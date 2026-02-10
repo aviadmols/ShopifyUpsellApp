@@ -43,6 +43,8 @@ class AuthController extends Controller
         }
         $this->oauth->exchangeCode($shop, $code);
         session(['shop_domain' => $shop]);
-        return redirect()->to('/admin?shop=' . $shop);
+        return redirect()
+            ->to('/admin/shops')
+            ->with('success', __('Shop connected successfully.'));
     }
 }
