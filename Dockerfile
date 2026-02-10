@@ -25,6 +25,8 @@ COPY . .
 
 RUN composer dump-autoload --optimize
 
-# Railway sets PORT at runtime
+# Start script: clear config cache, then serve (Railway sets PORT at runtime)
+COPY docker-start.sh /docker-start.sh
+RUN chmod +x /docker-start.sh
 EXPOSE 8000
-CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"]
+CMD ["/docker-start.sh"]

@@ -94,11 +94,19 @@ This creates a demo shop, placements, and a **default admin user**:
 
 ## Troubleshooting: "Application failed to respond"
 
-אם Railway מציג רק "Application failed to respond" בלי פרטי שגיאה:
+אם בדומיין מופיע רק "Application failed to respond":
 
-1. **בדוק Deploy Logs** ב-Railway (לא רק Request ID): לוגים של ה-build וה-runtime יראו אם השרת קרס (למשל חוסר APP_KEY או חיבור DB).
-2. **וודא APP_KEY** – ראה סעיף 0 למעלה. בלי מפתח, Laravel נכשל בטעינה.
-3. **וודא PORT** – ב-Dockerfile האפליקציה מאזינה ל-`$PORT`. אל תגדיר PORT ידנית ב-Variables אלא רק אם Railway לא מזריק אותו אוטומטית.
+1. **הוסף APP_KEY (חובה)**  
+   ב-Railway: **Variables** → **Add Variable** → `APP_KEY` = הערך מ-`php artisan key:generate --show` (מתחיל ב-`base64:...`).  
+   **שמור** ולחץ **Redeploy**. בלי זה Laravel לא עולה.
+
+2. **בדוק לוגים אחרי הדיפלוי**  
+   **Deployments** → הדיפלוי האחרון → **View logs**.  
+   אחרי "Deployment successful" צפה ב-**runtime logs** (השורות שמופיעות כשהאפליקציה רצה). אם יש שם שגיאה (למשל `No application encryption key` או exception אחר) – זה הסיבה.  
+   הסקריפט `docker-start.sh` מדפיס `Starting Laravel on 0.0.0.0:XXXX` – אם אתה רואה את זה ואז קריסה, השגיאה תופיע מיד אחרי.
+
+3. **וודא משתני MySQL**  
+   אם הוספת שירות MySQL ב-Railway, וודא ש-**DB_CONNECTION=mysql** מופיע ב-Variables (ולא נשמר config cache עם sqlite).
 
 ## Troubleshooting: Console/Kernel.php error
 
