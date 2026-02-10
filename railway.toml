@@ -1,0 +1,11 @@
+# Config as Code – דורס הגדרות מהדשבורד
+# https://docs.railway.app/config-as-code
+
+[build]
+builder = "DOCKERFILE"
+
+[deploy]
+# חובה: להריץ את הסקריפט שלנו. בלי זה Railway עלול להריץ פקודה אחרת (שמדפיסה APP_KEY ויוצאת).
+startCommand = "/docker-start.sh"
+healthcheckPath = "/up"
+healthcheckTimeout = 30

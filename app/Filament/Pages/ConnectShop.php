@@ -45,7 +45,7 @@ class ConnectShop extends Page
                             ->placeholder('mystore.myshopify.com')
                             ->required()
                             ->maxLength(255)
-                            ->rules(['regex:/^([a-zA-Z0-9][a-zA-Z0-9\-]*\.myshopify\.com|[a-zA-Z0-9][a-zA-Z0-9\-]+)$'])
+                            ->rules(['regex:/^([a-zA-Z0-9][a-zA-Z0-9\-]*\.myshopify\.com|[a-zA-Z0-9][a-zA-Z0-9\-]+)$/'])
                             ->validationAttribute('shop domain'),
                     ])
                     ->columns(1),
