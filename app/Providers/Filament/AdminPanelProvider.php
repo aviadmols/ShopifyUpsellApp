@@ -26,6 +26,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+            ->brandName('Zyg Upsell')
             ->login()
             ->colors([
                 'primary' => Color::Amber,

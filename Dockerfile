@@ -1,7 +1,7 @@
 # Laravel on Railway – PHP 8.2 with pdo_mysql
 FROM php:8.2-cli
 
-# Install system deps + MySQL extension
+# Install system deps + PHP extensions (intl required by Filament)
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -9,8 +9,11 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
+    libicu-dev \
     --no-install-recommends && rm -rf /var/lib/apt/lists/* \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath zip
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath zip \
+    && docker-php-ext-configure intl \
+    && docker-php-ext-install intl
 
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
