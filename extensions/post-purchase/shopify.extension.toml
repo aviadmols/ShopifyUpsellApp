@@ -1,0 +1,4 @@
+# Post-purchase offer: one-click add to order after payment (interstitial before thank-you).
+# Create with: shopify app generate extension -> Post-purchase, then replace with this.
+name = "post-purchase-ui"
+type = "checkout_post_purchase"

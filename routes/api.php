@@ -1,0 +1,46 @@
+<?php
+
+use App\Http\Controllers\Api\BlockController;
+use App\Http\Controllers\Api\CheckoutUpsellController;
+use App\Http\Controllers\Api\OfferController;
+use App\Http\Controllers\Api\PostPurchaseController;
+use App\Http\Controllers\Api\PreviewController;
+use App\Http\Controllers\Api\RuleController;
+use App\Http\Controllers\Api\ThankYouBlocksController;
+use App\Http\Controllers\Api\PlacementController;
+use App\Http\Controllers\WebhookController;
+use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Extension endpoints (signed; CORS allowed for Shopify)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['cors.extensions', 'checkout.extension.signature'])->group(function () {
+    Route::post('/post-purchase/should-render', [PostPurchaseController::class, 'shouldRender']);
+    Route::post('/post-purchase/accept', [PostPurchaseController::class, 'accept']);
+    Route::get('/checkout/offers', [CheckoutUpsellController::class, 'index']);
+    Route::post('/checkout/offers', [CheckoutUpsellController::class, 'index']);
+    Route::get('/thankyou/blocks', [ThankYouBlocksController::class, 'index']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Admin CRUD (session/OAuth; in production use auth middleware)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['web'])->group(function () {
+    Route::apiResource('offers', OfferController::class);
+    Route::apiResource('rules', RuleController::class);
+    Route::apiResource('blocks', BlockController::class);
+    Route::apiResource('placements', PlacementController::class);
+    Route::post('/preview/offer', [PreviewController::class, 'preview']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Webhooks (HMAC verified)
+|--------------------------------------------------------------------------
+*/
+Route::post('/webhooks/app-uninstalled', [WebhookController::class, 'appUninstalled']);
+Route::post('/webhooks/orders-create', [WebhookController::class, 'ordersCreate'])->name('webhooks.orders.create');

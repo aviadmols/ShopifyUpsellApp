@@ -1,0 +1,28 @@
+# Thank you / order status page blocks. Fetches blocks from Laravel and renders by type.
+api_version = "2024-01"
+
+[[extensions]]
+type = "ui_extension"
+name = "Thank You Blocks"
+handle = "thank-you-blocks"
+
+[[extensions.targeting]]
+target = "purchase.thank-you.block.render"
+module = "./src/ThankYou.jsx"
+
+[extensions.capabilities]
+network_access = true
+
+[extensions.settings]
+[[extensions.settings.fields]]
+key = "api_url"
+type = "single_line_text_field"
+name = "Laravel API URL"
+[[extensions.settings.fields]]
+key = "extension_secret"
+type = "single_line_text_field"
+name = "Extension secret"
+[[extensions.settings.fields]]
+key = "shop_domain"
+type = "single_line_text_field"
+name = "Shop domain"

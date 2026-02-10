@@ -1,0 +1,33 @@
+# Checkout upsell: show offers during checkout; add to cart with one click.
+# Create with: shopify app generate extension -> Checkout UI, then replace with this config.
+api_version = "2024-01"
+
+[[extensions]]
+type = "ui_extension"
+name = "Checkout Upsell"
+handle = "checkout-upsell"
+
+[[extensions.targeting]]
+target = "purchase.checkout.block.render"
+module = "./src/Checkout.jsx"
+
+[extensions.capabilities]
+network_access = true
+api_access = true
+
+[extensions.settings]
+[[extensions.settings.fields]]
+key = "api_url"
+type = "single_line_text_field"
+name = "Laravel API URL"
+description = "Full URL to your Laravel app (e.g. https://your-app.com)"
+[[extensions.settings.fields]]
+key = "extension_secret"
+type = "single_line_text_field"
+name = "Extension secret"
+description = "CHECKOUT_EXTENSION_SECRET value"
+[[extensions.settings.fields]]
+key = "shop_domain"
+type = "single_line_text_field"
+name = "Shop domain"
+description = "e.g. your-store.myshopify.com"
