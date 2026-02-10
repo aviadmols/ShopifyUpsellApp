@@ -1,5 +1,22 @@
 # Deploy checklist (Railway, etc.)
 
+## 0. APP_KEY (חובה – בלי זה האפליקציה לא עולה)
+
+Laravel דורש `APP_KEY` להצפנה ו-sessions. **אם חסר – האפליקציה תכשל בהפעלה** ותקבל "Application failed to respond".
+
+**ב-Railway:**  
+1. Variables → Add Variable  
+2. Name: `APP_KEY`  
+3. Value: מפתח base64 (32 תווים). ליצירה מקומית:
+   ```bash
+   php artisan key:generate --show
+   ```
+   להעתיק את הערך (מתחיל ב-`base64:`) ולהדביק ב-Railway.
+
+אחרי הוספת `APP_KEY` – **Redeploy**.
+
+---
+
 ## 1. MySQL environment variables
 
 Ensure these are set (Railway injects them when you add MySQL):
@@ -60,7 +77,7 @@ You should see JSON like:
 
 If you see `"ok": false` and an error, the DB is not connected (check vars and `DB_CONNECTION=mysql`).
 
-## 5. Optional: seed demo data
+## 5. Optional: seed demo data + default admin user
 
 Only for staging/demo:
 
@@ -68,9 +85,20 @@ Only for staging/demo:
 php artisan db:seed --force
 ```
 
-This creates a demo shop and placements.
+This creates a demo shop, placements, and a **default admin user**:
+
+- **Email:** `Aviadmols@gmail.com`
+- **Password:** `ChangeMe123!` (change after first login)
 
 ---
+
+## Troubleshooting: "Application failed to respond"
+
+אם Railway מציג רק "Application failed to respond" בלי פרטי שגיאה:
+
+1. **בדוק Deploy Logs** ב-Railway (לא רק Request ID): לוגים של ה-build וה-runtime יראו אם השרת קרס (למשל חוסר APP_KEY או חיבור DB).
+2. **וודא APP_KEY** – ראה סעיף 0 למעלה. בלי מפתח, Laravel נכשל בטעינה.
+3. **וודא PORT** – ב-Dockerfile האפליקציה מאזינה ל-`$PORT`. אל תגדיר PORT ידנית ב-Variables אלא רק אם Railway לא מזריק אותו אוטומטית.
 
 ## Troubleshooting: Console/Kernel.php error
 
