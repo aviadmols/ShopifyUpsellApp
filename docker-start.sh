@@ -1,5 +1,6 @@
 #!/bin/sh
 # Don't exit on first error so we always try to start the server (migrate can fail if DB not ready)
+echo "[docker-start] Container started, PORT=${PORT:-8000}" >&2
 echo "[docker-start] Container started, PORT=${PORT:-8000}"
 
 PORT="${PORT:-8000}"

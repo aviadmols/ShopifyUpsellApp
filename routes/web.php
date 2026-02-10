@@ -14,6 +14,15 @@ Route::get('/up', function () {
     return response()->json(['status' => 'ok', 'message' => 'Laravel is running']);
 });
 
+// לבדיקה שדיפלוי מעודכן – אם האתר עולה, גלוש ל-/version
+Route::get('/version', function () {
+    return response()->json([
+        'app' => 'ShopifyUpsellApp',
+        'deploy_check' => '2026-02-10-entrypt',
+        'env' => app()->environment(),
+    ]);
+});
+
 Route::get('/db-check', function () {
     $connection = config('database.default');
     try {

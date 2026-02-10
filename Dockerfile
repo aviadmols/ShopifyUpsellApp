@@ -36,4 +36,6 @@ RUN composer dump-autoload --optimize
 COPY docker-start.sh /docker-start.sh
 RUN chmod +x /docker-start.sh
 EXPOSE 8000
-CMD ["/docker-start.sh"]
+# ENTRYPOINT ensures this always runs (overrides any platform default)
+ENTRYPOINT ["/docker-start.sh"]
+CMD []

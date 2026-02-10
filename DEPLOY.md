@@ -1,5 +1,23 @@
 # Deploy checklist (Railway, etc.)
 
+## בודקים ש-Git וההגדרות נכונים ב-Railway
+
+אם האתר לא עולה (502) או שנראה שהקוד לא מעודכן:
+
+| מה לבדוק | איפה ב-Railway | מה אמור להיות |
+|----------|----------------|----------------|
+| **Repository** | Settings → Source (או Connect Repo) | הריפו הנכון, למשל `aviadmols/ShopifyUpsellApp` |
+| **Branch** | Settings → Branch | `main` (או הענף שאתה דוחף אליו) |
+| **Root Directory** | Settings → Root Directory / Monorepo | **ריק** או `.` (שורש הפרויקט; ה-Dockerfile חייב להיות בשורש) |
+| **Start Command** | Settings → Deploy → Start Command | **ריק** – כדי שה-ENTRYPOINT מה-Dockerfile ירוץ |
+| **Build** | בונה מ-Dockerfile | אמור לראות "Using Detected Dockerfile" בלוג ה-Build |
+
+**אם שינית משהו:** שמור → **Redeploy** → בטאב Deploy בחר **"Clear build cache"** ואז Deploy מחדש, כדי שלא ישתמש ב-cache ישן.
+
+**לאמת שהקוד המעודכן עלה:** כשהאתר עובד, גלוש ל־`https://your-domain/version` – אמור להחזיר JSON עם `deploy_check`. אם אתה רואה את הערך המעודכן, הדיפלוי מהענף הנכון.
+
+---
+
 ## 0. APP_KEY (חובה – בלי זה האפליקציה לא עולה)
 
 Laravel דורש `APP_KEY` להצפנה ו-sessions. **אם חסר – האפליקציה תכשל בהפעלה** ותקבל "Application failed to respond".
