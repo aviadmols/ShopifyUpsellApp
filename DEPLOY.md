@@ -98,4 +98,4 @@ If you see an error pointing to `vendor/laravel/framework/.../Console/Kernel.php
    then set `DB_CONNECTION=mysql` and your MySQL vars, then run `migrate --force` again.
 
 3. **Check PHP extensions**  
-   The server must have `pdo_mysql` (and often `mbstring`, `openssl`). In Docker/Railway you may need to install the PHP MySQL extension in the image.
+   The server must have `pdo_mysql`. This repo includes a **Dockerfile** that installs it with `docker-php-ext-install pdo_mysql`. If Railway detects the Dockerfile, it will use it instead of Nixpacks and the "could not find driver" error should disappear. `composer.json` also declares `ext-pdo_mysql` for Nixpacks-only builds.
