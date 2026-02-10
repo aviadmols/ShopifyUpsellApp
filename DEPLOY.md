@@ -92,6 +92,22 @@ This creates a demo shop, placements, and a **default admin user**:
 
 ---
 
+## "עובד אצלי (local) אבל לא בשרת"
+
+1. **לוגים ב-Railway**  
+   Deployments → הדיפלוי האחרון → **View logs**. חפש:
+   - `ERROR: APP_KEY is not set` → הוסף משתנה `APP_KEY` (ערך: `php artisan key:generate --show`).
+   - שגיאות של MySQL/PDO → וודא שהוספת שירות MySQL ב-Railway ומשתנים כמו `MYSQL_URL` או `DB_CONNECTION=mysql` מוגדרים.
+   - שגיאות של migrations → וודא חיבור DB תקין; הסקריפט `docker-start.sh` מריץ אוטומטית `php artisan migrate --force` בהפעלה.
+
+2. **משתני סביבה חובה בשרת**  
+   ב-Railway → Variables וודא: `APP_KEY`, ואם יש MySQL: `DB_CONNECTION=mysql` (ואין צורך להגדיר את כל ה-DB_* אם מוגדר `MYSQL_URL` / `MYSQL_PUBLIC_URL`).
+
+3. **בדיקת חיבור DB אחרי דיפלוי**  
+   גלוש ל־`https://your-app-url/db-check` – אם מקבל JSON עם `"ok": true` החיבור עובד.
+
+---
+
 ## Troubleshooting: "Application failed to respond"
 
 אם בדומיין מופיע רק "Application failed to respond":

@@ -26,6 +26,10 @@ RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 
 COPY . .
 
+# Ensure Laravel storage + bootstrap/cache exist and are writable (no .env in image)
+RUN mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache storage/logs bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
+
 RUN composer dump-autoload --optimize
 
 # Start script: clear config cache, then serve (Railway sets PORT at runtime)
