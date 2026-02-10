@@ -69,3 +69,33 @@ php artisan db:seed --force
 ```
 
 This creates a demo shop and placements.
+
+---
+
+## Troubleshooting: Console/Kernel.php error
+
+If you see an error pointing to `vendor/laravel/framework/.../Console/Kernel.php` or `Application->run()`, that line is only the **framework** – the **real error** is usually a few lines **above** it in the same log (the exception message and first stack lines).
+
+**What to do:**
+
+1. **Get the full error**  
+   Run on the server (or in the deploy log):
+   ```bash
+   php artisan config:clear
+   php artisan migrate --force 2>&1
+   ```
+   The line before `Kernel.php` / `Application->run()` usually says e.g.:
+   - `PDOException: could not find driver` → enable PHP extension `pdo_mysql`
+   - `SQLSTATE[HY000] [2002]` → MySQL not reachable (host/port/firewall)
+   - `No application encryption key has been specified` → set `APP_KEY` in env (e.g. `php artisan key:generate --show` and add to env)
+   - `Access denied for user` → wrong `MYSQLUSER` / `MYSQLPASSWORD` (or `DB_USERNAME` / `DB_PASSWORD`)
+
+2. **Before migrate, clear config**  
+   If the server cached config when MySQL vars were missing, Laravel may still use SQLite and then fail. Run:
+   ```bash
+   php artisan config:clear
+   ```
+   then set `DB_CONNECTION=mysql` and your MySQL vars, then run `migrate --force` again.
+
+3. **Check PHP extensions**  
+   The server must have `pdo_mysql` (and often `mbstring`, `openssl`). In Docker/Railway you may need to install the PHP MySQL extension in the image.
