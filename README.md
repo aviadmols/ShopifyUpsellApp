@@ -107,7 +107,9 @@ Admin CRUD: `/api/offers`, `/api/rules`, `/api/blocks`, `/api/placements`, `/api
 
 ## Deploy (outline)
 
-1. **Backend**: Deploy Laravel to a PHP 8.2+ host (e.g. Laravel Forge, Railway, shared hosting). Set `APP_URL` to production URL, configure DB and `.env` (Shopify keys, `CHECKOUT_EXTENSION_SECRET`).
+See **[DEPLOY.md](DEPLOY.md)** for a step-by-step checklist (MySQL vars, migrations, config cache).
+
+1. **Backend**: Deploy Laravel to a PHP 8.2+ host (e.g. Laravel Forge, Railway, shared hosting). Set `APP_URL` to production URL, configure DB and `.env` (Shopify keys, `CHECKOUT_EXTENSION_SECRET`). **Important:** set `DB_CONNECTION=mysql` and run `php artisan migrate --force` on deploy so tables are created.
 2. **Shopify app**: In Partners, set App URL and webhooks to production. Ensure CORS allows `*` for extension requests (Laravel can set `Access-Control-Allow-Origin: *` for extension routes).
 3. **Extensions**: Run `shopify app deploy` from the project root (with linked app). Configure extension settings in the Partner Dashboard / checkout editor with production API URL and secret.
 4. **Admin**: Run `npm run build` and serve `public/build` via Laravel; no separate deploy.

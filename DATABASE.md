@@ -75,3 +75,23 @@ The app supports two databases. You only need to connect **one** of them.
 | Production / shared hosting | **MySQL**  | Create DB + user, set MySQL vars in `.env`       |
 
 The run script (`run.ps1` or `run.bat`) creates the SQLite file when using SQLite; for MySQL it only runs migrations (you create the database and user yourself as above).
+
+---
+
+## Platform MySQL variables (Railway, etc.)
+
+If your host injects **MySQL** variables with names like `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD` (or `MYSQL_URL` / `MYSQL_PUBLIC_URL`), the app will use them automatically. No need to set `DB_HOST`, `DB_DATABASE`, etc. separately.
+
+**Required (at least one of these):**
+
+- Connection string: **`MYSQL_URL`** or **`MYSQL_PUBLIC_URL`** — Laravel can use this as `DB_URL` and connect with one value.
+
+**Or** individual values:
+
+- **`MYSQLHOST`** (or `DB_HOST`)
+- **`MYSQLPORT`** (or `DB_PORT`) — default 3306
+- **`MYSQLDATABASE`** or **`MYSQL_DATABASE`** (or `DB_DATABASE`)
+- **`MYSQLUSER`** (or `DB_USERNAME`)
+- **`MYSQLPASSWORD`** or **`MYSQL_ROOT_PASSWORD`** (or `DB_PASSWORD`)
+
+**Recommended:** set **`DB_CONNECTION=mysql`** in your platform’s environment. Otherwise the app may use SQLite if the MySQL vars are not visible when config is loaded (e.g. after config cache). See [DEPLOY.md](DEPLOY.md).
