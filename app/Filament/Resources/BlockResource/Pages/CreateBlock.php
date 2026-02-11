@@ -55,11 +55,19 @@ class CreateBlock extends CreateRecord
         $state = $this->form->getState();
         $surface = (string) ($state['surface'] ?? '');
         $type = (string) ($state['type'] ?? '');
+        $config = self::buildBlockConfig($state);
+        $previewOffers = [];
+        if (($surface === 'checkout' && $type === 'upsell') || ($surface === 'post_purchase' && $type === 'post_purchase_funnel')) {
+            $shopId = $state['shop_id'] ?? null;
+            $widgetOffers = is_array($state['widget_offers'] ?? null) ? $state['widget_offers'] : [];
+            $previewOffers = self::enrichPreviewOffers($shopId, $widgetOffers);
+        }
 
         return [
             'surface' => $surface,
             'type' => $type,
-            'config' => self::buildBlockConfig($state),
+            'config' => $config,
+            'preview_offers' => $previewOffers,
         ];
     }
 
@@ -261,10 +269,79 @@ class CreateBlock extends CreateRecord
      *
      * @return array<string, mixed>
      */
+    /**
+     * Enrich widget_offers with product/variant data from Shopify for preview.
+     *
+     * @param  int|string|null  $shopId
+     * @param  array<int, array<string, mixed>>  $widgetOffers
+     * @return array<int, array{title: string, description: string, image_url: string, price: string}>
+     */
+    public static function enrichPreviewOffers($shopId, array $widgetOffers): array
+    {
+        if (! $shopId) {
+            return [];
+        }
+        $shop = \App\Models\Shop::find((int) $shopId);
+        if (! $shop) {
+            return [];
+        }
+        $service = app(\App\Services\ShopifyGraphQLService::class);
+        $max = 5;
+        $out = [];
+        foreach ($widgetOffers as $i => $item) {
+            if (count($out) >= $max) {
+                break;
+            }
+            $variantId = trim((string) ($item['variant_id_manual'] ?? ''));
+            if ($variantId === '') {
+                $variantId = $item['product_variant_id'] ?? null;
+            }
+            if (! $variantId) {
+                continue;
+            }
+            $gid = str_starts_with($variantId, 'gid://') ? $variantId : 'gid://shopify/ProductVariant/'.preg_replace('/\D/', '', $variantId);
+            if ($gid === 'gid://shopify/ProductVariant/') {
+                continue;
+            }
+            try {
+                $variant = $service->getProductVariant($shop, $gid);
+            } catch (\Throwable) {
+                $variant = null;
+            }
+            $title = (string) ($item['title'] ?? '');
+            $description = (string) ($item['description'] ?? '');
+            $imageUrl = (string) ($item['image_url'] ?? '');
+            $price = '—';
+            if ($variant) {
+                if ($title === '') {
+                    $productTitle = (string) ($variant['product']['title'] ?? 'Product');
+                    $variantTitle = (string) ($variant['title'] ?? '');
+                    $title = strtolower($variantTitle) !== 'default title' ? $productTitle.' - '.$variantTitle : $productTitle;
+                }
+                if ($imageUrl === '') {
+                    $imageUrl = (string) ($variant['product']['featuredImage']['url'] ?? '');
+                }
+                $price = isset($variant['price']) ? (string) $variant['price'] : '—';
+            } else {
+                if ($title === '') {
+                    $title = 'Offer '.(count($out) + 1);
+                }
+            }
+            $out[] = [
+                'title' => $title,
+                'description' => $description,
+                'image_url' => $imageUrl,
+                'price' => $price,
+            ];
+        }
+
+        return $out;
+    }
+
     public static function getStateFromGet(\Filament\Forms\Get $get): array
     {
         $keys = [
-            'surface', 'type', 'extra_config', 'offer_ids_csv', 'widget_offers',
+            'surface', 'type', 'shop_id', 'extra_config', 'offer_ids_csv', 'widget_offers',
             'max_offers', 'display_mode', 'require_expanded', 'section_heading', 'title_size', 'title_appearance',
             'show_price', 'show_description', 'image_aspect_ratio', 'image_fit', 'image_corner_radius',
             'button_kind', 'button_appearance', 'card_spacing', 'divider_between_cards',

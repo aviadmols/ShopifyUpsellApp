@@ -2,6 +2,9 @@
   $surface = $surface ?? '';
   $type = $type ?? '';
   $config = $config ?? [];
+  $preview_offers = $preview_offers ?? [];
+  $show_price = !empty($config['show_price']);
+  $show_description = !empty($config['show_description']);
 @endphp
 <div class="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-gray-900/50 p-6">
   <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Widget preview — {{ $surface ?: '—' }} / {{ $type ?: '—' }}</p>
@@ -9,24 +12,43 @@
 
     @if($surface === 'checkout' && $type === 'upsell')
       <p class="font-semibold text-gray-900 dark:text-white">{{ $config['section_heading'] ?? 'Add to your order' }}</p>
-      <div class="border border-gray-200 dark:border-white/10 rounded-lg p-3 flex gap-3">
-        <div class="w-16 h-16 rounded bg-gray-200 dark:bg-gray-600 shrink-0"></div>
-        <div class="min-w-0 flex-1">
-          <p class="font-medium text-gray-900 dark:text-white">Sample offer</p>
-          @if(!empty($config['show_price']))<p class="text-sm text-gray-600 dark:text-gray-300">$9.99</p>@endif
-          @if(!empty($config['show_description']))<p class="text-xs text-gray-500 dark:text-gray-400">Description text</p>@endif
-          <button type="button" class="mt-2 text-sm px-3 py-1.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white">Add to order</button>
-        </div>
-      </div>
-      @if(($config['display_mode'] ?? 'stacked') === 'stacked')
+      @if(count($preview_offers) > 0)
+        @php $offersToShow = ($config['display_mode'] ?? 'stacked') === 'single' ? array_slice($preview_offers, 0, 1) : $preview_offers; @endphp
+        @foreach($offersToShow as $offer)
+          <div class="border border-gray-200 dark:border-white/10 rounded-lg p-3 flex gap-3">
+            <div class="w-16 h-16 rounded bg-gray-200 dark:bg-gray-600 shrink-0 overflow-hidden flex items-center justify-center">
+              @if(!empty($offer['image_url']))
+                <img src="{{ $offer['image_url'] }}" alt="" class="w-full h-full object-cover" onerror="this.style.display='none'">
+              @endif
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="font-medium text-gray-900 dark:text-white">{{ $offer['title'] ?: 'Offer' }}</p>
+              @if($show_price && isset($offer['price']))<p class="text-sm text-gray-600 dark:text-gray-300">{{ $offer['price'] }}</p>@endif
+              @if($show_description && !empty($offer['description']))<p class="text-xs text-gray-500 dark:text-gray-400">{{ Str::limit($offer['description'], 80) }}</p>@endif
+              <button type="button" class="mt-2 text-sm px-3 py-1.5 rounded {{ ($config['button_kind'] ?? 'secondary') === 'primary' ? 'bg-primary-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white' }}">Add to order</button>
+            </div>
+          </div>
+        @endforeach
+      @else
         <div class="border border-gray-200 dark:border-white/10 rounded-lg p-3 flex gap-3">
           <div class="w-16 h-16 rounded bg-gray-200 dark:bg-gray-600 shrink-0"></div>
           <div class="min-w-0 flex-1">
-            <p class="font-medium text-gray-900 dark:text-white">Second offer</p>
-            <p class="text-sm text-gray-600 dark:text-gray-300">$12.00</p>
-            <button type="button" class="mt-2 text-sm px-3 py-1.5 rounded bg-gray-200 dark:bg-gray-600">Add to order</button>
+            <p class="font-medium text-gray-900 dark:text-white">Sample offer</p>
+            @if($show_price)<p class="text-sm text-gray-600 dark:text-gray-300">$9.99</p>@endif
+            @if($show_description)<p class="text-xs text-gray-500 dark:text-gray-400">Description text</p>@endif
+            <button type="button" class="mt-2 text-sm px-3 py-1.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white">Add to order</button>
           </div>
         </div>
+        @if(($config['display_mode'] ?? 'stacked') === 'stacked')
+          <div class="border border-gray-200 dark:border-white/10 rounded-lg p-3 flex gap-3">
+            <div class="w-16 h-16 rounded bg-gray-200 dark:bg-gray-600 shrink-0"></div>
+            <div class="min-w-0 flex-1">
+              <p class="font-medium text-gray-900 dark:text-white">Second offer</p>
+              <p class="text-sm text-gray-600 dark:text-gray-300">$12.00</p>
+              <button type="button" class="mt-2 text-sm px-3 py-1.5 rounded bg-gray-200 dark:bg-gray-600">Add to order</button>
+            </div>
+          </div>
+        @endif
       @endif
     @endif
 
@@ -99,18 +121,40 @@
       @if(!empty($config['show_timer']))
         <p class="text-sm text-gray-600 dark:text-gray-300">{{ $config['timer_label'] ?? 'For a limited time' }} 4:55</p>
       @endif
-      <div class="border border-gray-200 dark:border-white/10 rounded-lg p-3 flex gap-3">
-        <div class="w-20 h-20 rounded bg-gray-200 dark:bg-gray-600 shrink-0"></div>
-        <div class="min-w-0 flex-1">
-          <p class="font-medium text-gray-900 dark:text-white">Offer product</p>
-          <p class="text-sm">$8.00 <span class="text-success-600">Save 20%</span></p>
-          @if(!empty($config['urgency_message']))<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ Str::limit($config['urgency_message'], 60) }}</p>@endif
-          <div class="mt-2 flex flex-wrap gap-2">
-            <button type="button" class="text-sm px-3 py-2 rounded bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900">{{ $config['cta_text'] ?? 'Pay Now' }}</button>
-            <button type="button" class="text-sm text-primary-600 dark:text-primary-400">{{ $config['decline_text'] ?? 'Decline offer' }}</button>
+      @if(count($preview_offers) > 0)
+        @foreach($preview_offers as $offer)
+          <div class="border border-gray-200 dark:border-white/10 rounded-lg p-3 flex gap-3">
+            <div class="w-20 h-20 rounded bg-gray-200 dark:bg-gray-600 shrink-0 overflow-hidden flex items-center justify-center">
+              @if(!empty($offer['image_url']))
+                <img src="{{ $offer['image_url'] }}" alt="" class="w-full h-full object-cover" onerror="this.style.display='none'">
+              @endif
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="font-medium text-gray-900 dark:text-white">{{ $offer['title'] ?: 'Offer product' }}</p>
+              <p class="text-sm">{{ $offer['price'] ?? '$8.00' }} <span class="text-success-600">Save 20%</span></p>
+              @if(!empty($offer['description']))<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ Str::limit($offer['description'], 60) }}</p>@endif
+              @if(!empty($config['urgency_message']))<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ Str::limit($config['urgency_message'], 60) }}</p>@endif
+              <div class="mt-2 flex flex-wrap gap-2">
+                <button type="button" class="text-sm px-3 py-2 rounded bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900">{{ $config['cta_text'] ?? 'Pay Now' }}</button>
+                <button type="button" class="text-sm text-primary-600 dark:text-primary-400">{{ $config['decline_text'] ?? 'Decline offer' }}</button>
+              </div>
+            </div>
+          </div>
+        @endforeach
+      @else
+        <div class="border border-gray-200 dark:border-white/10 rounded-lg p-3 flex gap-3">
+          <div class="w-20 h-20 rounded bg-gray-200 dark:bg-gray-600 shrink-0"></div>
+          <div class="min-w-0 flex-1">
+            <p class="font-medium text-gray-900 dark:text-white">Offer product</p>
+            <p class="text-sm">$8.00 <span class="text-success-600">Save 20%</span></p>
+            @if(!empty($config['urgency_message']))<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ Str::limit($config['urgency_message'], 60) }}</p>@endif
+            <div class="mt-2 flex flex-wrap gap-2">
+              <button type="button" class="text-sm px-3 py-2 rounded bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900">{{ $config['cta_text'] ?? 'Pay Now' }}</button>
+              <button type="button" class="text-sm text-primary-600 dark:text-primary-400">{{ $config['decline_text'] ?? 'Decline offer' }}</button>
+            </div>
           </div>
         </div>
-      </div>
+      @endif
     @endif
 
     @if(empty($surface) || empty($type))

@@ -59,18 +59,34 @@ class EditBlock extends EditRecord
         if (($surface === '' || $type === '') && isset($this->record)) {
             $surface = (string) $this->record->surface;
             $type = (string) $this->record->type;
+            $config = is_array($this->record->config) ? $this->record->config : [];
+            $previewOffers = [];
+            if (($surface === 'checkout' && $type === 'upsell') || ($surface === 'post_purchase' && $type === 'post_purchase_funnel')) {
+                $widgetOffers = self::widgetOffersFromBlock($this->record);
+                $previewOffers = CreateBlock::enrichPreviewOffers($this->record->shop_id, $widgetOffers);
+            }
 
             return [
                 'surface' => $surface,
                 'type' => $type,
-                'config' => is_array($this->record->config) ? $this->record->config : [],
+                'config' => $config,
+                'preview_offers' => $previewOffers,
             ];
+        }
+
+        $config = CreateBlock::buildBlockConfig($state);
+        $previewOffers = [];
+        if (($surface === 'checkout' && $type === 'upsell') || ($surface === 'post_purchase' && $type === 'post_purchase_funnel')) {
+            $shopId = $state['shop_id'] ?? null;
+            $widgetOffers = is_array($state['widget_offers'] ?? null) ? $state['widget_offers'] : [];
+            $previewOffers = CreateBlock::enrichPreviewOffers($shopId, $widgetOffers);
         }
 
         return [
             'surface' => $surface,
             'type' => $type,
-            'config' => CreateBlock::buildBlockConfig($state),
+            'config' => $config,
+            'preview_offers' => $previewOffers,
         ];
     }
 

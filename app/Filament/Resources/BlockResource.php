@@ -87,10 +87,17 @@ class BlockResource extends Resource
                                 $surface = (string) ($state['surface'] ?? '');
                                 $type = (string) ($state['type'] ?? '');
                                 $config = CreateBlock::buildBlockConfig($state);
+                                $previewOffers = [];
+                                if (($surface === 'checkout' && $type === 'upsell') || ($surface === 'post_purchase' && $type === 'post_purchase_funnel')) {
+                                    $shopId = $state['shop_id'] ?? null;
+                                    $widgetOffers = $state['widget_offers'] ?? [];
+                                    $previewOffers = CreateBlock::enrichPreviewOffers($shopId, is_array($widgetOffers) ? $widgetOffers : []);
+                                }
                                 $html = view('filament.components.block-preview', [
                                     'surface' => $surface,
                                     'type' => $type,
                                     'config' => $config,
+                                    'preview_offers' => $previewOffers,
                                 ])->render();
 
                                 return new \Illuminate\Support\HtmlString($html);
