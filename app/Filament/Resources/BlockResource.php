@@ -67,7 +67,7 @@ class BlockResource extends Resource
 
                                 return [];
                             })
-                            ->required()
+                            ->required(fn (Get $get): bool => ! empty($get('surface')))
                             ->live(),
                         Forms\Components\TextInput::make('name')
                             ->label('Admin label')
@@ -82,7 +82,6 @@ class BlockResource extends Resource
                                     : $q->whereRaw('1 = 0')
                             )
                             ->searchable()
-                            ->preload()
                             ->helperText('Optional: show this block only when rule conditions match.'),
                         Forms\Components\TextInput::make('sort_order')
                             ->numeric()

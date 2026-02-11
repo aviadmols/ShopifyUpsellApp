@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CorsForExtensions;
+use Throwable;
 use App\Http\Middleware\VerifyCheckoutExtensionSignature;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -23,5 +24,17 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->reportable(function (Throwable $e): void {
+            if (app()->environment('production')) {
+                $msg = sprintf(
+                    "[%s] %s in %s:%d\n%s",
+                    get_class($e),
+                    $e->getMessage(),
+                    $e->getFile(),
+                    $e->getLine(),
+                    $e->getTraceAsString()
+                );
+                fwrite(STDERR, $msg);
+            }
+        });
     })->create();
