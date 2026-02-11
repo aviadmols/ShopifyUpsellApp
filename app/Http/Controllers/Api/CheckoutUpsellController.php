@@ -89,6 +89,7 @@ class CheckoutUpsellController extends Controller
         }
 
         $type = (string) $block->type;
+        $typeLower = strtolower($type);
         $config = $block->config ?? [];
 
         if ($type === 'upsell') {
@@ -120,11 +121,11 @@ class CheckoutUpsellController extends Controller
             ]);
         }
 
-        if (str_starts_with($type, 'content_')) {
+        if (str_starts_with($typeLower, 'content_')) {
             $blocksPayload = [
                 [
                     'id' => $block->id,
-                    'type' => $type,
+                    'type' => $typeLower,
                     'config' => $config,
                 ],
             ];
