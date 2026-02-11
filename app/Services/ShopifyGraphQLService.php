@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Shop;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Shopify Admin GraphQL API client. Uses store access token for merchant API calls.
@@ -33,19 +34,44 @@ class ShopifyGraphQLService
      */
     public function request(Shop $shop, string $query, array $variables = []): array
     {
+        $url = $this->graphqlUrl($shop->shop_domain);
+        $queryPreview = str_replace(["\r", "\n"], ' ', trim(substr($query, 0, 200))) . (strlen($query) > 200 ? '…' : '');
+
+        Log::channel('shopify_api')->info('Shopify API request', [
+            'shop_id' => $shop->id,
+            'shop_domain' => $shop->shop_domain,
+            'url' => $url,
+            'query_preview' => $queryPreview,
+            'variables_keys' => array_keys($variables),
+        ]);
+
         $response = Http::withHeaders([
             'X-Shopify-Access-Token' => $shop->access_token,
             'Content-Type' => 'application/json',
-        ])->post($this->graphqlUrl($shop->shop_domain), [
+        ])->post($url, [
             'query' => $query,
             'variables' => $variables,
         ]);
 
-        $response->throw();
+        $status = $response->status();
         $data = $response->json();
+        $errors = $data['errors'] ?? null;
 
-        if (isset($data['errors'])) {
-            throw new \RuntimeException('GraphQL errors: ' . json_encode($data['errors']));
+        if ($errors) {
+            Log::channel('shopify_api')->warning('Shopify API GraphQL errors', [
+                'shop_id' => $shop->id,
+                'errors' => $errors,
+            ]);
+            throw new \RuntimeException('GraphQL errors: ' . json_encode($errors));
+        }
+
+        if (! $response->successful()) {
+            Log::channel('shopify_api')->warning('Shopify API HTTP error', [
+                'shop_id' => $shop->id,
+                'status' => $status,
+                'body_preview' => substr((string) $response->body(), 0, 500),
+            ]);
+            $response->throw();
         }
 
         return $data['data'] ?? [];
@@ -84,6 +110,41 @@ class ShopifyGraphQLService
      */
     public function searchProductVariants(Shop $shop, string $search = '', int $limit = 25): array
     {
+        $items = [];
+        $search = trim($search);
+
+        // If search looks like a variant ID (numeric or GID), fetch that variant so it always appears.
+        $variantIdToPrepend = $this->parseVariantIdFromSearch($search);
+        if ($variantIdToPrepend !== null) {
+            try {
+                $single = $this->getProductVariant($shop, $variantIdToPrepend);
+                if ($single) {
+                    $productTitle = (string) ($single['product']['title'] ?? 'Product');
+                    $variantTitle = (string) ($single['title'] ?? 'Variant');
+                    $price = isset($single['price']) ? (string) $single['price'] : null;
+                    $id = (string) ($single['id'] ?? '');
+                    $image = $single['product']['featuredImage']['url'] ?? null;
+                    $label = $productTitle;
+                    if (strtolower($variantTitle) !== 'default title') {
+                        $label .= " - {$variantTitle}";
+                    }
+                    if ($price !== null && $price !== '') {
+                        $label .= ' (' . $price . ')';
+                    }
+                    $items[] = [
+                        'id' => $id,
+                        'label' => $label,
+                        'product_title' => $productTitle,
+                        'variant_title' => $variantTitle,
+                        'image_url' => $image,
+                        'price' => $price,
+                    ];
+                }
+            } catch (\Throwable) {
+                // Continue to normal search
+            }
+        }
+
         $query = <<<'GRAPHQL'
             query searchProducts($query: String!, $first: Int!) {
                 products(query: $query, first: $first) {
@@ -105,7 +166,7 @@ class ShopifyGraphQLService
             }
         GRAPHQL;
 
-        $searchQuery = trim($search) !== ''
+        $searchQuery = $search !== ''
             ? "status:active AND ({$search})"
             : 'status:active';
 
@@ -114,7 +175,7 @@ class ShopifyGraphQLService
             'first' => max(1, min($limit, 50)),
         ]);
 
-        $items = [];
+        $seenIds = array_fill_keys(array_column($items, 'id'), true);
         foreach (($data['products']['nodes'] ?? []) as $product) {
             $productTitle = (string) ($product['title'] ?? 'Untitled product');
             $image = $product['featuredImage']['url'] ?? null;
@@ -124,19 +185,21 @@ class ShopifyGraphQLService
                     continue;
                 }
 
-                $variantTitle = (string) ($variant['title'] ?? 'Default');
-                $price = isset($variant['price']) ? (string) $variant['price'] : null;
                 $id = (string) ($variant['id'] ?? '');
-                if ($id === '') {
+                if ($id === '' || isset($seenIds[$id])) {
                     continue;
                 }
+                $seenIds[$id] = true;
+
+                $variantTitle = (string) ($variant['title'] ?? 'Default');
+                $price = isset($variant['price']) ? (string) $variant['price'] : null;
 
                 $label = $productTitle;
                 if (strtolower($variantTitle) !== 'default title') {
                     $label .= " - {$variantTitle}";
                 }
                 if ($price !== null && $price !== '') {
-                    $label .= " (${$price})";
+                    $label .= ' (' . $price . ')';
                 }
 
                 $items[] = [
@@ -151,6 +214,25 @@ class ShopifyGraphQLService
         }
 
         return array_slice($items, 0, $limit);
+    }
+
+    /**
+     * If search string looks like a variant ID (numeric or GID), return GID for getProductVariant.
+     */
+    protected function parseVariantIdFromSearch(string $search): ?string
+    {
+        $search = trim($search);
+        if ($search === '') {
+            return null;
+        }
+        if (str_starts_with($search, 'gid://shopify/ProductVariant/')) {
+            return $search;
+        }
+        $numeric = preg_replace('/\D/', '', $search);
+        if ($numeric !== '' && strlen($numeric) >= 8) {
+            return 'gid://shopify/ProductVariant/' . $numeric;
+        }
+        return null;
     }
 
     /**

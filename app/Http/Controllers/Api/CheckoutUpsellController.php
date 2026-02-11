@@ -7,6 +7,8 @@ use App\Models\Offer;
 use App\Models\Placement;
 use App\Models\Shop;
 use App\Services\RuleEngine;
+use App\Services\ShopifyGraphQLService;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -37,22 +39,62 @@ class CheckoutUpsellController extends Controller
 
         $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
         $displayMode = (string) ($placement->config['display_mode'] ?? 'stacked');
-        $data = array_map(fn (Offer $o) => [
-            'id' => $o->id,
-            'title' => $o->title,
-            'description' => $o->description,
-            'variant_id' => $this->normalizeVariantIdToGid($o->product_variant_id),
-            'discount_type' => $o->discount_type,
-            'discount_value' => $o->discount_value?->toString(),
-            'image_url' => $o->image_url,
-            'offer_type' => (string) ($o->offer_type ?? 'one_time'),
-            'selling_plan_id' => $o->selling_plan_id ? (string) $o->selling_plan_id : null,
-        ], $eligible);
+        $data = $this->enrichOffersFromShopify($shop, $eligible);
 
         return response()->json([
             'offers' => $data,
             'display_mode' => $displayMode,
         ]);
+    }
+
+    /**
+     * Build API payload for offers; enrich title/image from Shopify when missing.
+     *
+     * @param  array<Offer>  $eligible
+     * @return array<int, array<string, mixed>>
+     */
+    protected function enrichOffersFromShopify(Shop $shop, array $eligible): array
+    {
+        $service = app(ShopifyGraphQLService::class);
+        $out = [];
+        foreach ($eligible as $o) {
+            $variantId = $this->normalizeVariantIdToGid($o->product_variant_id);
+            $title = trim((string) $o->title);
+            $imageUrl = trim((string) $o->image_url);
+
+            if (($title === '' || $imageUrl === '') && $variantId !== '') {
+                try {
+                    $variant = $service->getProductVariant($shop, $variantId);
+                    if ($variant) {
+                        if ($title === '') {
+                            $productTitle = (string) ($variant['product']['title'] ?? 'Product');
+                            $variantTitle = (string) ($variant['title'] ?? '');
+                            $title = strtolower($variantTitle ?? '') !== 'default title'
+                                ? $productTitle . ' - ' . $variantTitle
+                                : $productTitle;
+                        }
+                        if ($imageUrl === '') {
+                            $imageUrl = (string) ($variant['product']['featuredImage']['url'] ?? '');
+                        }
+                    }
+                } catch (DecryptException|\Throwable) {
+                    // Keep DB values
+                }
+            }
+
+            $out[] = [
+                'id' => $o->id,
+                'title' => $title ?: $o->title,
+                'description' => $o->description,
+                'variant_id' => $variantId,
+                'discount_type' => $o->discount_type,
+                'discount_value' => $o->discount_value?->toString(),
+                'image_url' => $imageUrl ?: $o->image_url,
+                'offer_type' => (string) ($o->offer_type ?? 'one_time'),
+                'selling_plan_id' => $o->selling_plan_id ? (string) $o->selling_plan_id : null,
+            ];
+        }
+        return $out;
     }
 
     /**
