@@ -74,7 +74,13 @@ class BlockResource extends Resource
                             ->placeholder('e.g. Checkout upsell 1')
                             ->maxLength(255),
                         Forms\Components\Select::make('rule_id')
-                            ->relationship('rule', 'name', fn (Builder $q, Get $get) => $q->where('shop_id', $get('shop_id')))
+                            ->relationship(
+                                'rule',
+                                'name',
+                                fn (Builder $q, Get $get) => $get('shop_id')
+                                    ? $q->where('shop_id', $get('shop_id'))
+                                    : $q->whereRaw('1 = 0')
+                            )
                             ->searchable()
                             ->preload()
                             ->helperText('Optional: show this block only when rule conditions match.'),

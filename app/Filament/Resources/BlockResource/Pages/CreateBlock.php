@@ -29,7 +29,7 @@ class CreateBlock extends CreateRecord
                 ->modalHeading('Block preview')
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('Close')
-                ->modalContent(fn (): View => view('filament.components.block-preview', $this->blockPreviewData)),
+                ->modalContent(fn (): View => view('filament.components.block-preview', array_merge(['surface' => '', 'type' => '', 'config' => []], $this->blockPreviewData))),
         ];
     }
 
