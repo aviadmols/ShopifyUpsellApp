@@ -128,8 +128,8 @@ class BlockResource extends Resource
                         Forms\Components\Select::make('product_variant_id')
                             ->label('Product variant (search)')
                             ->searchable()
-                            ->getSearchResultsUsing(fn (string $search, Get $get): array => OfferResource::variantOptions($get('shop_id'), $search))
-                            ->getOptionLabelsUsing(fn ($value, Get $get): array => $value ? OfferResource::variantLabels($get('shop_id'), [(string) $value]) : [])
+                            ->getSearchResultsUsing(fn (string $search, Get $get): array => OfferResource::variantOptions($get('../../shop_id'), $search))
+                            ->getOptionLabelsUsing(fn ($value, Get $get): array => $value ? OfferResource::variantLabels($get('../../shop_id'), [(string) $value]) : [])
                             ->helperText('Pick a shop above first. If the list is empty (no token or scope), use the manual field below.'),
                         Forms\Components\TextInput::make('variant_id_manual')
                             ->label('Variant ID (manual)')

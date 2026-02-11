@@ -272,13 +272,14 @@ function CheckoutUpsell() {
 
   const minimalMessage = (
     <Text appearance="subdued" size="small">
-      {status.type === 'not_configured' ? 'Not configured' : status.type === 'error' ? 'Connection error' : 'No offers right now'}
+      {status.type === 'not_configured' ? 'Not configured' : 'Connection error'}
     </Text>
   );
 
   const hasContent = contentBlocks.length > 0;
   const showEmptyOrError = loading || status.type === 'not_configured' || status.type === 'error' || (offers.length === 0 && !hasContent);
   const debugContent = showDebugWhenEmpty ? fullDebugBlock : minimalMessage;
+  const hideWhenNoOffers = !loading && status.type === 'connected' && offers.length === 0 && !hasContent && !showDebugWhenEmpty;
 
   if (hasContent && !loading && status.type !== 'error' && status.type !== 'not_configured') {
     return (
@@ -354,6 +355,18 @@ function CheckoutUpsell() {
         ))}
       </BlockStack>
     );
+  }
+
+  if (hideWhenNoOffers) {
+    if (progressBar) {
+      return (
+        <BlockStack spacing="tight">
+          <Text size="medium" emphasis="bold">{progressMessage}</Text>
+          <Progress value={progress} max={1} accessibilityLabel={progressMessage} />
+        </BlockStack>
+      );
+    }
+    return <BlockStack spacing="none" />;
   }
 
   return (

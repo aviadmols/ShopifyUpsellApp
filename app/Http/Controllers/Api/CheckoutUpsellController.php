@@ -25,17 +25,33 @@ class CheckoutUpsellController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $shop = $this->resolveShop($request);
-        if (! $shop) {
-            return response()->json(['error' => 'Shop not found'], 404);
-        }
-
         $blockId = $request->input('block_id') ?? $request->query('block_id');
         if ($blockId !== null && $blockId !== '') {
-            $block = Block::where('shop_id', $shop->id)->where('surface', 'checkout')->find((int) $blockId);
+            $block = Block::where('surface', 'checkout')->find((int) $blockId);
             if ($block) {
-                return $this->responseForBlock($request, $shop, $block);
+                $shop = $block->shop;
+                if ($shop && $shop->uninstalled_at === null) {
+                    $requestShop = $this->resolveShop($request);
+                    if ($requestShop !== null && $requestShop->id !== $shop->id) {
+                        return response()->json(['error' => 'Block belongs to another store.'], 403);
+                    }
+                    return $this->responseForBlock($request, $shop, $block);
+                }
             }
+        }
+
+        $shop = $this->resolveShop($request);
+        if (! $shop) {
+            return response()->json(['error' => 'Shop not found. Set Shop domain in block settings to your store (e.g. mystore.myshopify.com).'], 404);
+        }
+
+        if ($blockId !== null && $blockId !== '') {
+            return response()->json([
+                'offers' => [],
+                'blocks' => [],
+                'ui' => [],
+                'error' => 'Block not found. Check Widget ID and that the widget exists for this store.',
+            ], 404);
         }
 
         $placement = Placement::where('shop_id', $shop->id)->where('placement_type', 'checkout')->first();
