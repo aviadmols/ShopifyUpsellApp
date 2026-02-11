@@ -185,8 +185,13 @@ class OfferBuilderService
         $config['offer_ids'] = $this->addIdToList($config['offer_ids'] ?? [], $offer->id);
         $config['max_offers'] = max(1, (int) ($data['checkout_max_offers'] ?? $config['max_offers'] ?? 3));
         $config['priority'] = (int) ($data['checkout_priority'] ?? $config['priority'] ?? 100);
-        $config['display_mode'] = (string) ($data['checkout_display_mode'] ?? $config['display_mode'] ?? 'stacked');
-        $config['require_expanded'] = (bool) ($data['checkout_require_expanded'] ?? $config['require_expanded'] ?? false);
+        // display_mode and require_expanded: only set from Placement edit, not from offer save (keep existing config)
+        if (! isset($config['display_mode'])) {
+            $config['display_mode'] = 'stacked';
+        }
+        if (! isset($config['require_expanded'])) {
+            $config['require_expanded'] = false;
+        }
 
         return $config;
     }

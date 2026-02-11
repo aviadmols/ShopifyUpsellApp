@@ -6,7 +6,7 @@
 
 | מיקום | Target של Shopify | מה ניתן להגדיר באפליקציה | מה API מחזיר |
 |---|---|---|---|
-| **Checkout** | `purchase.checkout.block.render` | `offer_ids`, `max_offers`, `priority`, `display_mode`, `require_expanded` | רשימת offers עם `variant_id`, `title`, `description`, `discount`, `image_url` |
+| **Checkout** | `purchase.checkout.block.render` | **Placements → Checkout:** `offer_ids`, `max_offers`, `priority`, `display_mode` (stacked/single), `require_expanded`. **Checkout UI:** `section_heading`, `title_size`, `title_appearance`, `show_price`, `show_description`, `image_aspect_ratio`, `image_fit`, `image_corner_radius`, `button_kind`, `button_appearance`, `card_spacing`, `divider_between_cards`. (Display mode נקבע רק ב-Placement, לא בעריכת Offer.) | רשימת offers עם `variant_id`, `title`, `description`, `discount`, `image_url`, `price`; אובייקט `ui` עם כל ההגדרות; `display_mode`. |
 | **Post-purchase** | `checkout_post_purchase` / `purchase.post_purchase.render` | `offer_ids`, `max_offers`, `cooldown_hours`, `allow_reoffer`, `show_timer`, `timer_seconds` | should-render + accept changeset (add line + optional discount) |
 | **Thank-you** | `purchase.thank-you.block.render` | `block_ids`, auto product-card per offer (`title/body/button_url/sort_order`) | רשימת blocks מסוג `banner/text/button/product_card` |
 
@@ -38,12 +38,30 @@
 2. מלא:
    - **Shop:** אותה חנות (למשל `millsdailypacks.myshopify.com`)
    - **Placement type:** **checkout**
-   - **Config** (שדה KeyValue):
-     - **offer_ids** → ערך: `1` (או רשימת IDs מופרדת בפסיקים, למשל `1,2,3`)
-     - **max_offers** → ערך: `3` (כמה offers מקסימום להציג ב-checkout)
+   - **Checkout config:**
+     - **Offer IDs (comma separated):** `1` או `1,2,3`
+     - **Max offers:** `3`
+     - **Priority:** `100`
+     - **Display mode:** **Stacked cards** (או Single card – קובע איך הבלוק מציג את האופטימיזציות)
+     - **Require expanded:** כבוי/פתוח
+   - **Checkout UI** (איך הבלוק נראה ב-checkout):
+     - **Section heading:** כותרת האזור (ברירת מחדל: "Add to your order")
+     - **Title text size:** small / medium / large / extraLarge
+     - **Title appearance:** default, accent, subdued, info, success, warning, critical
+     - **Show price:** הצגת מחיר מתחת לכותרת
+     - **Show description:** הצגת תיאור
+     - **Image aspect ratio:** Auto, 1:1, 5:4, 3:2, 4:3
+     - **Image fit:** cover / contain / fill
+     - **Image corner radius:** none / small / base / large
+     - **Button kind:** primary / secondary / plain
+     - **Button appearance:** default / monochrome / critical
+     - **Card spacing:** tight / loose / extra loose
+     - **Divider between cards:** מפריד בין כרטיסים
 3. **Save**
 
-עכשיו ה-API של האפליקציה יחזיר את ה-offers האלה כשהחנות וה-placement מסוג checkout מוגדרים.
+**חשוב:** Display mode (Stacked vs Single) נקבע **רק** כאן ב-Placement. שמירת אופר לא משנה אותו.
+
+עכשיו ה-API יחזיר את ה-offers עם אובייקט `ui` והבלוק יציג לפי ההגדרות.
 
 ---
 

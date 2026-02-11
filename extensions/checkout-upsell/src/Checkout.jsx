@@ -10,7 +10,9 @@ import {
   Text,
   Image,
   Divider,
+  Progress,
   useApplyCartLinesChange,
+  useSubtotalAmount,
 } from '@shopify/ui-extensions-react/checkout';
 import { useEffect, useState } from 'react';
 
@@ -33,6 +35,7 @@ export default reactExtension('purchase.checkout.block.render', () => <CheckoutU
 function CheckoutUpsell() {
   const settings = useSettings();
   const applyCartLinesChange = useApplyCartLinesChange();
+  const subtotalMoney = useSubtotalAmount();
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [added, setAdded] = useState(new Set());
@@ -49,6 +52,20 @@ function CheckoutUpsell() {
   const showDebugWhenEmpty = settings.show_debug_when_empty === true;
 
   const [displayMode, setDisplayMode] = useState('stacked');
+  const [ui, setUi] = useState({
+    section_heading: 'Add to your order',
+    title_size: 'medium',
+    title_appearance: 'default',
+    show_price: true,
+    show_description: true,
+    image_aspect_ratio: '',
+    image_fit: 'cover',
+    image_corner_radius: 'base',
+    button_kind: 'secondary',
+    button_appearance: 'default',
+    card_spacing: 'loose',
+    divider_between_cards: false,
+  });
 
   useEffect(() => {
     if (!apiUrl || !secret) {
@@ -69,7 +86,11 @@ function CheckoutUpsell() {
         if (r.ok) {
           return r.json().then((data) => {
             setOffers(data.offers || []);
-            setDisplayMode(data.display_mode === 'single' ? 'single' : 'stacked');
+            const dm = data.display_mode ?? data.ui?.display_mode ?? 'stacked';
+            setDisplayMode(dm === 'single' ? 'single' : 'stacked');
+            if (data.ui && typeof data.ui === 'object') {
+              setUi((prev) => ({ ...prev, ...data.ui }));
+            }
             const count = (data.offers || []).length;
             setStatus({
               type: 'connected',
@@ -113,6 +134,21 @@ function CheckoutUpsell() {
     } catch (_) {}
   };
 
+  const progressBar = ui.progress_bar && ui.progress_bar.enabled && Number(ui.progress_bar.goal) > 0 ? ui.progress_bar : null;
+  const currentSubtotal = Number(subtotalMoney?.amount) || 0;
+  const goalAmount = progressBar ? Number(progressBar.goal) : 0;
+  const progress = goalAmount > 0 ? Math.min(currentSubtotal / goalAmount, 1) : 0;
+  const remaining = Math.max(0, goalAmount - currentSubtotal);
+  const currencyCode = subtotalMoney?.currencyCode || 'USD';
+  const formatMoney = (value) => `${currencyCode} ${Number(value).toFixed(2)}`;
+  const progressMessage = progressBar
+    ? (currentSubtotal >= goalAmount
+        ? (progressBar.message_achieved || "You've unlocked free shipping!")
+        : (progressBar.message_below || "You're {amount} away from free shipping!")
+            .replace(/{amount}/g, formatMoney(remaining))
+            .replace(/{goal}/g, formatMoney(goalAmount)))
+    : '';
+
   const statusLine =
     status.type === 'not_configured'
       ? 'Not configured'
@@ -151,22 +187,52 @@ function CheckoutUpsell() {
 
   if (offers.length > 0 && !loading && status.type !== 'error' && status.type !== 'not_configured') {
     const offersToShow = displayMode === 'single' ? offers.slice(0, 1) : offers;
+    const sectionSpacing = ui.card_spacing === 'tight' ? 'tight' : ui.card_spacing === 'extraLoose' ? 'extraLoose' : 'loose';
+    const cardSpacing = ui.card_spacing === 'tight' ? 'tight' : ui.card_spacing === 'extraLoose' ? 'extraLoose' : 'loose';
+    const titleSize = ['small', 'medium', 'large', 'extraLarge'].includes(ui.title_size) ? ui.title_size : 'medium';
+    const titleAppearance = ui.title_appearance && ui.title_appearance !== 'default' ? ui.title_appearance : undefined;
+    const buttonKind = ['primary', 'secondary', 'plain'].includes(ui.button_kind) ? ui.button_kind : 'secondary';
+    const buttonAppearance = ui.button_appearance && ui.button_appearance !== 'default' ? ui.button_appearance : undefined;
+
     return (
-      <BlockStack spacing="loose">
-        <Text size="medium" emphasis="bold">Add to your order</Text>
-        {offersToShow.map((offer) => (
-          <BlockStack key={offer.id} spacing="tight">
-            {offer.image_url && <Image url={offer.image_url} alt={offer.title} />}
-            <Text>{offer.title}</Text>
+      <BlockStack spacing={sectionSpacing}>
+        {progressBar && (
+          <BlockStack spacing="tight">
+            <Text size="medium" emphasis="bold">{progressMessage}</Text>
+            <Progress value={progress} max={1} accessibilityLabel={progressMessage} />
+          </BlockStack>
+        )}
+        <Text size={titleSize} emphasis="bold" {...(titleAppearance ? { appearance: titleAppearance } : {})}>
+          {ui.section_heading || 'Add to your order'}
+        </Text>
+        {offersToShow.map((offer, index) => (
+          <BlockStack key={offer.id} spacing={cardSpacing}>
+            {index > 0 && ui.divider_between_cards && <Divider />}
+            {offer.image_url && (
+              <Image
+                source={offer.image_url}
+                accessibilityDescription={offer.title || 'Product'}
+                {...(ui.image_aspect_ratio && { aspectRatio: parseFloat(ui.image_aspect_ratio) || undefined })}
+                {...(ui.image_fit && { fit: ui.image_fit })}
+                {...(ui.image_corner_radius && { cornerRadius: ui.image_corner_radius })}
+              />
+            )}
+            <Text size={titleSize} {...(titleAppearance ? { appearance: titleAppearance } : {})}>
+              {offer.title}
+            </Text>
+            {ui.show_price && offer.price != null && offer.price !== '' && (
+              <Text appearance="subdued" size="small">${offer.price}</Text>
+            )}
             {(offer.offer_type === 'subscription' || offer.offer_type === 'both') && (
               <Text appearance="subdued" size="small">Subscribe & save</Text>
             )}
-            {offer.description && (
+            {ui.show_description && offer.description && (
               <Text appearance="subdued">{offer.description}</Text>
             )}
             <BlockStack spacing="tight">
               <Button
-                kind="secondary"
+                kind={buttonKind}
+                {...(buttonAppearance ? { appearance: buttonAppearance } : {})}
                 onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null)}
                 disabled={added.has(offer.variant_id)}
               >
@@ -181,6 +247,12 @@ function CheckoutUpsell() {
 
   return (
     <BlockStack spacing="tight">
+      {progressBar && (
+        <BlockStack spacing="tight">
+          <Text size="medium" emphasis="bold">{progressMessage}</Text>
+          <Progress value={progress} max={1} accessibilityLabel={progressMessage} />
+        </BlockStack>
+      )}
       {debugContent}
       {showDebugWhenEmpty && status.type === 'error' && (
         <Text size="small" appearance="subdued">Fix Block settings or check the app, then refresh checkout.</Text>

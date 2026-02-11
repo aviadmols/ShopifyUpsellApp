@@ -38,12 +38,13 @@ class CheckoutUpsellController extends Controller
         $context = $this->buildContext($request);
 
         $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
-        $displayMode = (string) ($placement->config['display_mode'] ?? 'stacked');
         $data = $this->enrichOffersFromShopify($shop, $eligible);
+        $ui = $this->buildUiFromPlacement($placement);
 
         return response()->json([
             'offers' => $data,
-            'display_mode' => $displayMode,
+            'display_mode' => $ui['display_mode'],
+            'ui' => $ui,
         ]);
     }
 
@@ -61,8 +62,9 @@ class CheckoutUpsellController extends Controller
             $variantId = $this->normalizeVariantIdToGid($o->product_variant_id);
             $title = trim((string) $o->title);
             $imageUrl = trim((string) $o->image_url);
+            $price = null;
 
-            if (($title === '' || $imageUrl === '') && $variantId !== '') {
+            if ($variantId !== '') {
                 try {
                     $variant = $service->getProductVariant($shop, $variantId);
                     if ($variant) {
@@ -76,6 +78,7 @@ class CheckoutUpsellController extends Controller
                         if ($imageUrl === '') {
                             $imageUrl = (string) ($variant['product']['featuredImage']['url'] ?? '');
                         }
+                        $price = isset($variant['price']) ? (string) $variant['price'] : null;
                     }
                 } catch (DecryptException|\Throwable) {
                     // Keep DB values
@@ -90,11 +93,51 @@ class CheckoutUpsellController extends Controller
                 'discount_type' => $o->discount_type,
                 'discount_value' => $o->discount_value?->toString(),
                 'image_url' => $imageUrl ?: $o->image_url,
+                'price' => $price,
                 'offer_type' => (string) ($o->offer_type ?? 'one_time'),
                 'selling_plan_id' => $o->selling_plan_id ? (string) $o->selling_plan_id : null,
             ];
         }
         return $out;
+    }
+
+    /**
+     * Build UI config from placement for checkout block.
+     *
+     * @return array<string, mixed>
+     */
+    protected function buildUiFromPlacement(Placement $placement): array
+    {
+        $c = $placement->config ?? [];
+
+        $progressBarEnabled = (bool) ($c['progress_bar_enabled'] ?? false);
+        $progressBarGoal = (float) ($c['progress_bar_goal'] ?? 0);
+        $progressBar = [
+            'enabled' => $progressBarEnabled && $progressBarGoal > 0,
+            'type' => (string) ($c['progress_bar_type'] ?? 'free_shipping'),
+            'goal' => $progressBarGoal,
+            'message_below' => (string) ($c['progress_bar_message_below'] ?? "You're {amount} away from free shipping!"),
+            'message_achieved' => (string) ($c['progress_bar_message_achieved'] ?? "You've unlocked free shipping!"),
+            'discount_type' => (string) ($c['progress_bar_discount_type'] ?? 'percentage'),
+            'discount_value' => (float) ($c['progress_bar_discount_value'] ?? 0),
+        ];
+
+        return [
+            'display_mode' => (string) ($c['display_mode'] ?? 'stacked'),
+            'section_heading' => (string) ($c['section_heading'] ?? 'Add to your order'),
+            'title_size' => (string) ($c['title_size'] ?? 'medium'),
+            'title_appearance' => (string) ($c['title_appearance'] ?? 'default'),
+            'show_price' => (bool) ($c['show_price'] ?? true),
+            'show_description' => (bool) ($c['show_description'] ?? true),
+            'image_aspect_ratio' => trim((string) ($c['image_aspect_ratio'] ?? '')),
+            'image_fit' => (string) ($c['image_fit'] ?? 'cover'),
+            'image_corner_radius' => (string) ($c['image_corner_radius'] ?? 'base'),
+            'button_kind' => (string) ($c['button_kind'] ?? 'secondary'),
+            'button_appearance' => (string) ($c['button_appearance'] ?? 'default'),
+            'card_spacing' => (string) ($c['card_spacing'] ?? 'loose'),
+            'divider_between_cards' => (bool) ($c['divider_between_cards'] ?? false),
+            'progress_bar' => $progressBar,
+        ];
     }
 
     /**
