@@ -40,6 +40,11 @@ class Offer extends Model
         return $this->belongsTo(Rule::class);
     }
 
+    public function blockOffers(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(BlockOffer::class);
+    }
+
     public function postPurchaseLogs(): HasMany
     {
         return $this->hasMany(PostPurchaseLog::class);

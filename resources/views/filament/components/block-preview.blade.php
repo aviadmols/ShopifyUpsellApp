@@ -4,7 +4,7 @@
   $config = $config ?? [];
 @endphp
 <div class="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-gray-900/50 p-6">
-  <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Preview — {{ $surface }} / {{ $type }}</p>
+  <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Widget preview — {{ $surface ?: '—' }} / {{ $type ?: '—' }}</p>
   <div class="max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 space-y-4">
 
     @if($surface === 'checkout' && $type === 'upsell')
@@ -114,7 +114,7 @@
     @endif
 
     @if(empty($surface) || empty($type))
-      <p class="text-sm text-gray-500 dark:text-gray-400">Select Surface and Type above, then click Preview.</p>
+      <p class="text-sm text-gray-500 dark:text-gray-400">Select Surface and Type in the form, then click "Preview widget" to see the preview.</p>
     @endif
   </div>
 </div>

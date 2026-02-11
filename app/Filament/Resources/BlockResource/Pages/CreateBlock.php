@@ -2,12 +2,18 @@
 
 namespace App\Filament\Resources\BlockResource\Pages;
 
+use App\Filament\Forms\Components\RuleBuilder;
 use App\Filament\Resources\BlockResource;
+use App\Filament\Widgets\WidgetRegistry;
 use App\Models\Block;
+use App\Models\BlockOffer;
+use App\Models\Offer;
 use App\Models\Placement;
+use App\Models\Rule;
 use Filament\Actions;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Contracts\View\View;
+use Illuminate\Validation\ValidationException;
 
 class CreateBlock extends CreateRecord
 {
@@ -16,17 +22,20 @@ class CreateBlock extends CreateRecord
     /** @var array<string, mixed> */
     public array $blockPreviewData = [];
 
+    /** @var array<int, array<string, mixed>> */
+    public array $widgetOffersData = [];
+
     protected function getHeaderActions(): array
     {
         return [
             Actions\Action::make('preview')
-                ->label('Preview')
+                ->label('Preview widget')
                 ->icon('heroicon-o-eye')
                 ->color('gray')
                 ->action(function (): void {
                     $this->blockPreviewData = $this->getBlockPreviewData();
                 })
-                ->modalHeading('Block preview')
+                ->modalHeading('Widget preview')
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('Close')
                 ->modalContent(fn (): View => view('filament.components.block-preview', array_merge(['surface' => '', 'type' => '', 'config' => []], $this->blockPreviewData))),
@@ -57,10 +66,84 @@ class CreateBlock extends CreateRecord
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        $type = (string) ($data['type'] ?? '');
+        $shopId = $data['shop_id'] ?? null;
+        $surface = (string) ($data['surface'] ?? '');
+        if (WidgetRegistry::isSingleton($type) && $shopId && $surface) {
+            $exists = Block::where('shop_id', $shopId)->where('surface', $surface)->where('type', $type)->exists();
+            if ($exists) {
+                throw ValidationException::withMessages([
+                    'type' => __('This widget type can only be created once per shop. One already exists for this shop.'),
+                ]);
+            }
+        }
+        $this->widgetOffersData = is_array($data['widget_offers'] ?? null) ? $data['widget_offers'] : [];
         $data['config'] = self::buildBlockConfig($data);
         self::unsetConfigKeys($data);
+        unset($data['widget_offers']);
 
         return $data;
+    }
+
+    protected function afterCreate(): void
+    {
+        self::syncWidgetOffers($this->record, $this->widgetOffersData);
+    }
+
+    /**
+     * Create/update offers from widget_offers repeater, sync block_offers pivot, update block config.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    public static function syncWidgetOffers(Block $block, array $items): void
+    {
+        $shopId = $block->shop_id;
+        if (! $shopId) {
+            return;
+        }
+        $offerIds = [];
+        $sortOrder = 0;
+        foreach ($items as $item) {
+            $variantId = $item['product_variant_id'] ?? null;
+            if (! $variantId) {
+                continue;
+            }
+            $conditions = RuleBuilder::buildConditionsFromState($item);
+            $ruleId = null;
+            if (! empty($conditions)) {
+                $rule = Rule::create([
+                    'shop_id' => $shopId,
+                    'name' => 'Widget offer rule ' . substr(md5(serialize($item)), 0, 8),
+                    'conditions' => $conditions,
+                ]);
+                $ruleId = $rule->id;
+            }
+            $offer = Offer::create([
+                'shop_id' => $shopId,
+                'rule_id' => $ruleId,
+                'title' => (string) ($item['title'] ?? 'Upsell offer'),
+                'description' => (string) ($item['description'] ?? ''),
+                'product_variant_id' => is_string($variantId) || is_numeric($variantId) ? (string) $variantId : '',
+                'discount_type' => (string) ($item['discount_type'] ?? 'none'),
+                'discount_value' => (float) ($item['discount_value'] ?? 0),
+                'image_url' => (string) ($item['image_url'] ?? ''),
+                'offer_type' => (string) ($item['offer_type'] ?? 'one_time'),
+                'selling_plan_id' => (string) ($item['selling_plan_id'] ?? ''),
+                'recharge_subscription_variant_id' => (string) ($item['recharge_subscription_variant_id'] ?? ''),
+                'allow_subscription_in_post_purchase' => (bool) ($item['allow_subscription_in_post_purchase'] ?? false),
+            ]);
+            $offerIds[] = $offer->id;
+            BlockOffer::create([
+                'block_id' => $block->id,
+                'offer_id' => $offer->id,
+                'sort_order' => $sortOrder++,
+            ]);
+        }
+        if ($offerIds !== []) {
+            $config = $block->config ?? [];
+            $config['offer_ids'] = $offerIds;
+            $block->update(['config' => $config]);
+        }
     }
 
     /**
@@ -75,8 +158,9 @@ class CreateBlock extends CreateRecord
         $config = [];
 
         if ($surface === 'checkout' && $type === 'upsell') {
+            $offerIds = ! empty($data['widget_offers']) ? [] : Placement::normalizeIntList((string) ($data['offer_ids_csv'] ?? ''));
             $config = [
-                'offer_ids' => Placement::normalizeIntList((string) ($data['offer_ids_csv'] ?? '')),
+                'offer_ids' => $offerIds,
                 'max_offers' => max(1, (int) ($data['max_offers'] ?? 3)),
                 'display_mode' => (string) ($data['display_mode'] ?? 'stacked'),
                 'require_expanded' => (bool) ($data['require_expanded'] ?? false),
@@ -136,8 +220,9 @@ class CreateBlock extends CreateRecord
                 'spacing' => (string) ($data['spacing'] ?? 'tight'),
             ];
         } elseif ($surface === 'post_purchase' && $type === 'post_purchase_funnel') {
+            $offerIds = ! empty($data['widget_offers']) ? [] : Placement::normalizeIntList((string) ($data['offer_ids_csv'] ?? ''));
             $config = [
-                'offer_ids' => Placement::normalizeIntList((string) ($data['offer_ids_csv'] ?? '')),
+                'offer_ids' => $offerIds,
                 'max_offers' => max(1, (int) ($data['max_offers'] ?? 3)),
                 'cooldown_hours' => max(0, (int) ($data['cooldown_hours'] ?? 24)),
                 'allow_reoffer' => (bool) ($data['allow_reoffer'] ?? false),
@@ -183,7 +268,7 @@ class CreateBlock extends CreateRecord
             'cooldown_hours', 'allow_reoffer', 'funnel_headline_template', 'funnel_show_progress', 'funnel_step_labels',
             'show_timer', 'timer_seconds', 'timer_label', 'urgency_message', 'cta_text', 'decline_text',
             'quantity_default', 'quantity_min', 'quantity_max',
-            'extra_config',
+            'extra_config', 'widget_offers',
         ];
         foreach ($keys as $key) {
             unset($data[$key]);

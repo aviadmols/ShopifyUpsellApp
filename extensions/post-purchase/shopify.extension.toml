@@ -8,5 +8,5 @@ type = "checkout_post_purchase"
 [[extensions.settings.fields]]
 key = "block_id"
 type = "single_line_text_field"
-name = "Block ID (optional)"
-description = "Admin block ID from Blocks (post-purchase funnel). Leave empty for legacy Placement."
+name = "Widget ID (optional)"
+description = "ID from Admin → Widgets (post-purchase funnel widget). One per shop. Leave empty for legacy Placement."

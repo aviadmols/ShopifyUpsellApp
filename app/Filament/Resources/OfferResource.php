@@ -319,7 +319,7 @@ class OfferResource extends Resource
     /**
      * @return array<string, string>
      */
-    protected static function variantOptions(?int $shopId, string $search): array
+    public static function variantOptions(?int $shopId, string $search): array
     {
         $shop = $shopId ? Shop::whereNull('uninstalled_at')->find($shopId) : null;
         if (! $shop) {
@@ -360,7 +360,7 @@ class OfferResource extends Resource
      * @param  array<int, string|array>  $values  May contain nested arrays when Select receives array state.
      * @return array<string, string>
      */
-    protected static function variantLabels(?int $shopId, array $values): array
+    public static function variantLabels(?int $shopId, array $values): array
     {
         $values = self::normalizeVariantIdsToScalars($values);
         $labels = [];

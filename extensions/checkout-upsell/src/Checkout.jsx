@@ -8,6 +8,7 @@ import {
   useApi,
   BlockStack,
   Button,
+  Link,
   Text,
   Image,
   Divider,
@@ -17,7 +18,7 @@ import {
 } from '@shopify/ui-extensions-react/checkout';
 import { useEffect, useState } from 'react';
 
-const BUILD_ID = 'zyg-upsell-checkout-20260210';
+const BUILD_ID = 'zyg-upsell-checkout-20260212-widgets';
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
 const DEFAULT_SHOP = 'millsdailypacks.myshopify.com';
 
@@ -32,6 +33,62 @@ function shortenShop(shop) {
 }
 
 export default reactExtension('purchase.checkout.block.render', () => <CheckoutUpsell />);
+
+function ContentBlockRender({ block }) {
+  const type = block?.type || '';
+  const config = block?.config || {};
+  const spacing = config.spacing === 'loose' ? 'loose' : 'tight';
+  const textSize = ['small', 'medium', 'large'].includes(config.text_size) ? config.text_size : 'medium';
+  const buttonKind = ['primary', 'secondary', 'plain'].includes(config.button_kind) ? config.button_kind : 'secondary';
+
+  if (type === 'content_icon_features') {
+    const items = Array.isArray(config.icon_features) ? config.icon_features : [];
+    return (
+      <BlockStack spacing="loose">
+        {items.map((item, i) => (
+          <BlockStack key={i} spacing="tight">
+            {item.title && <Text size="medium" emphasis="bold">{item.title}</Text>}
+            {item.subtitle && <Text appearance="subdued" size="small">{item.subtitle}</Text>}
+          </BlockStack>
+        ))}
+      </BlockStack>
+    );
+  }
+
+  if (type === 'content_banner' || type === 'content_rich_text' || type === 'content_button') {
+    return (
+      <BlockStack spacing={spacing}>
+        {config.image_url && type === 'content_banner' && (
+          <Image source={config.image_url} alt="" />
+        )}
+        {config.title && <Text size={textSize} emphasis="bold">{config.title}</Text>}
+        {config.body && <Text appearance="subdued" size="small">{config.body}</Text>}
+        {config.button_label && config.button_url && (
+          <Link to={config.button_url}>{config.button_label}</Link>
+        )}
+      </BlockStack>
+    );
+  }
+
+  if (type === 'content_product_card') {
+    return (
+      <BlockStack spacing={spacing}>
+        {config.image_url && <Image source={config.image_url} alt="" />}
+        {config.title && <Text size={textSize} emphasis="bold">{config.title}</Text>}
+        {config.body && <Text appearance="subdued" size="small">{config.body}</Text>}
+        {config.show_price !== false && config.price_text && (
+          <Text appearance="subdued" size="small">{config.price_text}</Text>
+        )}
+        {config.badge_text && <Text appearance="subdued" size="small">{config.badge_text}</Text>}
+        {config.button_label && config.button_url && (
+          <Link to={config.button_url}>{config.button_label}</Link>
+        )}
+      </BlockStack>
+    );
+  }
+
+  return null;
+}
 
 function normalizeLineItemsForApi(lines) {
   if (!Array.isArray(lines)) return [];
@@ -56,6 +113,7 @@ function CheckoutUpsell() {
   const applyCartLinesChange = useApplyCartLinesChange();
   const subtotalMoney = useSubtotalAmount();
   const [offers, setOffers] = useState([]);
+  const [contentBlocks, setContentBlocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [added, setAdded] = useState(new Set());
   const [status, setStatus] = useState({
@@ -96,7 +154,7 @@ function CheckoutUpsell() {
       setStatus({
         type: 'not_configured',
         message: 'Block not connected',
-        detail: 'Set "Extension secret" in Block settings (required). API URL and Shop domain are optional.',
+        detail: 'Set "Extension secret" in block settings (required). API URL and Shop domain are optional.',
       });
       return;
     }
@@ -118,16 +176,18 @@ function CheckoutUpsell() {
         if (r.ok) {
           return r.json().then((data) => {
             setOffers(data.offers || []);
+            setContentBlocks(Array.isArray(data.blocks) ? data.blocks : []);
             const dm = data.display_mode ?? data.ui?.display_mode ?? 'stacked';
             setDisplayMode(dm === 'single' ? 'single' : 'stacked');
             if (data.ui && typeof data.ui === 'object') {
               setUi((prev) => ({ ...prev, ...data.ui }));
             }
             const count = (data.offers || []).length;
+            const blockCount = (data.blocks || []).length;
             setStatus({
               type: 'connected',
-              message: count ? `Connected — ${count} offer(s)` : 'Connected — no offers for this cart',
-              detail: count ? 'Upsell active' : 'Add offers in Admin → Offers and enable Checkout placement.',
+              message: count ? `Connected — ${count} offer(s)` : blockCount ? 'Connected — content widget' : 'Connected — no offers for this cart',
+              detail: count ? 'Upsell active' : blockCount ? 'Content widget' : 'Add a widget in Admin → Widgets and set Widget ID here.',
             });
           });
         }
@@ -138,6 +198,7 @@ function CheckoutUpsell() {
         else if (statusCode >= 500) detail = 'Server error. Check app logs on Railway.';
         setStatus({ type: 'error', message: 'Connection failed', detail });
         setOffers([]);
+        setContentBlocks([]);
       })
       .catch((err) => {
         setStatus({
@@ -146,6 +207,7 @@ function CheckoutUpsell() {
           detail: err && err.message ? err.message : 'Network error. Check API URL and CORS.',
         });
         setOffers([]);
+        setContentBlocks([]);
       })
       .finally(() => setLoading(false));
   }, [apiUrl, secret, shopDomain, blockId, subtotalMoney?.amount, JSON.stringify(normalizeLineItemsForApi(lineItems))]);
@@ -214,8 +276,25 @@ function CheckoutUpsell() {
     </Text>
   );
 
-  const showEmptyOrError = loading || status.type === 'not_configured' || status.type === 'error' || offers.length === 0;
+  const hasContent = contentBlocks.length > 0;
+  const showEmptyOrError = loading || status.type === 'not_configured' || status.type === 'error' || (offers.length === 0 && !hasContent);
   const debugContent = showDebugWhenEmpty ? fullDebugBlock : minimalMessage;
+
+  if (hasContent && !loading && status.type !== 'error' && status.type !== 'not_configured') {
+    return (
+      <BlockStack spacing="loose">
+        {contentBlocks.map((blk) => (
+          <ContentBlockRender key={blk.id || blk.type} block={blk} />
+        ))}
+        {progressBar && (
+          <BlockStack spacing="tight">
+            <Text size="medium" emphasis="bold">{progressMessage}</Text>
+            <Progress value={progress} max={1} accessibilityLabel={progressMessage} />
+          </BlockStack>
+        )}
+      </BlockStack>
+    );
+  }
 
   if (offers.length > 0 && !loading && status.type !== 'error' && status.type !== 'not_configured') {
     const offersToShow = displayMode === 'single' ? offers.slice(0, 1) : offers;
@@ -289,8 +368,8 @@ function CheckoutUpsell() {
       {showDebugWhenEmpty && status.type === 'error' && (
         <Text size="small" appearance="subdued">Fix Block settings or check the app, then refresh checkout.</Text>
       )}
-      {showDebugWhenEmpty && offers.length === 0 && !loading && status.type === 'connected' && (
-        <Text size="small" appearance="subdued">Add offers in Admin → Offers and enable Checkout placement for this shop.</Text>
+      {showDebugWhenEmpty && offers.length === 0 && !hasContent && !loading && status.type === 'connected' && (
+        <Text size="small" appearance="subdued">Add a widget in Admin → Widgets and set Widget ID in this block settings.</Text>
       )}
     </BlockStack>
   );

@@ -52,6 +52,7 @@
 1. ניהול החנות → **Settings** → **Checkout** (או **Online Store** → **Themes** → **Customize** ואז בחירת Checkout אם יש).
 2. בעורך ה-Checkout – לחפש **"App block"** / **"Add block"**.
 3. לבחור את האפליקציה (Zyg Upsell / Checkout Upsell) ולהוסיף את הבלוק לאזור הרצוי.
+4. **Widget ID**: בכל מופע של הבלוק אפשר להזין **Widget ID** (מהאדמין → Widgets). כל מופע יכול להציג widget אחר: Upsell, Progress bar, או Content (אייקונים, באנר, כפתור וכו'). אם לא מזינים ID – משתמשים ב-Legacy Placement.
 
 אם הבלוק לא נוסף – **ה-extension לא יוצג** ב-Checkout, גם אם ה-deploy תקין.
 

@@ -38,8 +38,8 @@ description = "Optional. Store myshopify.com domain. Leave empty for default."
 [[extensions.settings.fields]]
 key = "block_id"
 type = "single_line_text_field"
-name = "Block ID (optional)"
-description = "Admin block ID from Blocks. Leave empty to use legacy Placement config."
+name = "Widget ID (optional)"
+description = "ID from Admin → Widgets. Use one widget per block instance (e.g. Upsell, Progress bar, or Content). Leave empty for legacy Placement."
 [[extensions.settings.fields]]
 key = "show_debug_when_empty"
 type = "boolean"

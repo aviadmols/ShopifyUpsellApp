@@ -31,8 +31,8 @@ name = "Shop domain"
 [[extensions.settings.fields]]
 key = "block_id"
 type = "single_line_text_field"
-name = "Block ID (optional)"
-description = "Admin block ID from Blocks. Leave empty for legacy Placement block list."
+name = "Widget ID (optional)"
+description = "ID from Admin → Widgets. Leave empty for legacy Placement block list."
 [[extensions.settings.fields]]
 key = "show_debug_when_empty"
 type = "boolean"

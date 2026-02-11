@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Block extends Model
 {
@@ -32,6 +34,24 @@ class Block extends Model
     public function rule(): BelongsTo
     {
         return $this->belongsTo(Rule::class);
+    }
+
+    public function blockOffers(): HasMany
+    {
+        return $this->hasMany(BlockOffer::class)->orderBy('sort_order');
+    }
+
+    /** Offers linked to this block via pivot (order by sort_order). */
+    public function offers(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            Offer::class,
+            BlockOffer::class,
+            'block_id',
+            'id',
+            'id',
+            'offer_id'
+        )->orderBy('block_offers.sort_order');
     }
 
     /** Surfaces: where the block is shown */
@@ -72,9 +92,13 @@ class Block extends Model
         };
     }
 
-    /** Normalized offer_ids from config (for upsell / post_purchase_funnel). */
+    /** Normalized offer IDs: from block_offers pivot first, then fallback to config offer_ids. */
     public function getOfferIds(): array
     {
+        $pivot = $this->blockOffers()->pluck('offer_id')->all();
+        if ($pivot !== []) {
+            return array_values(array_map('intval', $pivot));
+        }
         $raw = $this->config['offer_ids'] ?? [];
         if (is_string($raw)) {
             $raw = array_filter(array_map('intval', explode(',', $raw)));

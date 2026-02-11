@@ -2,8 +2,12 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Forms\Components\RuleBuilder;
 use App\Filament\Resources\BlockResource\Pages;
+use App\Filament\Resources\OfferResource;
+use App\Filament\Widgets\WidgetRegistry;
 use App\Models\Block;
+use App\Models\Offer;
 use App\Models\Placement;
 use Filament\Forms;
 use Filament\Forms\Get;
@@ -19,28 +23,19 @@ class BlockResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-cube';
 
-    protected static ?string $navigationGroup = 'Blocks';
+    protected static ?string $navigationGroup = 'Widgets';
 
     protected static ?int $navigationSort = 1;
 
-    protected static ?string $modelLabel = 'Block';
+    protected static ?string $modelLabel = 'Widget';
+
+    protected static ?string $pluralModelLabel = 'Widgets';
 
     public static function form(Form $form): Form
     {
-        $contentTypes = [
-            'content_icon_features' => 'Icon features (icon + title + description)',
-            'content_banner' => 'Banner (image + text + button)',
-            'content_rich_text' => 'Rich text',
-            'content_button' => 'Button / CTA',
-            'content_product_card' => 'Product card',
-        ];
-        $checkoutTypes = ['upsell' => 'Upsell (offers)', 'progress_bar' => 'Progress bar'] + $contentTypes;
-        $thankYouTypes = $contentTypes;
-        $postPurchaseTypes = ['post_purchase_funnel' => 'Post-purchase funnel'];
-
         return $form
             ->schema([
-                Forms\Components\Section::make('Block identity')
+                Forms\Components\Section::make('Widget identity')
                     ->schema([
                         Forms\Components\Select::make('shop_id')
                             ->relationship('shop', 'shop_domain', fn (Builder $q) => $q->whereNull('uninstalled_at'))
@@ -48,25 +43,12 @@ class BlockResource extends Resource
                             ->searchable()
                             ->preload(),
                         Forms\Components\Select::make('surface')
-                            ->options(array_combine(Block::surfaces(), Block::surfaces()))
+                            ->options(array_combine(WidgetRegistry::surfaces(), WidgetRegistry::surfaces()))
                             ->required()
                             ->live()
                             ->afterStateUpdated(fn ($state, Forms\Set $set) => $set('type', '')),
                         Forms\Components\Select::make('type')
-                            ->options(function (Get $get) use ($checkoutTypes, $thankYouTypes, $postPurchaseTypes) {
-                                $surface = $get('surface');
-                                if ($surface === 'checkout') {
-                                    return $checkoutTypes;
-                                }
-                                if ($surface === 'thank_you') {
-                                    return $thankYouTypes;
-                                }
-                                if ($surface === 'post_purchase') {
-                                    return $postPurchaseTypes;
-                                }
-
-                                return [];
-                            })
+                            ->options(fn (Get $get): array => WidgetRegistry::typeOptionsForSurface($get('surface')))
                             ->required(fn (Get $get): bool => ! empty($get('surface')))
                             ->live(),
                         Forms\Components\TextInput::make('name')
@@ -89,6 +71,18 @@ class BlockResource extends Resource
                     ])
                     ->columns(2),
 
+                Forms\Components\Section::make('Preview')
+                    ->description('See how this widget will look in Checkout or Thank you page.')
+                    ->schema([
+                        Forms\Components\Placeholder::make('preview_placeholder')
+                            ->label('')
+                            ->content(new \Illuminate\Support\HtmlString(
+                                '<p class="text-sm text-gray-600 dark:text-gray-400">Use the <strong>Preview</strong> button (eye icon) in the top bar to open a live preview of this widget.</p>'
+                            )),
+                    ])
+                    ->collapsible()
+                    ->collapsed(fn (Get $get): bool => empty($get('surface')) || empty($get('type'))),
+
                 self::schemaCheckoutUpsell($form),
                 self::schemaCheckoutProgressBar($form),
                 self::schemaContentIconFeatures($form),
@@ -96,6 +90,7 @@ class BlockResource extends Resource
                 self::schemaContentProductCard($form),
                 self::schemaPostPurchaseFunnel($form),
 
+                self::schemaWidgetOffers($form),
                 Forms\Components\KeyValue::make('extra_config')
                     ->label('Extra config (optional)')
                     ->reorderable()
@@ -103,15 +98,76 @@ class BlockResource extends Resource
             ]);
     }
 
+    protected static function schemaWidgetOffers(Form $form): Forms\Components\Section
+    {
+        return Forms\Components\Section::make('Offers (manage products & rules)')
+            ->description('Add offers and set rules per offer. Order below is the display order.')
+            ->schema([
+                Forms\Components\Repeater::make('widget_offers')
+                    ->label('Offers')
+                    ->defaultItems(0)
+                    ->reorderable()
+                    ->reorderableWithButtons()
+                    ->schema([
+                        Forms\Components\Select::make('product_variant_id')
+                            ->label('Product variant')
+                            ->searchable()
+                            ->getSearchResultsUsing(fn (string $search, Get $get): array => OfferResource::variantOptions($get('shop_id'), $search))
+                            ->getOptionLabelsUsing(fn ($value, Get $get): array => $value ? OfferResource::variantLabels($get('shop_id'), [(string) $value]) : []),
+                        Forms\Components\TextInput::make('title')
+                            ->required()
+                            ->default('Upsell offer')
+                            ->maxLength(255),
+                        Forms\Components\Textarea::make('description')->columnSpanFull(),
+                        Forms\Components\Select::make('discount_type')
+                            ->options(array_combine(Offer::discountTypes(), Offer::discountTypes()))
+                            ->default('none')
+                            ->live(),
+                        Forms\Components\TextInput::make('discount_value')
+                            ->numeric()
+                            ->required(fn (Get $get): bool => in_array($get('discount_type'), ['percentage', 'fixed'], true)),
+                        Forms\Components\TextInput::make('image_url')->label('Image URL')->url()->maxLength(500),
+                        Forms\Components\Select::make('offer_type')
+                            ->options([
+                                'one_time' => 'One-time only',
+                                'subscription' => 'Subscription only (Recharge)',
+                                'both' => 'One-time and subscription',
+                            ])
+                            ->default('one_time')
+                            ->live(),
+                        Forms\Components\TextInput::make('selling_plan_id')
+                            ->label('Selling plan ID (GID)')
+                            ->maxLength(255)
+                            ->visible(fn (Get $get): bool => in_array($get('offer_type'), ['subscription', 'both'], true)),
+                        Forms\Components\TextInput::make('recharge_subscription_variant_id')
+                            ->label('Recharge subscription variant ID')
+                            ->maxLength(255)
+                            ->visible(fn (Get $get): bool => in_array($get('offer_type'), ['subscription', 'both'], true)),
+                        Forms\Components\Toggle::make('allow_subscription_in_post_purchase')
+                            ->default(false)
+                            ->visible(fn (Get $get): bool => in_array($get('offer_type'), ['subscription', 'both'], true)),
+                        Forms\Components\Placeholder::make('rule_section')
+                            ->label('Show this offer when (optional)')
+                            ->content('Set conditions below. Leave empty to always show.'),
+                        ...RuleBuilder::schema(),
+                    ])
+                    ->columns(2)
+                    ->columnSpanFull(),
+            ])
+            ->visible(fn (Get $get): bool => (($get('surface') === 'checkout' && $get('type') === 'upsell') || ($get('surface') === 'post_purchase' && $get('type') === 'post_purchase_funnel')))
+            ->collapsed(false);
+    }
+
     protected static function schemaCheckoutUpsell(Form $form): Forms\Components\Section
     {
         return Forms\Components\Section::make('Upsell block (Checkout)')
-            ->description('Offers and display. Each offer can have its own rule in Offer resource.')
+            ->description('Display options. Add offers in the section above or use comma-separated Offer IDs below.')
             ->schema([
                 Forms\Components\TextInput::make('offer_ids_csv')
-                    ->label('Offer IDs (comma separated)')
+                    ->label('Offer IDs (comma separated, fallback)')
                     ->placeholder('1,2,3')
-                    ->required(),
+                    ->required(fn (Get $get): bool => empty($get('widget_offers')))
+                    ->helperText('Required when no offers are added above.'),
                 Forms\Components\TextInput::make('max_offers')
                     ->numeric()
                     ->default(3)
@@ -296,9 +352,10 @@ class BlockResource extends Resource
         return Forms\Components\Section::make('Post-purchase funnel')
             ->schema([
                 Forms\Components\TextInput::make('offer_ids_csv')
-                    ->label('Offer IDs (order = funnel steps)')
+                    ->label('Offer IDs (order = funnel steps, fallback)')
                     ->placeholder('1,2,3')
-                    ->required(),
+                    ->required(fn (Get $get): bool => empty($get('widget_offers')))
+                    ->helperText('Required when no offers are added in the section above.'),
                 Forms\Components\TextInput::make('max_offers')
                     ->numeric()
                     ->minValue(1)
@@ -362,9 +419,9 @@ class BlockResource extends Resource
                     ->searchable()
                     ->preload(),
                 Tables\Filters\SelectFilter::make('surface')
-                    ->options(array_combine(Block::surfaces(), Block::surfaces())),
+                    ->options(array_combine(WidgetRegistry::surfaces(), WidgetRegistry::surfaces())),
                 Tables\Filters\SelectFilter::make('type')
-                    ->options(array_combine(Block::types(), Block::types())),
+                    ->options(WidgetRegistry::allTypeLabels()),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

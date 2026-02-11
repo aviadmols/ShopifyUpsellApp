@@ -1,15 +1,17 @@
-# Blocks – ארכיטקטורת בלוקים (Checkout / Thank you / Post-purchase)
+# Blocks / Widgets – ארכיטקטורת בלוקים (Checkout / Thank you / Post-purchase)
 
 ## סקירה
 
-ניהול תצוגה ב-Checkout, Thank you ו-Post-purchase מתבצע דרך **Blocks** באדמין. לכל בלוק יש **מזהה (ID)**. ב-Shopify, בכל מופע של App block (בעורך Checkout או Thank you) ניתן להזין **Block ID** – כך אותו extension יכול להציג בלוקים שונים לפי מיקום.
+ניהול תצוגה ב-Checkout, Thank you ו-Post-purchase מתבצע דרך **Widgets** (לשעבר Blocks) באדמין. לכל widget יש **מזהה (ID)**. ב-Shopify, בכל מופע של App block (בעורך Checkout או Thank you) ניתן להזין **Block ID** – כך אותו extension יכול להציג בלוקים שונים לפי מיקום.
 
-## אדמין
+## אדמין (Widgets)
 
-- **Blocks** (תפריט Blocks): יצירה ועריכה של בלוקים.
+- **Widgets** (תפריט Widgets): יצירה ועריכה של כל סוגי ה-widgets.
   - **Surface**: `checkout` | `thank_you` | `post_purchase`
   - **Type**: לפי surface – למשל `upsell`, `progress_bar`, `content_icon_features`, `content_banner`, `content_rich_text`, `content_button`, `content_product_card`, `post_purchase_funnel`
-  - **Rule** (אופציונלי): חוק ברמת בלוק – מתי להציג את הבלוק (UTM, סל, מוצרים וכו').
+  - **Rule** (אופציונלי): חוק ברמת widget – מתי להציג (UTM, סל, מוצרים וכו').
+  - **Offers (inline)**: ב-widgetים מסוג Upsell ו-Post-purchase funnel ניתן לנהל מוצרים/הצעות ישירות בתוך הטופס (סעיף "Offers (manage products & rules)") – כולל חוק per-offer. הסדר בקופסה קובע את סדר ההצגה. נתונים נשמרים ב-tabel `block_offers` (pivot) ו-`offers`.
+  - **Singleton**: widget מסוג `post_purchase_funnel` ניתן ליצירה **פעם אחת בלבד** לכל חנות; ניסיון ליצור שני ייכשל בולידציה.
 - **Placements** מסומן כ-**Legacy**: ממשיך לעבוד כ-fallback כשלא מוגדר `block_id` בהגדרות הבלוק.
 
 ## הרחבות (Extensions)
@@ -35,4 +37,5 @@
 ## מיגרציה
 
 - טבלה **blocks** (מיגרציה `2026_02_11_000002_create_blocks_table`).
+- טבלת pivot **block_offers** (מיגרציה `2026_02_12_000001_create_block_offers_table`): קישור widget ↔ offers עם `sort_order`. ה-API משתמש ב-`Block::getOfferIds()` שמחזיר קודם את ה-offer IDs מ-pivot (לפי סדר), ורק אם אין – מ-`config.offer_ids`.
 - מיגרציה `2026_02_11_000003_migrate_thank_you_blocks_to_blocks` מעתיקה רשומות מ-`thank_you_blocks` ל-`blocks` (surface=thank_you). טבלת `thank_you_blocks` נשארת כ-Legacy.

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\BlockResource\Pages;
 
 use App\Filament\Resources\BlockResource;
+use App\Models\Offer;
 use App\Models\Placement;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
@@ -15,20 +16,23 @@ class EditBlock extends EditRecord
     /** @var array<string, mixed> */
     public array $blockPreviewData = [];
 
+    /** @var array<int, array<string, mixed>> */
+    public array $widgetOffersData = [];
+
     protected function getHeaderActions(): array
     {
         return [
             Actions\Action::make('preview')
-                ->label('Preview')
+                ->label('Preview widget')
                 ->icon('heroicon-o-eye')
                 ->color('gray')
                 ->action(function (): void {
                     $this->blockPreviewData = $this->getBlockPreviewData();
                 })
-                ->modalHeading('Block preview')
+                ->modalHeading('Widget preview')
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('Close')
-                ->modalContent(fn (): View => view('filament.components.block-preview', $this->blockPreviewData)),
+                ->modalContent(fn (): View => view('filament.components.block-preview', array_merge(['surface' => '', 'type' => '', 'config' => []], $this->blockPreviewData))),
             Actions\DeleteAction::make(),
         ];
     }
@@ -57,11 +61,13 @@ class EditBlock extends EditRecord
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
+        $this->record->load('blockOffers.offer.rule');
         $config = is_array($data['config'] ?? null) ? $data['config'] : [];
         $surface = (string) ($data['surface'] ?? '');
         $type = (string) ($data['type'] ?? '');
 
         if ($surface === 'checkout' && $type === 'upsell') {
+            $data['widget_offers'] = self::widgetOffersFromBlock($this->record);
             $data['offer_ids_csv'] = implode(',', Placement::normalizeIntList($config['offer_ids'] ?? []));
             $data['max_offers'] = (int) ($config['max_offers'] ?? 3);
             $data['display_mode'] = (string) ($config['display_mode'] ?? 'stacked');
@@ -111,6 +117,7 @@ class EditBlock extends EditRecord
             $data['button_kind'] = (string) ($config['button_kind'] ?? 'secondary');
             $data['spacing'] = (string) ($config['spacing'] ?? 'tight');
         } elseif ($surface === 'post_purchase' && $type === 'post_purchase_funnel') {
+            $data['widget_offers'] = self::widgetOffersFromBlock($this->record);
             $data['offer_ids_csv'] = implode(',', Placement::normalizeIntList($config['offer_ids'] ?? []));
             $data['max_offers'] = (int) ($config['max_offers'] ?? 3);
             $data['cooldown_hours'] = (int) ($config['cooldown_hours'] ?? 24);
@@ -159,10 +166,60 @@ class EditBlock extends EditRecord
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        $this->widgetOffersData = is_array($data['widget_offers'] ?? null) ? $data['widget_offers'] : [];
         $data['config'] = CreateBlock::buildBlockConfig($data);
         CreateBlock::unsetConfigKeys($data);
+        unset($data['widget_offers']);
 
         return $data;
     }
 
+    protected function afterSave(): void
+    {
+        $block = $this->record;
+        if (($block->surface === 'checkout' && $block->type === 'upsell') || ($block->surface === 'post_purchase' && $block->type === 'post_purchase_funnel')) {
+            $block->blockOffers()->delete();
+            CreateBlock::syncWidgetOffers($block, $this->widgetOffersData);
+        }
+    }
+
+    /**
+     * Build widget_offers form state from block's blockOffers->offer (for edit).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function widgetOffersFromBlock(\App\Models\Block $block): array
+    {
+        $out = [];
+        foreach ($block->blockOffers as $bo) {
+            $offer = $bo->offer;
+            if (! $offer instanceof Offer) {
+                continue;
+            }
+            $conditions = $offer->rule?->conditions ?? [];
+            $matchType = isset($conditions['or']) ? 'or' : 'and';
+            $rows = $conditions[$matchType] ?? [];
+            $ruleConditions = [];
+            foreach ($rows as $cond) {
+                foreach ($cond as $field => $value) {
+                    $ruleConditions[] = ['field' => $field, 'value' => is_array($value) ? implode(',', $value) : $value];
+                }
+            }
+            $out[] = [
+                'product_variant_id' => $offer->product_variant_id,
+                'title' => $offer->title,
+                'description' => $offer->description,
+                'discount_type' => $offer->discount_type,
+                'discount_value' => $offer->discount_value,
+                'image_url' => $offer->image_url,
+                'offer_type' => $offer->offer_type,
+                'selling_plan_id' => $offer->selling_plan_id,
+                'recharge_subscription_variant_id' => $offer->recharge_subscription_variant_id,
+                'allow_subscription_in_post_purchase' => $offer->allow_subscription_in_post_purchase,
+                'rule_match_type' => $matchType,
+                'rule_conditions' => $ruleConditions,
+            ];
+        }
+        return $out;
+    }
 }
