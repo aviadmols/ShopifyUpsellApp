@@ -32,7 +32,15 @@ class EditBlock extends EditRecord
                 ->modalHeading('Widget preview')
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('Close')
-                ->modalContent(fn (): View => view('filament.components.block-preview', array_merge(['surface' => '', 'type' => '', 'config' => []], $this->blockPreviewData))),
+                ->modalContent(function (): View {
+                    $data = array_merge(['surface' => '', 'type' => '', 'config' => []], $this->blockPreviewData);
+                    if (($data['surface'] === '' || $data['type'] === '') && isset($this->record)) {
+                        $data['surface'] = (string) $this->record->surface;
+                        $data['type'] = (string) $this->record->type;
+                        $data['config'] = is_array($this->record->config) ? $this->record->config : [];
+                    }
+                    return view('filament.components.block-preview', $data);
+                }),
             Actions\DeleteAction::make(),
         ];
     }
@@ -47,6 +55,17 @@ class EditBlock extends EditRecord
         $state = $this->form->getState();
         $surface = (string) ($state['surface'] ?? '');
         $type = (string) ($state['type'] ?? '');
+
+        if (($surface === '' || $type === '') && isset($this->record)) {
+            $surface = (string) $this->record->surface;
+            $type = (string) $this->record->type;
+
+            return [
+                'surface' => $surface,
+                'type' => $type,
+                'config' => is_array($this->record->config) ? $this->record->config : [],
+            ];
+        }
 
         return [
             'surface' => $surface,
@@ -207,6 +226,7 @@ class EditBlock extends EditRecord
             }
             $out[] = [
                 'product_variant_id' => $offer->product_variant_id,
+                'variant_id_manual' => $offer->product_variant_id,
                 'title' => $offer->title,
                 'description' => $offer->description,
                 'discount_type' => $offer->discount_type,

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Forms\Components\RuleBuilder;
+use App\Filament\Resources\BlockResource\Pages\CreateBlock;
 use App\Filament\Resources\BlockResource\Pages;
 use App\Filament\Resources\OfferResource;
 use App\Filament\Widgets\WidgetRegistry;
@@ -37,6 +38,7 @@ class BlockResource extends Resource
         return $form
             ->schema([
                 Forms\Components\Section::make('Widget identity')
+                    ->description('For Checkout: create one widget per block (e.g. Upsell, Progress bar, Icon features). In Shopify → Checkout → Customize, add the app block and set "Widget ID" to this widget\'s ID (number in the table). For Upsell, add offers below or you will see "no offers" in Checkout.')
                     ->schema([
                         Forms\Components\Select::make('shop_id')
                             ->options(fn (): array => Shop::whereNull('uninstalled_at')->pluck('shop_domain', 'id')->all())
@@ -56,6 +58,7 @@ class BlockResource extends Resource
                         Forms\Components\TextInput::make('name')
                             ->label('Admin label')
                             ->placeholder('e.g. Checkout upsell 1')
+                            ->helperText('For "Widget ID" in Checkout settings use the widget ID number (table column ID), not this label.')
                             ->maxLength(255),
                         Forms\Components\Select::make('rule_id')
                             ->options(function (Get $get): array {
@@ -75,13 +78,23 @@ class BlockResource extends Resource
                     ->columns(2),
 
                 Forms\Components\Section::make('Preview')
-                    ->description('See how this widget will look in Checkout or Thank you page.')
+                    ->description('Live preview — updates as you change Surface, Type and options below.')
                     ->schema([
-                        Forms\Components\Placeholder::make('preview_placeholder')
+                        Forms\Components\Placeholder::make('preview_live')
                             ->label('')
-                            ->content(new \Illuminate\Support\HtmlString(
-                                '<p class="text-sm text-gray-600 dark:text-gray-400">Use the <strong>Preview</strong> button (eye icon) in the top bar to open a live preview of this widget.</p>'
-                            )),
+                            ->content(function (Get $get): \Illuminate\Support\HtmlString {
+                                $state = CreateBlock::getStateFromGet($get);
+                                $surface = (string) ($state['surface'] ?? '');
+                                $type = (string) ($state['type'] ?? '');
+                                $config = CreateBlock::buildBlockConfig($state);
+                                $html = view('filament.components.block-preview', [
+                                    'surface' => $surface,
+                                    'type' => $type,
+                                    'config' => $config,
+                                ])->render();
+
+                                return new \Illuminate\Support\HtmlString($html);
+                            }),
                     ])
                     ->collapsible()
                     ->collapsed(fn (Get $get): bool => empty($get('surface')) || empty($get('type'))),
@@ -113,10 +126,17 @@ class BlockResource extends Resource
                     ->reorderableWithButtons()
                     ->schema([
                         Forms\Components\Select::make('product_variant_id')
-                            ->label('Product variant')
+                            ->label('Product variant (search)')
                             ->searchable()
                             ->getSearchResultsUsing(fn (string $search, Get $get): array => OfferResource::variantOptions($get('shop_id'), $search))
-                            ->getOptionLabelsUsing(fn ($value, Get $get): array => $value ? OfferResource::variantLabels($get('shop_id'), [(string) $value]) : []),
+                            ->getOptionLabelsUsing(fn ($value, Get $get): array => $value ? OfferResource::variantLabels($get('shop_id'), [(string) $value]) : [])
+                            ->helperText('Pick a shop above first. If the list is empty (no token or scope), use the manual field below.'),
+                        Forms\Components\TextInput::make('variant_id_manual')
+                            ->label('Variant ID (manual)')
+                            ->placeholder('e.g. 48072914534655 or gid://shopify/ProductVariant/48072914534655')
+                            ->maxLength(255)
+                            ->helperText('Enter variant ID when search does not work. Used if filled; otherwise the search selection above is used.')
+                            ->live(),
                         Forms\Components\TextInput::make('title')
                             ->required()
                             ->default('Upsell offer')
@@ -164,7 +184,7 @@ class BlockResource extends Resource
     protected static function schemaCheckoutUpsell(Form $form): Forms\Components\Section
     {
         return Forms\Components\Section::make('Upsell block (Checkout)')
-            ->description('Display options. Add offers in the section above or use comma-separated Offer IDs below.')
+            ->description('Display options. Add offers in "Offers (manage products & rules)" above, or use comma-separated Offer IDs below. If you leave both empty, Checkout will show "no offers".')
             ->schema([
                 Forms\Components\TextInput::make('offer_ids_csv')
                     ->label('Offer IDs (comma separated, fallback)')

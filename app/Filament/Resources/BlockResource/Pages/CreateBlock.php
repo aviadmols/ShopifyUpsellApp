@@ -38,7 +38,10 @@ class CreateBlock extends CreateRecord
                 ->modalHeading('Widget preview')
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('Close')
-                ->modalContent(fn (): View => view('filament.components.block-preview', array_merge(['surface' => '', 'type' => '', 'config' => []], $this->blockPreviewData))),
+                ->modalContent(function (): View {
+                    $data = array_merge(['surface' => '', 'type' => '', 'config' => []], $this->blockPreviewData);
+                    return view('filament.components.block-preview', $data);
+                }),
         ];
     }
 
@@ -104,7 +107,10 @@ class CreateBlock extends CreateRecord
         $offerIds = [];
         $sortOrder = 0;
         foreach ($items as $item) {
-            $variantId = $item['product_variant_id'] ?? null;
+            $variantId = trim((string) ($item['variant_id_manual'] ?? ''));
+            if ($variantId === '') {
+                $variantId = $item['product_variant_id'] ?? null;
+            }
             if (! $variantId) {
                 continue;
             }
@@ -248,6 +254,35 @@ class CreateBlock extends CreateRecord
         }
 
         return $config;
+    }
+
+    /**
+     * Build full form state from Get (for live preview). Reads all keys used by buildBlockConfig.
+     *
+     * @return array<string, mixed>
+     */
+    public static function getStateFromGet(\Filament\Forms\Get $get): array
+    {
+        $keys = [
+            'surface', 'type', 'extra_config', 'offer_ids_csv', 'widget_offers',
+            'max_offers', 'display_mode', 'require_expanded', 'section_heading', 'title_size', 'title_appearance',
+            'show_price', 'show_description', 'image_aspect_ratio', 'image_fit', 'image_corner_radius',
+            'button_kind', 'button_appearance', 'card_spacing', 'divider_between_cards',
+            'progress_bar_type', 'progress_bar_goal', 'progress_bar_message_below', 'progress_bar_message_achieved',
+            'progress_bar_discount_type', 'progress_bar_discount_value',
+            'icon_features_items',
+            'title', 'body', 'image_url', 'button_label', 'button_url', 'text_size', 'text_appearance', 'spacing',
+            'product_id', 'price_text', 'badge_text',
+            'cooldown_hours', 'allow_reoffer', 'funnel_headline_template', 'funnel_show_progress', 'funnel_step_labels',
+            'show_timer', 'timer_seconds', 'timer_label', 'urgency_message', 'cta_text', 'decline_text',
+            'quantity_default', 'quantity_min', 'quantity_max',
+        ];
+        $state = [];
+        foreach ($keys as $key) {
+            $state[$key] = $get($key);
+        }
+
+        return $state;
     }
 
     /**
