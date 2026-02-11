@@ -35,8 +35,12 @@ class PlacementResource extends Resource
                     ->required()
                     ->live(),
 
+                Forms\Components\Section::make('Where to configure')
+                    ->description('Checkout progress bar (goal amount, messages): set Placement type to Checkout and scroll down to "Progress bar (checkout)". Post-purchase (step labels, timer, CTA, decline, quantity): set Placement type to Post-purchase and scroll to "Post-purchase UI (funnel look & feel)".')
+                    ->schema([])
+                    ->collapsible(),
+
                 Forms\Components\Fieldset::make('Checkout config')
-                    ->description('Offers and layout. Display mode is controlled here (not from Offer form).')
                     ->visible(fn (Get $get): bool => $get('placement_type') === 'checkout')
                     ->schema([
                         Forms\Components\TextInput::make('offer_ids_csv')
@@ -62,7 +66,6 @@ class PlacementResource extends Resource
                     ->columns(2),
 
                 Forms\Components\Fieldset::make('Checkout UI')
-                    ->description('How the block looks in checkout (Shopify Checkout UI options).')
                     ->visible(fn (Get $get): bool => $get('placement_type') === 'checkout')
                     ->schema([
                         Forms\Components\TextInput::make('section_heading')
@@ -154,7 +157,6 @@ class PlacementResource extends Resource
                     ->columns(2),
 
                 Forms\Components\Fieldset::make('Progress bar (checkout)')
-                    ->description('Show a progress bar toward a goal (e.g. free shipping or discount). Uses cart subtotal. Configure the actual discount/shipping in Shopify (Discounts / Shipping).')
                     ->visible(fn (Get $get): bool => $get('placement_type') === 'checkout')
                     ->schema([
                         Forms\Components\Toggle::make('progress_bar_enabled')
@@ -206,7 +208,6 @@ class PlacementResource extends Resource
                     ->columns(2),
 
                 Forms\Components\Fieldset::make('Post-purchase funnel')
-                    ->description('Multiple offers in sequence. Each step shows one offer; "Decline" moves to the next.')
                     ->visible(fn (Get $get): bool => $get('placement_type') === 'post_purchase')
                     ->schema([
                         Forms\Components\TextInput::make('offer_ids_csv')
