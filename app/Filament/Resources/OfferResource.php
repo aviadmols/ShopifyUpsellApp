@@ -70,7 +70,6 @@ class OfferResource extends Resource
                             ->label('Image URL'),
 
                         Forms\Components\Fieldset::make('Recharge / Subscription')
-                            ->description('Offer this product as a one-time purchase, subscription (Recharge), or both.')
                             ->schema([
                                 Forms\Components\Select::make('offer_type')
                                     ->options([
@@ -96,8 +95,7 @@ class OfferResource extends Resource
                                     ->default(false)
                                     ->visible(fn (Get $get): bool => in_array($get('offer_type'), ['subscription', 'both'], true)),
                             ])
-                            ->columns(2)
-                            ->collapsible(),
+                            ->columns(2),
                     ])
                     ->columns(1),
 
@@ -118,7 +116,6 @@ class OfferResource extends Resource
 
                         Forms\Components\Fieldset::make('Checkout options')
                             ->visible(fn (Get $get): bool => in_array('checkout', (array) ($get('placement_types') ?? []), true))
-                            ->description('Checkout placement shows upsells during checkout.')
                             ->schema([
                                 Forms\Components\TextInput::make('checkout_max_offers')
                                     ->numeric()
@@ -140,12 +137,10 @@ class OfferResource extends Resource
                                     ->label('Render only when block is expanded')
                                     ->default(false),
                             ])
-                            ->columns(2)
-                            ->helperText('To make Checkout work: (1) Deploy the checkout extension with shopify app deploy. (2) In Shopify Admin → Settings → Checkout → Checkout editor, add the app block. (3) In extension settings set API URL, Extension secret, and Shop domain.'),
+                            ->columns(2),
 
                         Forms\Components\Fieldset::make('Post-purchase options')
                             ->visible(fn (Get $get): bool => in_array('post_purchase', (array) ($get('placement_types') ?? []), true))
-                            ->description('Post-purchase shows one or more offers after payment, before thank-you.')
                             ->schema([
                                 Forms\Components\TextInput::make('post_purchase_max_offers')
                                     ->numeric()
@@ -169,12 +164,10 @@ class OfferResource extends Resource
                                     ->minValue(0)
                                     ->label('Timer seconds'),
                             ])
-                            ->columns(2)
-                            ->helperText('To make Post-purchase work: (1) Deploy the post-purchase extension. (2) In Shopify Admin → Settings → Checkout → Post-purchase, add the app. (3) Set API URL, secret, and shop domain in extension settings.'),
+                            ->columns(2),
 
                         Forms\Components\Fieldset::make('Thank-you options')
                             ->visible(fn (Get $get): bool => in_array('thank_you', (array) ($get('placement_types') ?? []), true))
-                            ->description('Thank-you blocks appear on the order status / thank-you page.')
                             ->schema([
                                 Forms\Components\Toggle::make('thank_you_enable_product_card')
                                     ->default(true)
@@ -190,8 +183,7 @@ class OfferResource extends Resource
                                     ->numeric()
                                     ->default(100),
                             ])
-                            ->columns(1)
-                            ->helperText('To make Thank you work: (1) Deploy the thank-you-blocks extension. (2) In Shopify Admin → Settings → Checkout → Order status page, add the app block. (3) Configure API URL, secret, and shop domain in extension settings.'),
+                            ->columns(1),
                     ])
                     ->columns(1),
 
