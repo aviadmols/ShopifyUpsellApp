@@ -5,6 +5,7 @@
 import {
   reactExtension,
   useSettings,
+  useApi,
   BlockStack,
   Button,
   Text,
@@ -32,8 +33,26 @@ function shortenShop(shop) {
 
 export default reactExtension('purchase.checkout.block.render', () => <CheckoutUpsell />);
 
+function normalizeLineItemsForApi(lines) {
+  if (!Array.isArray(lines)) return [];
+  return lines.map((line) => {
+    const merch = line?.merchandise ?? line;
+    const id = merch?.id ?? line?.id;
+    const productId = merch?.product?.id ?? line?.product_id;
+    const variantId = merch?.id ?? line?.variant_id ?? id;
+    return {
+      id: line?.id,
+      quantity: line?.quantity ?? 1,
+      merchandiseId: variantId,
+      product_id: productId,
+      variant_id: variantId,
+    };
+  });
+}
+
 function CheckoutUpsell() {
   const settings = useSettings();
+  const api = useApi();
   const applyCartLinesChange = useApplyCartLinesChange();
   const subtotalMoney = useSubtotalAmount();
   const [offers, setOffers] = useState([]);
@@ -49,6 +68,7 @@ function CheckoutUpsell() {
   const secret = (settings.extension_secret || '').trim();
   const shopDomain = (settings.shop_domain || '').trim();
   const shop = shopDomain || DEFAULT_SHOP;
+  const blockId = settings.block_id != null && settings.block_id !== '' ? String(settings.block_id).trim() : undefined;
   const showDebugWhenEmpty = settings.show_debug_when_empty === true;
 
   const [displayMode, setDisplayMode] = useState('stacked');
@@ -67,6 +87,9 @@ function CheckoutUpsell() {
     divider_between_cards: false,
   });
 
+  const cartLines = (typeof api?.lines?.current === 'function' ? api.lines.current() : api?.lines?.current) ?? api?.lines ?? [];
+  const lineItems = Array.isArray(cartLines) ? cartLines : (cartLines?.value ? (Array.isArray(cartLines.value) ? cartLines.value : []) : []);
+
   useEffect(() => {
     if (!apiUrl || !secret) {
       setLoading(false);
@@ -79,8 +102,17 @@ function CheckoutUpsell() {
     }
     setStatus({ type: 'loading', message: 'Connecting to app…', detail: '' });
 
-    fetch(`${apiUrl}/api/checkout/offers?shop=${encodeURIComponent(shop)}`, {
-      headers: { 'X-Extension-Secret': secret, Accept: 'application/json' },
+    const body = {
+      shop,
+      block_id: blockId || undefined,
+      subtotal: subtotalMoney?.amount ?? 0,
+      line_items: normalizeLineItemsForApi(lineItems),
+    };
+
+    fetch(`${apiUrl}/api/checkout/offers`, {
+      method: 'POST',
+      headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body),
     })
       .then((r) => {
         if (r.ok) {
@@ -116,7 +148,7 @@ function CheckoutUpsell() {
         setOffers([]);
       })
       .finally(() => setLoading(false));
-  }, [apiUrl, secret, shopDomain]);
+  }, [apiUrl, secret, shopDomain, blockId, subtotalMoney?.amount, JSON.stringify(normalizeLineItemsForApi(lineItems))]);
 
   const addToCart = async (variantId, sellingPlanId = null) => {
     if (added.has(variantId)) return;

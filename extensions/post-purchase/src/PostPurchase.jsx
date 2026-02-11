@@ -36,6 +36,7 @@ function PostPurchaseFunnel() {
   const apiUrl = extension?.settings?.api_url?.value ?? '';
   const secret = extension?.settings?.extension_secret?.value ?? '';
   const shop = extension?.settings?.shop_domain?.value ?? '';
+  const blockId = extension?.settings?.block_id?.value != null && String(extension.settings.block_id.value).trim() !== '' ? String(extension.settings.block_id.value).trim() : undefined;
   const orderId = extension?.order?.id ?? '';
   const customer = extension?.customer ?? {};
   const first_name = customer?.firstName ?? customer?.first_name ?? 'there';
@@ -53,6 +54,7 @@ function PostPurchaseFunnel() {
       },
       body: JSON.stringify({
         shop,
+        block_id: blockId,
         order_id: orderId,
         order: extension?.order,
         line_items: extension?.order?.lineItems,

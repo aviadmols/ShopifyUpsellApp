@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Block;
 use App\Models\Offer;
 use App\Models\Placement;
 use App\Models\Shop;
@@ -20,12 +21,21 @@ class CheckoutUpsellController extends Controller
 
     /**
      * Return list of offers eligible for checkout (cart context). GET or POST.
+     * If block_id is provided, use Block (surface=checkout); otherwise fallback to Placement (legacy).
      */
     public function index(Request $request): JsonResponse
     {
         $shop = $this->resolveShop($request);
         if (! $shop) {
             return response()->json(['error' => 'Shop not found'], 404);
+        }
+
+        $blockId = $request->input('block_id') ?? $request->query('block_id');
+        if ($blockId !== null && $blockId !== '') {
+            $block = Block::where('shop_id', $shop->id)->where('surface', 'checkout')->find((int) $blockId);
+            if ($block) {
+                return $this->responseForBlock($request, $shop, $block);
+            }
         }
 
         $placement = Placement::where('shop_id', $shop->id)->where('placement_type', 'checkout')->first();
@@ -46,6 +56,112 @@ class CheckoutUpsellController extends Controller
             'display_mode' => $ui['display_mode'],
             'ui' => $ui,
         ]);
+    }
+
+    /**
+     * Build response for a single checkout Block (by block_id).
+     */
+    protected function responseForBlock(Request $request, Shop $shop, Block $block): JsonResponse
+    {
+        $context = $this->buildContext($request);
+
+        if ($block->rule_id) {
+            $rule = $block->rule;
+            if (! $rule || ! $this->ruleEngine->evaluate($rule->conditions, $context)) {
+                return response()->json(['offers' => [], 'blocks' => [], 'ui' => []]);
+            }
+        }
+
+        $type = (string) $block->type;
+        $config = $block->config ?? [];
+
+        if ($type === 'upsell') {
+            $offerIds = $block->getOfferIds();
+            $maxOffers = (int) ($config['max_offers'] ?? 3);
+            $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
+            $data = $this->enrichOffersFromShopify($shop, $eligible);
+            $ui = $this->buildUiFromBlockConfig($config, false);
+
+            return response()->json([
+                'offers' => $data,
+                'display_mode' => (string) ($config['display_mode'] ?? 'stacked'),
+                'ui' => $ui,
+            ]);
+        }
+
+        if ($type === 'progress_bar') {
+            $ui = $this->buildUiFromBlockConfig($config, true);
+
+            return response()->json([
+                'offers' => [],
+                'display_mode' => 'stacked',
+                'ui' => $ui,
+            ]);
+        }
+
+        if (str_starts_with($type, 'content_')) {
+            $blocksPayload = [
+                [
+                    'id' => $block->id,
+                    'type' => $type,
+                    'config' => $config,
+                ],
+            ];
+
+            return response()->json([
+                'offers' => [],
+                'blocks' => $blocksPayload,
+                'display_mode' => 'stacked',
+                'ui' => [],
+            ]);
+        }
+
+        return response()->json(['offers' => [], 'blocks' => [], 'ui' => []]);
+    }
+
+    /**
+     * Build UI config from block config (upsell or progress_bar).
+     *
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    protected function buildUiFromBlockConfig(array $config, bool $progressBarOnly): array
+    {
+        $progressBarEnabled = (bool) ($config['progress_bar_enabled'] ?? false);
+        $progressBarGoal = (float) ($config['progress_bar_goal'] ?? 0);
+        $progressBar = [
+            'enabled' => $progressBarEnabled || $progressBarOnly,
+            'type' => (string) ($config['progress_bar_type'] ?? 'free_shipping'),
+            'goal' => $progressBarGoal,
+            'message_below' => (string) ($config['progress_bar_message_below'] ?? "You're {amount} away from free shipping!"),
+            'message_achieved' => (string) ($config['progress_bar_message_achieved'] ?? "You've unlocked free shipping!"),
+            'discount_type' => (string) ($config['progress_bar_discount_type'] ?? 'percentage'),
+            'discount_value' => (float) ($config['progress_bar_discount_value'] ?? 0),
+        ];
+        if ($progressBarOnly && $progressBarGoal <= 0) {
+            $progressBar['goal'] = (float) ($config['progress_bar_goal'] ?? 100);
+        }
+
+        $ui = [
+            'progress_bar' => $progressBar,
+        ];
+        if (! $progressBarOnly) {
+            $ui['display_mode'] = (string) ($config['display_mode'] ?? 'stacked');
+            $ui['section_heading'] = (string) ($config['section_heading'] ?? 'Add to your order');
+            $ui['title_size'] = (string) ($config['title_size'] ?? 'medium');
+            $ui['title_appearance'] = (string) ($config['title_appearance'] ?? 'default');
+            $ui['show_price'] = (bool) ($config['show_price'] ?? true);
+            $ui['show_description'] = (bool) ($config['show_description'] ?? true);
+            $ui['image_aspect_ratio'] = trim((string) ($config['image_aspect_ratio'] ?? ''));
+            $ui['image_fit'] = (string) ($config['image_fit'] ?? 'cover');
+            $ui['image_corner_radius'] = (string) ($config['image_corner_radius'] ?? 'base');
+            $ui['button_kind'] = (string) ($config['button_kind'] ?? 'secondary');
+            $ui['button_appearance'] = (string) ($config['button_appearance'] ?? 'default');
+            $ui['card_spacing'] = (string) ($config['card_spacing'] ?? 'loose');
+            $ui['divider_between_cards'] = (bool) ($config['divider_between_cards'] ?? false);
+        }
+
+        return $ui;
     }
 
     /**

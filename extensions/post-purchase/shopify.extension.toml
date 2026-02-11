@@ -3,3 +3,10 @@
 name = "post-purchase-ui"
 uid = "cd7fff10-47a6-a6f7-60f2-c8e090f069c8fd0d2443"
 type = "checkout_post_purchase"
+
+[extensions.settings]
+[[extensions.settings.fields]]
+key = "block_id"
+type = "single_line_text_field"
+name = "Block ID (optional)"
+description = "Admin block ID from Blocks (post-purchase funnel). Leave empty for legacy Placement."

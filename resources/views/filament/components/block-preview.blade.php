@@ -1,0 +1,120 @@
+@php
+  $surface = $surface ?? '';
+  $type = $type ?? '';
+  $config = $config ?? [];
+@endphp
+<div class="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-gray-900/50 p-6">
+  <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Preview — {{ $surface }} / {{ $type }}</p>
+  <div class="max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 space-y-4">
+
+    @if($surface === 'checkout' && $type === 'upsell')
+      <p class="font-semibold text-gray-900 dark:text-white">{{ $config['section_heading'] ?? 'Add to your order' }}</p>
+      <div class="border border-gray-200 dark:border-white/10 rounded-lg p-3 flex gap-3">
+        <div class="w-16 h-16 rounded bg-gray-200 dark:bg-gray-600 shrink-0"></div>
+        <div class="min-w-0 flex-1">
+          <p class="font-medium text-gray-900 dark:text-white">Sample offer</p>
+          @if(!empty($config['show_price']))<p class="text-sm text-gray-600 dark:text-gray-300">$9.99</p>@endif
+          @if(!empty($config['show_description']))<p class="text-xs text-gray-500 dark:text-gray-400">Description text</p>@endif
+          <button type="button" class="mt-2 text-sm px-3 py-1.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white">Add to order</button>
+        </div>
+      </div>
+      @if(($config['display_mode'] ?? 'stacked') === 'stacked')
+        <div class="border border-gray-200 dark:border-white/10 rounded-lg p-3 flex gap-3">
+          <div class="w-16 h-16 rounded bg-gray-200 dark:bg-gray-600 shrink-0"></div>
+          <div class="min-w-0 flex-1">
+            <p class="font-medium text-gray-900 dark:text-white">Second offer</p>
+            <p class="text-sm text-gray-600 dark:text-gray-300">$12.00</p>
+            <button type="button" class="mt-2 text-sm px-3 py-1.5 rounded bg-gray-200 dark:bg-gray-600">Add to order</button>
+          </div>
+        </div>
+      @endif
+    @endif
+
+    @if($surface === 'checkout' && $type === 'progress_bar')
+      @php
+        $goal = (float)($config['progress_bar_goal'] ?? 100);
+        $remaining = 45.00;
+      @endphp
+      <p class="font-medium text-gray-900 dark:text-white">{{ str_replace(['{amount}', '{goal}'], ['$' . number_format($remaining, 2), '$' . number_format($goal, 2)], $config['progress_bar_message_below'] ?? "You're {amount} away from free shipping!") }}</p>
+      <div class="h-2 w-full bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+        <div class="h-full bg-primary-500 rounded-full" style="width: {{ $goal > 0 ? min(100, (($goal - $remaining) / $goal) * 100) : 0 }}%"></div>
+      </div>
+    @endif
+
+    @if($type === 'content_icon_features')
+      @php $items = $config['icon_features'] ?? []; @endphp
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        @forelse($items as $item)
+          <div class="text-center p-2">
+            <div class="w-10 h-10 mx-auto rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 text-lg mb-2">●</div>
+            <p class="font-semibold text-gray-900 dark:text-white text-sm">{{ $item['title'] ?? '—' }}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ $item['subtitle'] ?? '' }}</p>
+          </div>
+        @empty
+          <p class="text-sm text-gray-500 dark:text-gray-400 col-span-full">Add items in Icon features section.</p>
+        @endforelse
+      </div>
+    @endif
+
+    @if(in_array($type, ['content_banner', 'content_rich_text', 'content_button']))
+      @if(!empty($config['image_url']) && $type === 'content_banner')
+        <img src="{{ $config['image_url'] }}" alt="" class="w-full h-24 object-cover rounded-lg" onerror="this.style.display='none'">
+      @endif
+      @if(!empty($config['title']))
+        <p class="font-semibold text-gray-900 dark:text-white">{{ $config['title'] }}</p>
+      @endif
+      @if(!empty($config['body']))
+        <p class="text-sm text-gray-600 dark:text-gray-300">{{ Str::limit($config['body'], 120) }}</p>
+      @endif
+      @if(!empty($config['button_label']))
+        <button type="button" class="text-sm px-3 py-2 rounded {{ ($config['button_kind'] ?? 'secondary') === 'primary' ? 'bg-primary-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white' }}">{{ $config['button_label'] }}</button>
+      @endif
+    @endif
+
+    @if($type === 'content_product_card')
+      @if(!empty($config['image_url']))
+        <img src="{{ $config['image_url'] }}" alt="" class="w-full h-32 object-cover rounded-lg" onerror="this.style.display='none'">
+      @else
+        <div class="w-full h-32 rounded-lg bg-gray-200 dark:bg-gray-600"></div>
+      @endif
+      @if(!empty($config['title']))<p class="font-semibold text-gray-900 dark:text-white">{{ $config['title'] }}</p>@endif
+      @if(!empty($config['body']))<p class="text-sm text-gray-600 dark:text-gray-300">{{ Str::limit($config['body'], 80) }}</p>@endif
+      @if(!empty($config['badge_text']))<span class="inline-block text-xs px-2 py-0.5 rounded bg-success-100 dark:bg-success-900/30 text-success-700 dark:text-success-400">{{ $config['badge_text'] }}</span>@endif
+      @if(!empty($config['show_price']) && !empty($config['price_text']))<p class="font-medium">{{ $config['price_text'] }}</p>@endif
+      @if(!empty($config['button_label']))<button type="button" class="text-sm px-3 py-2 rounded bg-gray-200 dark:bg-gray-600">{{ $config['button_label'] }}</button>@endif
+    @endif
+
+    @if($surface === 'post_purchase' && $type === 'post_purchase_funnel')
+      @if(!empty($config['funnel_headline_template']))
+        <p class="font-semibold text-gray-900 dark:text-white">{{ str_replace(['{first_name}', '{order_id}'], ['Customer', '123'], $config['funnel_headline_template']) }}</p>
+      @endif
+      @if(!empty($config['funnel_show_progress']))
+        @php $labels = array_filter(array_map('trim', explode(',', $config['funnel_step_labels'] ?? 'Order, Offer, Bonus, Done'))); @endphp
+        <div class="flex gap-2 text-xs">
+          @foreach(array_slice($labels, 0, 4) as $i => $l)
+            <span class="px-2 py-1 rounded {{ $i === 1 ? 'bg-primary-100 dark:bg-primary-900/30 font-medium' : 'bg-gray-100 dark:bg-gray-700' }}">{{ $l }}</span>
+          @endforeach
+        </div>
+      @endif
+      @if(!empty($config['show_timer']))
+        <p class="text-sm text-gray-600 dark:text-gray-300">{{ $config['timer_label'] ?? 'For a limited time' }} 4:55</p>
+      @endif
+      <div class="border border-gray-200 dark:border-white/10 rounded-lg p-3 flex gap-3">
+        <div class="w-20 h-20 rounded bg-gray-200 dark:bg-gray-600 shrink-0"></div>
+        <div class="min-w-0 flex-1">
+          <p class="font-medium text-gray-900 dark:text-white">Offer product</p>
+          <p class="text-sm">$8.00 <span class="text-success-600">Save 20%</span></p>
+          @if(!empty($config['urgency_message']))<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ Str::limit($config['urgency_message'], 60) }}</p>@endif
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button type="button" class="text-sm px-3 py-2 rounded bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900">{{ $config['cta_text'] ?? 'Pay Now' }}</button>
+            <button type="button" class="text-sm text-primary-600 dark:text-primary-400">{{ $config['decline_text'] ?? 'Decline offer' }}</button>
+          </div>
+        </div>
+      </div>
+    @endif
+
+    @if(empty($surface) || empty($type))
+      <p class="text-sm text-gray-500 dark:text-gray-400">Select Surface and Type above, then click Preview.</p>
+    @endif
+  </div>
+</div>

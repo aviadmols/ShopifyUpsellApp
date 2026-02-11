@@ -29,6 +29,11 @@ key = "shop_domain"
 type = "single_line_text_field"
 name = "Shop domain"
 [[extensions.settings.fields]]
+key = "block_id"
+type = "single_line_text_field"
+name = "Block ID (optional)"
+description = "Admin block ID from Blocks. Leave empty for legacy Placement block list."
+[[extensions.settings.fields]]
 key = "show_debug_when_empty"
 type = "boolean"
 name = "Show debug info when no blocks or error"

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Block;
 use App\Models\Placement;
 use App\Models\Shop;
 use App\Models\ThankYouBlock;
@@ -13,12 +14,27 @@ class ThankYouBlocksController extends Controller
 {
     /**
      * Return blocks to render on thank you / order status page.
+     * If block_id is provided, return that single Block (surface=thank_you); otherwise legacy Placement + ThankYouBlock.
      */
     public function index(Request $request): JsonResponse
     {
         $shop = $this->resolveShop($request);
         if (! $shop) {
             return response()->json(['error' => 'Shop not found'], 404);
+        }
+
+        $blockId = $request->input('block_id') ?? $request->query('block_id');
+        if ($blockId !== null && $blockId !== '') {
+            $block = Block::where('shop_id', $shop->id)->where('surface', 'thank_you')->find((int) $blockId);
+            if ($block) {
+                $data = [[
+                    'id' => $block->id,
+                    'type' => $block->type,
+                    'config' => $block->config ?? [],
+                ]];
+
+                return response()->json(['blocks' => $data]);
+            }
         }
 
         $placement = Placement::where('shop_id', $shop->id)->where('placement_type', 'thank_you')->first();

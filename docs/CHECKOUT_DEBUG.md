@@ -27,7 +27,7 @@
 `https://dev.shopify.com/dashboard/.../logs/webhooks`
 
 - **Webhooks** = Shopify שולח אירועים **לאפליקציה** (order created, app uninstalled וכו').
-- **Checkout UI extension** = הקוד רץ **בדפדפן של הלקוח** ב-Checkout, ו**ה extension** קורא ל-**ה-API שלך** (`/api/checkout/offers`).
+- **Checkout UI extension** = הקוד רץ **בדפדפן של הלקוח** ב-Checkout, ו**ה extension** קורא ל-**ה-API שלך** (`/api/checkout/offers`). הבקשה היא **POST** עם גוף JSON: `shop`, `block_id` (אופציונלי), `subtotal`, `line_items` – כדי שחוקים (rules) לפי סל/סכום יעבדו.
 
 לכן:
 - אם ה-extension לא רץ או לא קורא ל-API – **לא יופיע שום דבר** בלוגי Webhooks.
@@ -71,6 +71,12 @@
 ### ד. Extension secret לא מוגדר (רק לחיווי / לוגיקה)
 
 בלי **Extension secret** ב-Block settings הבלוק אצלנו מציג "Not configured" אבל **עדיין אמור להציג** את BUILD_ID והסטטוס. אם אין **כלום** על המסך – הסיבה היא כנראה אחד הסעיפים למעלה (בלוק לא נוסף / גרסה / תכנית).
+
+### ה. Blocks ו-block_id (הגדרה חדשה)
+
+- **Blocks** = ניהול בלוקים לפי ID באדמין (Blocks → יצירת בלוקים ל-Checkout / Thank you / Post-purchase). כל בלוק מקבל **מספר (ID)**.
+- **ב-Checkout**: בהגדרות הבלוק (Block settings) בעורך ה-Checkout אפשר להזין **Block ID** – המספר של הבלוק שיוצג במופע הזה. אם לא מזינים – משתמשים ב-**Placement** הישן (Legacy).
+- אם מזינים Block ID שלא קיים או שייך לחנות אחרת – השרת מחזיר fallback ל-Placement או מערך ריק. ב-Network תבדוק שהבקשה ל-`/api/checkout/offers` היא **POST** והגוף כולל `shop` ו-(אופציונלי) `block_id`.
 
 ---
 

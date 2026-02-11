@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Block;
 use App\Models\Offer;
 use App\Models\Placement;
 use App\Models\Shop;
@@ -22,12 +23,44 @@ class PostPurchaseController extends Controller
 
     /**
      * Decide if post-purchase offer should render; return first eligible offer. Log impression.
+     * If block_id is provided, use Block (surface=post_purchase, type=post_purchase_funnel); otherwise Placement (legacy).
      */
     public function shouldRender(Request $request): JsonResponse
     {
         $shop = $this->resolveShop($request);
         if (! $shop) {
             return response()->json(['error' => 'Shop not found'], 404);
+        }
+
+        $blockId = $request->input('block_id');
+        if ($blockId !== null && $blockId !== '') {
+            $block = Block::where('shop_id', $shop->id)->where('surface', 'post_purchase')->where('type', 'post_purchase_funnel')->find((int) $blockId);
+            if ($block) {
+                $context = $this->buildContext($request);
+                if ($block->rule_id) {
+                    $rule = $block->rule;
+                    if (! $rule || ! $this->ruleEngine->evaluate($rule->conditions, $context)) {
+                        return response()->json(['render' => false]);
+                    }
+                }
+                $offerIds = $block->getOfferIds();
+                $maxOffers = (int) (($block->config ?? [])['max_offers'] ?? 1);
+                $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
+                if (empty($eligible)) {
+                    return response()->json(['render' => false]);
+                }
+                foreach ($eligible as $o) {
+                    $this->idempotency->logEvent($shop, (string) ($context['order_id'] ?? ''), $o->id, 'impression', $context);
+                }
+                $offersPayload = $this->enrichOffersForPostPurchase($shop, $eligible);
+                $funnel = $this->buildFunnelFromConfig($block->config ?? []);
+
+                return response()->json([
+                    'render' => true,
+                    'offers' => $offersPayload,
+                    'funnel' => $funnel,
+                ]);
+            }
         }
 
         $placement = Placement::where('shop_id', $shop->id)->where('placement_type', 'post_purchase')->first();
@@ -275,7 +308,17 @@ class PostPurchaseController extends Controller
      */
     protected function buildFunnelFromPlacement(Placement $placement): array
     {
-        $c = $placement->config ?? [];
+        return $this->buildFunnelFromConfig($placement->config ?? []);
+    }
+
+    /**
+     * Build funnel UI config from array (Block or Placement config).
+     *
+     * @param  array<string, mixed>  $c
+     * @return array<string, mixed>
+     */
+    protected function buildFunnelFromConfig(array $c): array
+    {
         $stepLabels = (string) ($c['funnel_step_labels'] ?? 'Order, Offer, Bonus, Done');
         $labels = array_map('trim', explode(',', $stepLabels));
 

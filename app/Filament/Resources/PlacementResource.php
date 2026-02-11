@@ -21,6 +21,16 @@ class PlacementResource extends Resource
 
     protected static ?int $navigationSort = 3;
 
+    public static function getNavigationBadge(): ?string
+    {
+        return 'Legacy';
+    }
+
+    public static function getNavigationBadgeTooltip(): ?string
+    {
+        return 'Prefer Blocks for new config (set block_id in extension settings).';
+    }
+
     public static function form(Form $form): Form
     {
         return $form
@@ -36,7 +46,7 @@ class PlacementResource extends Resource
                     ->live(),
 
                 Forms\Components\Section::make('Where to configure')
-                    ->description('Checkout progress bar (goal amount, messages): set Placement type to Checkout and scroll down to "Progress bar (checkout)". Post-purchase (step labels, timer, CTA, decline, quantity): set Placement type to Post-purchase and scroll to "Post-purchase UI (funnel look & feel)".')
+                    ->description('Legacy: For new setups use Blocks (Blocks menu) and set block_id in each extension. Checkout: Progress bar and Upsell → create Blocks (surface=checkout). Post-purchase → create Block (surface=post_purchase, type=post_purchase_funnel). Thank you → create Blocks (surface=thank_you).')
                     ->schema([])
                     ->collapsible(),
 

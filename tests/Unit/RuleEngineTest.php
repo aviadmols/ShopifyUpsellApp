@@ -102,4 +102,32 @@ class RuleEngineTest extends TestCase
     {
         $this->assertTrue($this->engine->evaluate([], ['subtotal' => 100]));
     }
+
+    /** Checkout extension sends subtotal and line_items; rules should evaluate. */
+    public function test_checkout_context_subtotal_and_line_items(): void
+    {
+        $context = [
+            'subtotal' => 85.50,
+            'line_items' => [
+                ['product_id' => 100, 'variant_id' => 200, 'quantity' => 1],
+                ['product_id' => 101, 'variant_id' => 201, 'quantity' => 2],
+            ],
+        ];
+        $this->assertTrue($this->engine->evaluate(
+            ['and' => [['subtotal_gte' => 50], ['subtotal_lte' => 100]]],
+            $context
+        ));
+        $this->assertFalse($this->engine->evaluate(
+            ['and' => [['subtotal_gte' => 100]]],
+            $context
+        ));
+        $this->assertTrue($this->engine->evaluate(
+            ['and' => [['line_items_has_product_id' => 101]]],
+            $context
+        ));
+        $this->assertFalse($this->engine->evaluate(
+            ['and' => [['line_items_has_product_id' => 999]]],
+            $context
+        ));
+    }
 }

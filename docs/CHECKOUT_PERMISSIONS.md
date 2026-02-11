@@ -25,3 +25,8 @@
 
 ה-backend מאמת רק את `X-Extension-Secret` ופרמטר `shop` – לא נדרשים scopes נוספים כדי שה-Checkout block יעבוד.  
 אם ה-backend משתמש ב-Admin API (למשל לקריאת מוצרים/הזמנות), אז ה-optional_scopes רלוונטיים לאותן פעולות בצד השרת, לא לרינדור הבלוק ב-Checkout.
+
+### Blocks ו-block_id
+
+- ה-Checkout extension שולח **POST** ל-`/api/checkout/offers` עם גוף: `shop`, `block_id` (אופציונלי, מהגדרות הבלוק), `subtotal`, `line_items`. כך חוקים (rules) לפי סכום סל/מוצרים יכולים לרוץ.
+- **Block ID** (בהגדרות הבלוק בעורך Checkout) = מזהה בלוק מהאדמין (Blocks). אם מוגדר – השרת מחזיר את תצורת הבלוק הזה (Upsell / Progress bar / תוכן); אחרת – fallback ל-Placement (Legacy).
