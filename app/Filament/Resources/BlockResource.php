@@ -9,13 +9,14 @@ use App\Filament\Widgets\WidgetRegistry;
 use App\Models\Block;
 use App\Models\Offer;
 use App\Models\Placement;
+use App\Models\Rule;
+use App\Models\Shop;
 use Filament\Forms;
 use Filament\Forms\Get;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 class BlockResource extends Resource
 {
@@ -38,10 +39,11 @@ class BlockResource extends Resource
                 Forms\Components\Section::make('Widget identity')
                     ->schema([
                         Forms\Components\Select::make('shop_id')
-                            ->relationship('shop', 'shop_domain', fn (Builder $q) => $q->whereNull('uninstalled_at'))
+                            ->options(fn (): array => Shop::whereNull('uninstalled_at')->pluck('shop_domain', 'id')->all())
                             ->required()
                             ->searchable()
-                            ->preload(),
+                            ->preload()
+                            ->live(),
                         Forms\Components\Select::make('surface')
                             ->options(array_combine(WidgetRegistry::surfaces(), WidgetRegistry::surfaces()))
                             ->required()
@@ -56,14 +58,15 @@ class BlockResource extends Resource
                             ->placeholder('e.g. Checkout upsell 1')
                             ->maxLength(255),
                         Forms\Components\Select::make('rule_id')
-                            ->relationship(
-                                'rule',
-                                'name',
-                                fn (Builder $q, Get $get) => $get('shop_id')
-                                    ? $q->where('shop_id', $get('shop_id'))
-                                    : $q->whereRaw('1 = 0')
-                            )
+                            ->options(function (Get $get): array {
+                                $shopId = $get('shop_id');
+                                if (! $shopId) {
+                                    return [];
+                                }
+                                return Rule::where('shop_id', $shopId)->pluck('name', 'id')->all();
+                            })
                             ->searchable()
+                            ->live()
                             ->helperText('Optional: show this block only when rule conditions match.'),
                         Forms\Components\TextInput::make('sort_order')
                             ->numeric()

@@ -1,12 +1,16 @@
 # Post-purchase offer: one-click add to order after payment (interstitial before thank-you).
-# Create with: shopify app generate extension -> Post-purchase, then replace with this.
 name = "post-purchase-ui"
-uid = "cd7fff10-47a6-a6f7-60f2-c8e090f069c8fd0d2443"
 type = "checkout_post_purchase"
+uid = "cd7fff10-47a6-a6f7-60f2-c8e090f069c8fd0d2443"
 
-[extensions.settings]
-[[extensions.settings.fields]]
+# Required by Shopify: at least one metafield.
+[[metafields]]
+namespace = "zyg_upsell"
+key = "post_purchase_config"
+
+[settings]
+[[settings.fields]]
 key = "block_id"
 type = "single_line_text_field"
 name = "Widget ID (optional)"
-description = "ID from Admin → Widgets (post-purchase funnel widget). One per shop. Leave empty for legacy Placement."
+description = "ID from Admin → Widgets (post-purchase funnel). Leave empty for legacy."

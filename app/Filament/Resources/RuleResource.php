@@ -20,6 +20,11 @@ class RuleResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false; // Managed from Widgets (Blocks)
+    }
+
     public static function form(Form $form): Form
     {
         return $form

@@ -26,6 +26,11 @@ class Preview extends Page
 
     protected static ?int $navigationSort = 10;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false; // Preview is per-widget in Widgets (Blocks)
+    }
+
     protected static string $view = 'filament.pages.preview';
 
     protected static ?string $title = 'Preview: Which offer would render?';

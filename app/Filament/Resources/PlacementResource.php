@@ -31,6 +31,11 @@ class PlacementResource extends Resource
         return 'Prefer Blocks for new config (set block_id in extension settings).';
     }
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false; // Legacy; managed from Widgets (Blocks)
+    }
+
     public static function form(Form $form): Form
     {
         return $form
