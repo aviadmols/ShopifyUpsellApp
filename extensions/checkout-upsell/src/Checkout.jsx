@@ -32,6 +32,15 @@ function shortenShop(shop) {
   return shop.slice(0, 12) + '…' + shop.slice(-10);
 }
 
+/** Read a setting value; supports both flat (useSettings) and nested .value shape (e.g. editor). */
+function getSetting(settings, key) {
+  if (!settings || typeof settings !== 'object') return undefined;
+  const raw = settings[key];
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw === 'object' && raw !== null && 'value' in raw) return raw.value;
+  return raw;
+}
+
 export default reactExtension('purchase.checkout.block.render', () => <CheckoutUpsell />);
 
 function ContentBlockRender({ block }) {
@@ -122,12 +131,13 @@ function CheckoutUpsell() {
     detail: '',
   });
 
-  const apiUrl = (settings.api_url || DEFAULT_API_URL || '').replace(/\/$/, '');
-  const secret = (settings.extension_secret || '').trim();
-  const shopDomain = (settings.shop_domain || '').trim();
+  const apiUrl = (getSetting(settings, 'api_url') || DEFAULT_API_URL || '').replace(/\/$/, '');
+  const secret = (getSetting(settings, 'extension_secret') || '').trim();
+  const shopDomain = (getSetting(settings, 'shop_domain') || '').trim();
   const shop = shopDomain || DEFAULT_SHOP;
-  const blockId = settings.block_id != null && settings.block_id !== '' ? String(settings.block_id).trim() : undefined;
-  const showDebugWhenEmpty = settings.show_debug_when_empty === true;
+  const blockIdRaw = getSetting(settings, 'block_id');
+  const blockId = blockIdRaw != null && String(blockIdRaw).trim() !== '' ? String(blockIdRaw).trim() : undefined;
+  const showDebugWhenEmpty = getSetting(settings, 'show_debug_when_empty') === true;
 
   const [displayMode, setDisplayMode] = useState('stacked');
   const [ui, setUi] = useState({
@@ -162,7 +172,7 @@ function CheckoutUpsell() {
 
     const body = {
       shop,
-      block_id: blockId || undefined,
+      ...(blockId !== undefined && { block_id: parseInt(blockId, 10) || blockId }),
       subtotal: subtotalMoney?.amount ?? 0,
       line_items: normalizeLineItemsForApi(lineItems),
     };
@@ -265,6 +275,7 @@ function CheckoutUpsell() {
       <Text appearance="subdued" size="small">{BUILD_ID}</Text>
       <Text appearance="subdued" size="small">API: {shortenUrl(apiUrl)}</Text>
       <Text appearance="subdued" size="small">Shop: {shortenShop(shop)}</Text>
+      <Text appearance="subdued" size="small">Widget ID: {blockId ?? '(not set)'}</Text>
       <Text appearance="subdued" size="small">Status: {statusLine}</Text>
       {status.detail && status.type === 'error' && (
         <Text appearance="subdued" size="small">{status.detail}</Text>
