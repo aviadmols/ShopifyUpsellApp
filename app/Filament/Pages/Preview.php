@@ -6,7 +6,9 @@ use App\Models\Offer;
 use App\Models\Placement;
 use App\Models\Shop;
 use App\Services\RuleEngine;
+use App\Services\ShopifyGraphQLService;
 use Filament\Forms;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Filament\Forms\Form;
 use Filament\Pages\Page;
 use Filament\Pages\Concerns\InteractsWithFormActions;
@@ -146,29 +148,86 @@ class Preview extends Page
             $eligible[] = $offer;
         }
 
+        $enriched = $this->enrichEligibleFromShopify($shop, $eligible);
         $matched = $eligible[0] ?? null;
+        $matchedEnriched = $enriched[0] ?? null;
+
         $this->result = [
             'placement_type' => $placementType,
             'display_mode' => $placementType === 'checkout' ? $displayMode : null,
-            'match' => $matched ? [
+            'match' => $matched && $matchedEnriched ? [
                 'offerId' => $matched->id,
-                'title' => $matched->title,
+                'title' => $matchedEnriched['title'],
                 'variantId' => $matched->product_variant_id,
-                'image_url' => $matched->image_url,
+                'image_url' => $matchedEnriched['image_url'],
                 'description' => $matched->description,
                 'discount_type' => $matched->discount_type,
                 'discount_value' => $matched->discount_value?->toString(),
             ] : null,
             'eligible_count' => count($eligible),
-            'eligible' => array_map(fn (Offer $o) => [
-                'id' => $o->id,
-                'title' => $o->title,
-                'variantId' => $o->product_variant_id,
-                'image_url' => $o->image_url,
-            ], $eligible),
+            'eligible' => $enriched,
             'block_ids' => $placementType === 'thank_you' ? $blockIds : [],
             'context_used' => $context,
         ];
+    }
+
+    /**
+     * Enrich offers with title/image from Shopify when missing.
+     *
+     * @param  array<Offer>  $eligible
+     * @return array<int, array{id: int, title: string, variantId: string|null, image_url: string|null}>
+     */
+    protected function enrichEligibleFromShopify(Shop $shop, array $eligible): array
+    {
+        $service = app(ShopifyGraphQLService::class);
+        $out = [];
+        foreach ($eligible as $o) {
+            $gid = $this->variantIdToGid($o->product_variant_id);
+            $title = trim((string) $o->title);
+            $imageUrl = trim((string) $o->image_url);
+
+            if (($title === '' || $imageUrl === '') && $gid !== '') {
+                try {
+                    $variant = $service->getProductVariant($shop, $gid);
+                    if ($variant) {
+                        if ($title === '') {
+                            $productTitle = (string) ($variant['product']['title'] ?? 'Product');
+                            $variantTitle = (string) ($variant['title'] ?? '');
+                            $title = strtolower($variantTitle) !== 'default title'
+                                ? $productTitle . ' - ' . $variantTitle
+                                : $productTitle;
+                        }
+                        if ($imageUrl === '') {
+                            $imageUrl = (string) ($variant['product']['featuredImage']['url'] ?? '');
+                        }
+                    }
+                } catch (DecryptException|\Throwable) {
+                    // keep DB values
+                }
+            }
+
+            $out[] = [
+                'id' => $o->id,
+                'title' => $title ?: $o->title,
+                'variantId' => $o->product_variant_id,
+                'image_url' => $imageUrl ?: $o->image_url,
+            ];
+        }
+        return $out;
+    }
+
+    protected function variantIdToGid(?string $id): string
+    {
+        $id = trim((string) $id);
+        if ($id === '') {
+            return '';
+        }
+        if (str_starts_with($id, 'gid://')) {
+            return $id;
+        }
+        $numeric = preg_replace('/\D/', '', $id);
+
+        return $numeric !== '' ? 'gid://shopify/ProductVariant/' . $numeric : $id;
     }
 
     /**
