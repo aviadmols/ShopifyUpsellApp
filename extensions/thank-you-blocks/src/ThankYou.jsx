@@ -1,6 +1,6 @@
 /**
  * Thank you page: fetches blocks from Laravel GET /api/thankyou/blocks and renders by type.
- * Types: banner, text, button, product_card. Always shows BUILD_ID so you can verify the extension runs.
+ * Types: banner, text, button, product_card. Debug panel only when no blocks or error, and only if show_debug_when_empty is true.
  */
 import {
   reactExtension,
@@ -23,11 +23,12 @@ export default reactExtension('purchase.thank-you.block.render', () => <ThankYou
 function ThankYouBlocks() {
   const settings = useSettings();
   const [blocks, setBlocks] = useState([]);
-  const [status, setStatus] = useState('loading'); // loading | ok | no_config | error
+  const [status, setStatus] = useState('loading');
 
   const apiUrl = (settings.api_url || DEFAULT_API_URL || '').replace(/\/$/, '');
   const secret = (settings.extension_secret || '').trim();
   const shopDomain = (settings.shop_domain || DEFAULT_SHOP_DOMAIN).trim() || DEFAULT_SHOP_DOMAIN;
+  const showDebugWhenEmpty = settings.show_debug_when_empty === true;
 
   useEffect(() => {
     if (!apiUrl || !secret) {
@@ -60,31 +61,35 @@ function ThankYouBlocks() {
             ? 'No blocks for this order'
             : `${blocks.length} block(s)`;
 
-  const debugBlock = (
+  const fullDebugBlock = (
     <BlockStack spacing="extraTight">
       <Text size="small" appearance="subdued">Thank You Blocks · {BUILD_ID}</Text>
       <Text size="small" appearance="subdued">Status: {statusLine}</Text>
     </BlockStack>
   );
 
-  if (blocks.length === 0) {
+  const minimalMessage = (
+    <Text appearance="subdued" size="small">
+      {status === 'no_config' ? 'Not configured' : status === 'error' ? 'Connection error' : 'No blocks for this order'}
+    </Text>
+  );
+
+  if (blocks.length > 0) {
     return (
       <BlockStack spacing="loose">
-        {debugBlock}
-        {status === 'no_config' && (
-          <Text size="small" appearance="subdued">Add blocks in the app and set Extension secret in this block.</Text>
-        )}
+        {blocks.map((block) => (
+          <Block key={block.id} block={block} />
+        ))}
       </BlockStack>
     );
   }
 
   return (
-    <BlockStack spacing="loose">
-      {debugBlock}
-      <Divider />
-      {blocks.map((block) => (
-        <Block key={block.id} block={block} />
-      ))}
+    <BlockStack spacing="tight">
+      {showDebugWhenEmpty ? fullDebugBlock : minimalMessage}
+      {showDebugWhenEmpty && status === 'no_config' && (
+        <Text size="small" appearance="subdued">Add blocks in the app and set Extension secret in this block.</Text>
+      )}
     </BlockStack>
   );
 }

@@ -1,6 +1,6 @@
 /**
  * Checkout upsell: fetches offers from Laravel and adds selected variant to cart.
- * Always shows BUILD_ID and status so you can verify deploy and debug connection.
+ * Debug panel (BUILD_ID, API, Status) only when no offers or error, and only if block setting show_debug_when_empty is true.
  */
 import {
   reactExtension,
@@ -46,6 +46,7 @@ function CheckoutUpsell() {
   const secret = (settings.extension_secret || '').trim();
   const shopDomain = (settings.shop_domain || '').trim();
   const shop = shopDomain || DEFAULT_SHOP;
+  const showDebugWhenEmpty = settings.show_debug_when_empty === true;
 
   const [displayMode, setDisplayMode] = useState('stacked');
 
@@ -123,7 +124,7 @@ function CheckoutUpsell() {
             ? (offers.length ? 'Connected' : 'No offers')
             : status.message;
 
-  const statusBlock = (
+  const fullDebugBlock = (
     <BlockStack spacing="extraTight">
       <Text size="medium" emphasis="bold">Checkout Upsell</Text>
       <Text appearance="subdued" size="small">{BUILD_ID}</Text>
@@ -139,68 +140,54 @@ function CheckoutUpsell() {
     </BlockStack>
   );
 
-  if (loading) {
-    return (
-      <BlockStack spacing="tight">
-        {statusBlock}
-      </BlockStack>
-    );
-  }
+  const minimalMessage = (
+    <Text appearance="subdued" size="small">
+      {status.type === 'not_configured' ? 'Not configured' : status.type === 'error' ? 'Connection error' : 'No offers right now'}
+    </Text>
+  );
 
-  if (status.type === 'not_configured') {
-    return (
-      <BlockStack spacing="tight">
-        {statusBlock}
-      </BlockStack>
-    );
-  }
+  const showEmptyOrError = loading || status.type === 'not_configured' || status.type === 'error' || offers.length === 0;
+  const debugContent = showDebugWhenEmpty ? fullDebugBlock : minimalMessage;
 
-  if (status.type === 'error') {
+  if (offers.length > 0 && !loading && status.type !== 'error' && status.type !== 'not_configured') {
+    const offersToShow = displayMode === 'single' ? offers.slice(0, 1) : offers;
     return (
       <BlockStack spacing="loose">
-        {statusBlock}
-        <Text size="small" appearance="subdued">Fix Block settings or check the app, then refresh checkout.</Text>
+        <Text size="medium" emphasis="bold">Add to your order</Text>
+        {offersToShow.map((offer) => (
+          <BlockStack key={offer.id} spacing="tight">
+            {offer.image_url && <Image url={offer.image_url} alt={offer.title} />}
+            <Text>{offer.title}</Text>
+            {(offer.offer_type === 'subscription' || offer.offer_type === 'both') && (
+              <Text appearance="subdued" size="small">Subscribe & save</Text>
+            )}
+            {offer.description && (
+              <Text appearance="subdued">{offer.description}</Text>
+            )}
+            <BlockStack spacing="tight">
+              <Button
+                kind="secondary"
+                onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null)}
+                disabled={added.has(offer.variant_id)}
+              >
+                {added.has(offer.variant_id) ? 'Added' : (offer.offer_type === 'subscription' ? 'Add as subscription' : 'Add to order')}
+              </Button>
+            </BlockStack>
+          </BlockStack>
+        ))}
       </BlockStack>
     );
   }
-
-  if (offers.length === 0) {
-    return (
-      <BlockStack spacing="loose">
-        {statusBlock}
-        <Text size="small" appearance="subdued">Add offers in Admin → Offers and enable Checkout placement for this shop.</Text>
-      </BlockStack>
-    );
-  }
-
-  const offersToShow = displayMode === 'single' ? offers.slice(0, 1) : offers;
 
   return (
-    <BlockStack spacing="loose">
-      {statusBlock}
-      <Divider />
-      <Text size="medium" emphasis="bold">Add to your order</Text>
-      {offersToShow.map((offer) => (
-        <BlockStack key={offer.id} spacing="tight">
-          {offer.image_url && <Image url={offer.image_url} alt={offer.title} />}
-          <Text>{offer.title}</Text>
-          {(offer.offer_type === 'subscription' || offer.offer_type === 'both') && (
-            <Text appearance="subdued" size="small">Subscribe & save</Text>
-          )}
-          {offer.description && (
-            <Text appearance="subdued">{offer.description}</Text>
-          )}
-          <BlockStack spacing="tight">
-            <Button
-              kind="secondary"
-              onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null)}
-              disabled={added.has(offer.variant_id)}
-            >
-              {added.has(offer.variant_id) ? 'Added' : (offer.offer_type === 'subscription' ? 'Add as subscription' : 'Add to order')}
-            </Button>
-          </BlockStack>
-        </BlockStack>
-      ))}
+    <BlockStack spacing="tight">
+      {debugContent}
+      {showDebugWhenEmpty && status.type === 'error' && (
+        <Text size="small" appearance="subdued">Fix Block settings or check the app, then refresh checkout.</Text>
+      )}
+      {showDebugWhenEmpty && offers.length === 0 && !loading && status.type === 'connected' && (
+        <Text size="small" appearance="subdued">Add offers in Admin → Offers and enable Checkout placement for this shop.</Text>
+      )}
     </BlockStack>
   );
 }

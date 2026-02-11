@@ -14,7 +14,7 @@ Route::get('/up', function () {
     return response()->json(['status' => 'ok', 'message' => 'Laravel is running']);
 });
 
-// לבדיקה שדיפלוי מעודכן – אם האתר עולה, גלוש ל-/version
+// Deploy check: hit /version to confirm the app is running
 Route::get('/version', function () {
     return response()->json([
         'app' => 'ShopifyUpsellApp',

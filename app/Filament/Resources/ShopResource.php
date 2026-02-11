@@ -35,11 +35,11 @@ class ShopResource extends Resource
                     ->required()
                     ->maxLength(255)
                     ->readOnly()
-                    ->helperText('הדומיין שנרשם בהתקנה (למשל millsdailypacks-usa.myshopify.com).'),
+                    ->helperText('Domain recorded at install (e.g. millsdailypacks-usa.myshopify.com).'),
                 Forms\Components\TagsInput::make('alternate_domains')
-                    ->label('דומיינים חלופיים (לזיהוי אותה חנות)')
+                    ->label('Alternate domains (same shop)')
                     ->placeholder('millsdailypacks.myshopify.com')
-                    ->helperText('אם ב-Checkout נשלח דומיין אחר (למשל millsdailypacks.myshopify.com או millsdailypacks-usa), הוסף כאן. שורה אחת לכל דומיין.')
+                    ->helperText('If checkout sends a different domain (e.g. millsdailypacks.myshopify.com or millsdailypacks-usa), add it here. One per line.')
                     ->splitKeys(['Tab', ',']),
                 Forms\Components\TextInput::make('scope')
                     ->maxLength(255),

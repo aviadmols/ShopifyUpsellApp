@@ -28,3 +28,8 @@ name = "Extension secret"
 key = "shop_domain"
 type = "single_line_text_field"
 name = "Shop domain"
+[[extensions.settings.fields]]
+key = "show_debug_when_empty"
+type = "boolean"
+name = "Show debug info when no blocks or error"
+description = "When enabled, shows BUILD_ID and status when there are no blocks or connection fails. Leave off for storefront."

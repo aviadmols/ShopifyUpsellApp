@@ -41,7 +41,7 @@ class CheckoutUpsellController extends Controller
             'id' => $o->id,
             'title' => $o->title,
             'description' => $o->description,
-            'variant_id' => $o->product_variant_id,
+            'variant_id' => $this->normalizeVariantIdToGid($o->product_variant_id),
             'discount_type' => $o->discount_type,
             'discount_value' => $o->discount_value?->toString(),
             'image_url' => $o->image_url,
@@ -53,6 +53,23 @@ class CheckoutUpsellController extends Controller
             'offers' => $data,
             'display_mode' => $displayMode,
         ]);
+    }
+
+    /**
+     * Normalize product_variant_id to Shopify GID for useApplyCartLinesChange (merchandiseId).
+     */
+    protected function normalizeVariantIdToGid(?string $id): string
+    {
+        $id = trim((string) $id);
+        if ($id === '') {
+            return '';
+        }
+        if (str_starts_with($id, 'gid://')) {
+            return $id;
+        }
+        $numeric = preg_replace('/\D/', '', $id);
+
+        return $numeric !== '' ? 'gid://shopify/ProductVariant/'.$numeric : $id;
     }
 
     protected function resolveShop(Request $request): ?Shop

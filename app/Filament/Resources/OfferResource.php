@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Log;
 
 class OfferResource extends Resource
 {
@@ -38,18 +39,18 @@ class OfferResource extends Resource
                             ->preload()
                             ->live(),
                         Forms\Components\Select::make('selected_variant_ids')
-                            ->label('Variants from Shopify (multi-select)')
-                            ->multiple()
+                            ->label('Variants from Shopify')
+                            ->multiple(fn (string $operation): bool => $operation === 'create')
                             ->searchable()
-                            ->visible(fn (string $operation): bool => $operation === 'create')
-                            ->helperText('You can select multiple variants. One offer will be created per variant.')
+                            ->helperText('Requires app scope: read_products. On create: select one or more; on edit: select one. If the list is empty, check that the shop is connected and has granted product read access.')
                             ->getSearchResultsUsing(fn (string $search, Get $get): array => self::variantOptions($get('shop_id'), $search))
                             ->getOptionLabelsUsing(fn ($values, Get $get): array => self::variantLabels($get('shop_id'), (array) ($values ?? []))),
                         Forms\Components\TextInput::make('product_variant_id')
                             ->label('Single variant ID (manual fallback)')
                             ->maxLength(255)
-                            ->helperText('Use this when Shopify search is unavailable or for editing an existing offer.')
-                            ->required(fn (string $operation, Get $get): bool => $operation === 'edit' || empty((array) ($get('selected_variant_ids') ?? []))),
+                            ->helperText('Use when Shopify search is unavailable or to paste a GID (e.g. gid://shopify/ProductVariant/123).')
+                            ->visible(fn (Get $get): bool => empty(array_filter((array) ($get('selected_variant_ids') ?? []))))
+                            ->required(fn (Get $get): bool => empty(array_filter((array) ($get('selected_variant_ids') ?? [])))),
                         Forms\Components\TextInput::make('title')
                             ->required()
                             ->default('Upsell offer')
@@ -320,7 +321,9 @@ class OfferResource extends Resource
 
         try {
             $items = app(ShopifyGraphQLService::class)->searchProductVariants($shop, $search, 25);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::warning('OfferResource: Shopify variant search failed', ['shop_id' => $shopId, 'message' => $e->getMessage()]);
+
             return [];
         }
 

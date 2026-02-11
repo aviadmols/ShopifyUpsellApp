@@ -22,8 +22,22 @@ class EditOffer extends EditRecord
         /** @var Offer $offer */
         $offer = $this->record;
         $builderState = app(OfferBuilderService::class)->buildEditState($offer);
+        $data = array_merge($data, $builderState);
+        if (trim((string) ($offer->product_variant_id ?? '')) !== '') {
+            $data['selected_variant_ids'] = [$offer->product_variant_id];
+        }
 
-        return array_merge($data, $builderState);
+        return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    protected function resolveProductVariantId(array $data, Offer $offer): string
+    {
+        $variantIds = array_values(array_filter((array) ($data['selected_variant_ids'] ?? [])));
+
+        return $variantIds !== [] ? (string) $variantIds[0] : (string) ($data['product_variant_id'] ?? $offer->product_variant_id);
     }
 
     /**
@@ -39,7 +53,7 @@ class EditOffer extends EditRecord
             'shop_id' => (int) ($data['shop_id'] ?? $offer->shop_id),
             'title' => (string) ($data['title'] ?? $offer->title),
             'description' => (string) ($data['description'] ?? ''),
-            'product_variant_id' => (string) ($data['product_variant_id'] ?? $offer->product_variant_id),
+            'product_variant_id' => $this->resolveProductVariantId($data, $offer),
             'discount_type' => (string) ($data['discount_type'] ?? $offer->discount_type),
             'discount_value' => in_array(($data['discount_type'] ?? 'none'), ['percentage', 'fixed'], true)
                 ? ($data['discount_value'] ?? null)

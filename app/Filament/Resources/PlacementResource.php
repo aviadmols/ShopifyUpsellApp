@@ -36,6 +36,7 @@ class PlacementResource extends Resource
                     ->live(),
 
                 Forms\Components\Fieldset::make('Checkout config')
+                    ->description('API/extension options: offer_ids, max_offers, priority, display_mode (stacked|single), require_expanded. Future: e.g. grid.')
                     ->visible(fn (Get $get): bool => $get('placement_type') === 'checkout')
                     ->schema([
                         Forms\Components\TextInput::make('offer_ids_csv')

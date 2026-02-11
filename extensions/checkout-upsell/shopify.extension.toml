@@ -35,3 +35,8 @@ key = "shop_domain"
 type = "single_line_text_field"
 name = "Shop domain (optional)"
 description = "Optional. Store myshopify.com domain. Leave empty for default."
+[[extensions.settings.fields]]
+key = "show_debug_when_empty"
+type = "boolean"
+name = "Show debug info when no offers or error"
+description = "When enabled, shows BUILD_ID and connection details when the block has no offers or fails. Leave off for storefront."
