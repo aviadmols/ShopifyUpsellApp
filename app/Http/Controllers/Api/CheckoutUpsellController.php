@@ -34,7 +34,11 @@ class CheckoutUpsellController extends Controller
         ]));
 
         if ($blockId !== null && $blockId !== '') {
-            $block = Block::where('surface', 'checkout')->find((int) $blockId);
+            $blockIdInt = (int) $blockId;
+            if ($blockIdInt < 1) {
+                return $emptyResponse('Widget ID must be the number from Admin → Widgets (e.g. 5 or 12). You entered: '.((string) $blockId));
+            }
+            $block = Block::where('surface', 'checkout')->find($blockIdInt);
             if ($block) {
                 $shop = $block->shop;
                 if ($shop && $shop->uninstalled_at === null) {
@@ -94,11 +98,16 @@ class CheckoutUpsellController extends Controller
             $data = $this->enrichOffersFromShopify($shop, $eligible);
             $ui = $this->buildUiFromBlockConfig($config, false);
 
-            return response()->json([
+            $payload = [
                 'offers' => $data,
                 'display_mode' => (string) ($config['display_mode'] ?? 'stacked'),
                 'ui' => $ui,
-            ]);
+            ];
+            if (count($data) === 0 && count($offerIds) === 0) {
+                $payload['block_error'] = 'Widget '.$block->id.' found but has no offers. Add offers in Admin → Widgets for this widget.';
+            }
+
+            return response()->json($payload);
         }
 
         if ($type === 'progress_bar') {
