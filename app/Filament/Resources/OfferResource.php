@@ -12,6 +12,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 
@@ -45,12 +46,18 @@ class OfferResource extends Resource
                             ->helperText('Requires app scope: read_products. On create: select one or more; on edit: select one. If the list is empty, check that the shop is connected and has granted product read access.')
                             ->getSearchResultsUsing(fn (string $search, Get $get): array => self::variantOptions($get('shop_id'), $search))
                             ->getOptionLabelsUsing(fn ($values, Get $get): array => self::variantLabels($get('shop_id'), (array) ($values ?? []))),
+                        Forms\Components\Textarea::make('variant_ids_manual')
+                            ->label('Variant IDs (manual / open field)')
+                            ->placeholder('48072914534655'."\n".'gid://shopify/ProductVariant/48072914534655')
+                            ->helperText('One variant ID per line or comma-separated. Use when the dropdown is empty or to paste IDs from Shopify. On edit, the first ID is used.')
+                            ->columnSpanFull()
+                            ->rows(3),
                         Forms\Components\TextInput::make('product_variant_id')
-                            ->label('Single variant ID (manual fallback)')
+                            ->label('Single variant ID (legacy fallback)')
                             ->maxLength(255)
-                            ->helperText('Use when Shopify search is unavailable or to paste a GID (e.g. gid://shopify/ProductVariant/123).')
-                            ->visible(fn (Get $get): bool => empty(array_filter((array) ($get('selected_variant_ids') ?? []))))
-                            ->required(fn (Get $get): bool => empty(array_filter((array) ($get('selected_variant_ids') ?? [])))),
+                            ->helperText('Single ID or GID. Prefer the dropdown or the manual field above.')
+                            ->visible(fn (Get $get): bool => empty(array_filter((array) ($get('selected_variant_ids') ?? []))) && empty(trim((string) ($get('variant_ids_manual') ?? ''))))
+                            ->required(fn (Get $get): bool => empty(array_filter((array) ($get('selected_variant_ids') ?? []))) && empty(trim((string) ($get('variant_ids_manual') ?? '')))),
                         Forms\Components\TextInput::make('title')
                             ->required()
                             ->default('Upsell offer')
@@ -315,7 +322,17 @@ class OfferResource extends Resource
     protected static function variantOptions(?int $shopId, string $search): array
     {
         $shop = $shopId ? Shop::whereNull('uninstalled_at')->find($shopId) : null;
-        if (! $shop || ! $shop->access_token) {
+        if (! $shop) {
+            return [];
+        }
+
+        try {
+            if (! $shop->access_token) {
+                return [];
+            }
+        } catch (DecryptException $e) {
+            Log::warning('OfferResource: Shop access_token decrypt failed (wrong key or corrupted)', ['shop_id' => $shopId]);
+
             return [];
         }
 
@@ -340,11 +357,12 @@ class OfferResource extends Resource
     }
 
     /**
-     * @param  array<int, string>  $values
+     * @param  array<int, string|array>  $values  May contain nested arrays when Select receives array state.
      * @return array<string, string>
      */
     protected static function variantLabels(?int $shopId, array $values): array
     {
+        $values = self::normalizeVariantIdsToScalars($values);
         $labels = [];
         foreach ($values as $value) {
             $labels[(string) $value] = (string) $value;
@@ -355,14 +373,24 @@ class OfferResource extends Resource
         }
 
         $shop = $shopId ? Shop::whereNull('uninstalled_at')->find($shopId) : null;
-        if (! $shop || ! $shop->access_token) {
+        if (! $shop) {
+            return $labels;
+        }
+        try {
+            if (! $shop->access_token) {
+                return $labels;
+            }
+        } catch (DecryptException $e) {
+            Log::warning('OfferResource: Shop access_token decrypt failed (wrong key or corrupted)', ['shop_id' => $shopId]);
+
             return $labels;
         }
 
         $service = app(ShopifyGraphQLService::class);
         foreach ($values as $gid) {
+            $gid = (string) $gid;
             try {
-                $variant = $service->getProductVariant($shop, (string) $gid);
+                $variant = $service->getProductVariant($shop, $gid);
             } catch (\Throwable) {
                 continue;
             }
@@ -380,11 +408,49 @@ class OfferResource extends Resource
                 $label .= " - {$variantTitle}";
             }
             if ($price !== '') {
-                $label .= " (${$price})";
+                $label .= ' (' . $price . ')';
             }
-            $labels[(string) $gid] = $label;
+            $labels[$gid] = $label;
         }
 
         return $labels;
+    }
+
+    /**
+     * Flatten variant id list so Filament Select never receives array keys (array_key_exists requires string|int).
+     *
+     * @param  array<int, mixed>  $values
+     * @return array<int, string>
+     */
+    public static function normalizeVariantIdsToScalars(array $values): array
+    {
+        $out = [];
+        foreach ($values as $v) {
+            if (is_array($v)) {
+                $v = array_values($v)[0] ?? null;
+            }
+            if ($v !== null && $v !== '' && (is_string($v) || is_numeric($v))) {
+                $out[] = (string) $v;
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * Parse variant IDs from a string (newline or comma separated). Returns non-empty trimmed IDs.
+     *
+     * @return array<int, string>
+     */
+    public static function parseVariantIdsFromString(?string $input): array
+    {
+        if (trim((string) $input) === '') {
+            return [];
+        }
+        $ids = preg_split('/[\s,]+/', (string) $input, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $ids = array_map('trim', $ids);
+        $ids = array_values(array_filter($ids, fn (string $id): bool => $id !== ''));
+
+        return $ids;
     }
 }

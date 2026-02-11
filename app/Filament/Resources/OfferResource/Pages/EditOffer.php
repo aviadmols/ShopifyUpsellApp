@@ -14,6 +14,17 @@ class EditOffer extends EditRecord
     protected static string $resource = OfferResource::class;
 
     /**
+     * Livewire property hook: normalize selected_variant_ids after hydration so Select never gets array keys.
+     */
+    public function hydrateData(array $data): void
+    {
+        if (isset($this->data['selected_variant_ids']) && is_array($this->data['selected_variant_ids'])) {
+            $flat = OfferResource::normalizeVariantIdsToScalars($this->data['selected_variant_ids']);
+            $this->data['selected_variant_ids'] = $flat === [] ? [] : (count($flat) === 1 ? $flat[0] : $flat);
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -25,19 +36,25 @@ class EditOffer extends EditRecord
         $data = array_merge($data, $builderState);
         if (trim((string) ($offer->product_variant_id ?? '')) !== '') {
             $data['selected_variant_ids'] = [$offer->product_variant_id];
+            $data['variant_ids_manual'] = $offer->product_variant_id;
         }
 
         return $data;
     }
 
     /**
+     * Collect variant ID from dropdown, manual text field, or legacy single field; return first.
+     *
      * @param  array<string, mixed>  $data
      */
     protected function resolveProductVariantId(array $data, Offer $offer): string
     {
-        $variantIds = array_values(array_filter((array) ($data['selected_variant_ids'] ?? [])));
+        $fromSelect = OfferResource::normalizeVariantIdsToScalars((array) ($data['selected_variant_ids'] ?? []));
+        $fromManual = OfferResource::parseVariantIdsFromString((string) ($data['variant_ids_manual'] ?? ''));
+        $single = trim((string) ($data['product_variant_id'] ?? ''));
+        $all = array_values(array_filter(array_merge($fromSelect, $fromManual, $single !== '' ? [$single] : [])));
 
-        return $variantIds !== [] ? (string) $variantIds[0] : (string) ($data['product_variant_id'] ?? $offer->product_variant_id);
+        return $all !== [] ? (string) $all[0] : (string) ($offer->product_variant_id ?? '');
     }
 
     /**

@@ -18,11 +18,12 @@ class CreateOffer extends CreateRecord
     protected function handleRecordCreation(array $data): Model
     {
         $builder = app(OfferBuilderService::class);
-        $variants = array_values(array_filter((array) ($data['selected_variant_ids'] ?? [])));
-
-        if (empty($variants) && ! empty($data['product_variant_id'])) {
-            $variants = [(string) $data['product_variant_id']];
+        $variants = OfferResource::normalizeVariantIdsToScalars((array) ($data['selected_variant_ids'] ?? []));
+        $variants = array_merge($variants, OfferResource::parseVariantIdsFromString((string) ($data['variant_ids_manual'] ?? '')));
+        if (empty($variants) && trim((string) ($data['product_variant_id'] ?? '')) !== '') {
+            $variants = [ (string) trim($data['product_variant_id']) ];
         }
+        $variants = array_values(array_unique($variants));
 
         if (empty($variants)) {
             throw new \RuntimeException('Please choose at least one variant.');
