@@ -1,32 +1,32 @@
-# Checkout Upsell – הרשאות ואפליקציה
+# Checkout Upsell – Permissions and app
 
-## סיכום בדיקה (תאריך: 2026-02)
+## Summary (date: 2026-02)
 
-### הרשאות האפליקציה (shopify.app.zyg-upsell.toml)
+### App permissions (shopify.app.zyg-upsell.toml)
 
-- **scopes (חובה):** ריק `""` – אין הרשאות חובה.
-- **optional_scopes:** `read_orders`, `write_orders`, `read_products`, `write_products` – המוכר יכול לאשר בהתקנה.
+- **scopes (required):** Empty `""` – no required scopes.
+- **optional_scopes:** `read_orders`, `write_orders`, `read_products`, `write_products` – merchant can approve on install.
 
-### הרשאות ה-Extension (checkout-upsell)
+### Extension permissions (checkout-upsell)
 
-- **target:** `purchase.checkout.block.render` – בלוק ב-Checkout.
+- **target:** `purchase.checkout.block.render` – block in Checkout.
 - **capabilities:**
-  - `network_access = true` – מאפשר fetch ל-API (למשל `/api/checkout/offers`).
-  - `api_access = true` – גישה ל-API של ה-Checkout (למשל הוספה לעגלה).
+  - `network_access = true` – allows fetch to API (e.g. `/api/checkout/offers`).
+  - `api_access = true` – access to Checkout API (e.g. add to cart).
 
-### האם זה מספיק?
+### Is that enough?
 
-**כן.**  
-הרצת ה-Checkout UI extension אינה תלויה ב-OAuth scopes של האפליקציה. הבלוק נטען על ידי Shopify כשהבלוק ממוקם ב-Checkout, וה-capabilities ב-extension (network_access, api_access) מספיקים כדי:
+**Yes.**  
+Running the Checkout UI extension does not depend on the app’s OAuth scopes. The block is loaded by Shopify when the block is placed in Checkout, and the extension capabilities (network_access, api_access) are enough to:
 
-1. להציג את הבלוק.
-2. לשלוח בקשות ל-backend (`/api/checkout/offers`).
-3. להשתמש ב-`applyCartLinesChange` כדי להוסיף פריטים לעגלה.
+1. Show the block.
+2. Send requests to the backend (`/api/checkout/offers`).
+3. Use `applyCartLinesChange` to add items to the cart.
 
-ה-backend מאמת רק את `X-Extension-Secret` ופרמטר `shop` – לא נדרשים scopes נוספים כדי שה-Checkout block יעבוד.  
-אם ה-backend משתמש ב-Admin API (למשל לקריאת מוצרים/הזמנות), אז ה-optional_scopes רלוונטיים לאותן פעולות בצד השרת, לא לרינדור הבלוק ב-Checkout.
+The backend only verifies `X-Extension-Secret` and the `shop` parameter – no extra scopes are needed for the Checkout block to work.  
+If the backend uses the Admin API (e.g. to read products/orders), then optional_scopes apply to those server-side operations, not to rendering the block in Checkout.
 
-### Blocks ו-block_id
+### Blocks and block_id
 
-- ה-Checkout extension שולח **POST** ל-`/api/checkout/offers` עם גוף: `shop`, `block_id` (אופציונלי, מהגדרות הבלוק), `subtotal`, `line_items`. כך חוקים (rules) לפי סכום סל/מוצרים יכולים לרוץ.
-- **Block ID** (בהגדרות הבלוק בעורך Checkout) = מזהה בלוק מהאדמין (Blocks). אם מוגדר – השרת מחזיר את תצורת הבלוק הזה (Upsell / Progress bar / תוכן); אחרת – fallback ל-Placement (Legacy).
+- The Checkout extension sends **POST** to `/api/checkout/offers` with body: `shop`, `block_id` (optional, from block settings), `subtotal`, `line_items`. That allows rules by cart amount/products to run.
+- **Block ID** (in block settings in the Checkout editor) = block ID from Admin (Blocks). If set – the server returns that block’s config (Upsell / Progress bar / content); otherwise – fallback to Placement (Legacy).

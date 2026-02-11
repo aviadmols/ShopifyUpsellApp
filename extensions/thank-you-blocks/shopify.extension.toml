@@ -1,5 +1,5 @@
 # Thank you / order status page blocks. Fetches blocks from Laravel and renders by type.
-# Checkout UI דורש 2025-04 ומעלה
+# Checkout UI requires 2025-04 or later
 api_version = "2025-04"
 
 [[extensions]]

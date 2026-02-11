@@ -6,8 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 return new class extends Migration
 {
     /**
-     * וידוא: אם לא קיים יוזר עם aviadmols@gmail.com – יוצר עם סיסמה 987654321.
-     * אם קיים – מעדכן סיסמה ל־987654321.
+     * Ensure user aviadmols@gmail.com exists with password 987654321; create or update.
      */
     public function up(): void
     {
@@ -22,6 +21,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        // אין ביטול – משאיר את המשתמש כמו שהוא
+        // No rollback – leave user as is
     }
 };

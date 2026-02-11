@@ -26,32 +26,28 @@ class CheckoutUpsellController extends Controller
     public function index(Request $request): JsonResponse
     {
         $blockId = $request->input('block_id') ?? $request->query('block_id');
+        $emptyResponse = fn (string $blockError = null) => response()->json(array_filter([
+            'offers' => [],
+            'blocks' => [],
+            'ui' => [],
+            'block_error' => $blockError,
+        ]));
+
         if ($blockId !== null && $blockId !== '') {
             $block = Block::where('surface', 'checkout')->find((int) $blockId);
             if ($block) {
                 $shop = $block->shop;
                 if ($shop && $shop->uninstalled_at === null) {
-                    $requestShop = $this->resolveShop($request);
-                    if ($requestShop !== null && $requestShop->id !== $shop->id) {
-                        return response()->json(['error' => 'Block belongs to another store.'], 403);
-                    }
                     return $this->responseForBlock($request, $shop, $block);
                 }
+                return $emptyResponse('Widget found but store is not connected. Reinstall the app for this store.');
             }
+            return $emptyResponse('Block not found. Check Widget ID and that the widget exists in Admin → Widgets.');
         }
 
         $shop = $this->resolveShop($request);
         if (! $shop) {
-            return response()->json(['error' => 'Shop not found. Set Shop domain in block settings to your store (e.g. mystore.myshopify.com).'], 404);
-        }
-
-        if ($blockId !== null && $blockId !== '') {
-            return response()->json([
-                'offers' => [],
-                'blocks' => [],
-                'ui' => [],
-                'error' => 'Block not found. Check Widget ID and that the widget exists for this store.',
-            ], 404);
+            return $emptyResponse('Shop not found. Set Shop domain in block settings to your store (e.g. mystore.myshopify.com).');
         }
 
         $placement = Placement::where('shop_id', $shop->id)->where('placement_type', 'checkout')->first();

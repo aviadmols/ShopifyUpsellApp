@@ -184,11 +184,16 @@ function CheckoutUpsell() {
             }
             const count = (data.offers || []).length;
             const blockCount = (data.blocks || []).length;
-            setStatus({
-              type: 'connected',
-              message: count ? `Connected — ${count} offer(s)` : blockCount ? 'Connected — content widget' : 'Connected — no offers for this cart',
-              detail: count ? 'Upsell active' : blockCount ? 'Content widget' : 'Add a widget in Admin → Widgets and set Widget ID here.',
-            });
+            const blockError = data.block_error || data.error;
+            if (blockError) {
+              setStatus({ type: 'connected', message: blockError, detail: '' });
+            } else {
+              setStatus({
+                type: 'connected',
+                message: count ? `Connected — ${count} offer(s)` : blockCount ? 'Content widget' : 'Connected — no offers for this cart',
+                detail: count ? 'Upsell active' : blockCount ? 'Content widget' : 'Add a widget in Admin → Widgets and set Widget ID here.',
+              });
+            }
           });
         }
         const statusCode = r.status;

@@ -9,7 +9,7 @@ embedded = true
 api_version = "2026-01"
 
 [access_scopes]
-# הרשאות חובה בהתקנה – כך החנות תאשר אותן כשמוסיפים את האפליקציה. Checkout UI extensions לא דורשים scope נפרד.
+# Required scopes on install. Checkout UI extensions do not require a separate scope.
 scopes = "read_products,write_products,read_orders,write_orders"
 optional_scopes = []
 use_legacy_install_flow = false
