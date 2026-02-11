@@ -12,6 +12,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class OfferResource extends Resource
 {
@@ -31,7 +32,7 @@ class OfferResource extends Resource
                     ->description('Pick one or multiple variants directly from Shopify. If Shopify is unavailable, manual variant ID still works.')
                     ->schema([
                         Forms\Components\Select::make('shop_id')
-                            ->relationship('shop', 'shop_domain', fn ($q) => $q->whereNull('uninstalled_at'))
+                            ->relationship('shop', 'shop_domain', fn (Builder $query) => $query->whereNull('uninstalled_at'))
                             ->required()
                             ->searchable()
                             ->preload()
