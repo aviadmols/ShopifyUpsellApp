@@ -82,6 +82,14 @@ class PreviewController extends Controller
      */
     protected function normalizeContext(array $payload): array
     {
+        $utms = $payload['utms'] ?? [];
+        if (! is_array($utms)) {
+            $utms = [];
+        }
+        $urlParams = $payload['url_params'] ?? $payload['query'] ?? [];
+        if (! is_array($urlParams)) {
+            $urlParams = [];
+        }
         return [
             'order_id' => $payload['order_id'] ?? $payload['order']['id'] ?? null,
             'subtotal' => $payload['subtotal'] ?? $payload['order']['subtotal'] ?? 0,
@@ -89,6 +97,8 @@ class PreviewController extends Controller
             'customer' => $payload['customer'] ?? [],
             'shipping_address' => $payload['shipping_address'] ?? $payload['shippingAddress'] ?? [],
             'shipping_country' => $payload['shipping_country'] ?? $payload['shipping_address']['country_code'] ?? $payload['shippingAddress']['countryCode'] ?? null,
+            'utms' => array_filter(array_map('strval', $utms)),
+            'url_params' => array_filter(array_map('strval', $urlParams)),
         ];
     }
 }

@@ -87,6 +87,12 @@ class RuleEngine
             'line_items_has_any_product_id' => $this->lineItemsHasAnyProductId($context, (array) $value),
             'customer_has_tag' => $this->customerHasTag($context, (string) $value),
             'shipping_country_in' => $this->shippingCountryIn($context, (array) $value),
+            'utm_param_equals' => $this->utmParamEquals($context, $value),
+            'utm_param_contains' => $this->utmParamContains($context, $value),
+            'url_param_equals' => $this->urlParamEquals($context, $value),
+            'url_param_contains' => $this->urlParamContains($context, $value),
+            'line_item_property_equals' => $this->lineItemPropertyEquals($context, $value),
+            'line_item_property_exists' => $this->lineItemPropertyExists($context, (string) $value),
             default => false,
         };
     }
@@ -141,5 +147,100 @@ class RuleEngine
     {
         $country = $context['shipping_country'] ?? $context['shipping_address']['country_code'] ?? $context['shippingAddress']['countryCode'] ?? '';
         return in_array(strtoupper($country), array_map('strtoupper', $countries), true);
+    }
+
+    /**
+     * UTM/URL params: value can be "param_name,expected_value" or JSON array [param, value].
+     * Context: utms (array), url_params (array) — from request query and/or cookies/session.
+     */
+    protected function utmParamEquals(array $context, mixed $value): bool
+    {
+        [$param, $expected] = $this->parseParamValue($value);
+        $utms = $context['utms'] ?? $context['utm'] ?? [];
+        $actual = is_array($utms) ? ($utms[$param] ?? null) : null;
+        return $actual !== null && (string) $actual === (string) $expected;
+    }
+
+    protected function utmParamContains(array $context, mixed $value): bool
+    {
+        [$param, $substring] = $this->parseParamValue($value);
+        $utms = $context['utms'] ?? $context['utm'] ?? [];
+        $actual = is_array($utms) ? ($utms[$param] ?? '') : '';
+        return str_contains((string) $actual, (string) $substring);
+    }
+
+    protected function urlParamEquals(array $context, mixed $value): bool
+    {
+        [$param, $expected] = $this->parseParamValue($value);
+        $params = $context['url_params'] ?? $context['query'] ?? [];
+        $actual = is_array($params) ? ($params[$param] ?? null) : null;
+        return $actual !== null && (string) $actual === (string) $expected;
+    }
+
+    protected function urlParamContains(array $context, mixed $value): bool
+    {
+        [$param, $substring] = $this->parseParamValue($value);
+        $params = $context['url_params'] ?? $context['query'] ?? [];
+        $actual = is_array($params) ? ($params[$param] ?? '') : '';
+        return str_contains((string) $actual, (string) $substring);
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    protected function parseParamValue(mixed $value): array
+    {
+        if (is_array($value)) {
+            $param = (string) ($value[0] ?? $value['param'] ?? '');
+            $val = (string) ($value[1] ?? $value['value'] ?? '');
+
+            return [$param, $val];
+        }
+        $str = (string) $value;
+        if (str_contains($str, ',')) {
+            $parts = explode(',', $str, 2);
+            return [trim($parts[0]), trim($parts[1] ?? '')];
+        }
+        return [$str, ''];
+    }
+
+    /**
+     * Line item property: value "property_key,expected_value" or "property_key" for exists.
+     * Context line_items: each item can have 'properties' (array key=>value) or 'attributes'.
+     */
+    protected function lineItemPropertyEquals(array $context, mixed $value): bool
+    {
+        [$propKey, $expected] = $this->parseParamValue($value);
+        $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
+        foreach ($lines as $line) {
+            $props = $line['properties'] ?? $line['attributes'] ?? $line['customAttributes'] ?? [];
+            if (! is_array($props)) {
+                continue;
+            }
+            $actual = $props[$propKey] ?? null;
+            if ($actual !== null && (string) $actual === (string) $expected) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected function lineItemPropertyExists(array $context, string $propKey): bool
+    {
+        $propKey = trim($propKey);
+        if ($propKey === '') {
+            return false;
+        }
+        $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
+        foreach ($lines as $line) {
+            $props = $line['properties'] ?? $line['attributes'] ?? $line['customAttributes'] ?? [];
+            if (! is_array($props)) {
+                continue;
+            }
+            if (array_key_exists($propKey, $props) && (string) ($props[$propKey] ?? '') !== '') {
+                return true;
+            }
+        }
+        return false;
     }
 }

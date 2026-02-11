@@ -112,11 +112,13 @@ function Block({ block }) {
   }
   if (type === 'product_card') {
     const productUrl = config?.button_url || (config?.product_id ? `/products/${config.product_id}` : '#');
+    const isSubscription = config?.offer_type === 'subscription' || config?.offer_type === 'both';
     return (
       <BlockStack spacing={spacing}>
         {maybeDividerBefore}
         {config?.image_url && <Image url={config.image_url} alt={config?.title || ''} />}
         {titleText}
+        {isSubscription && <Text appearance="subdued" size="small">Subscribe & save</Text>}
         {config?.badge_text && <Text appearance="subdued">{config.badge_text}</Text>}
         {config?.body && <Text appearance={titleAppearance} size={titleSize}>{config.body}</Text>}
         {config?.show_price !== false && config?.price_text && (

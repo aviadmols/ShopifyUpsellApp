@@ -75,7 +75,16 @@ class Preview extends Page
                                 'thank_you' => 'Thank you',
                             ])
                             ->required()
+                            ->live()
                             ->default('post_purchase'),
+                        Forms\Components\Select::make('display_mode')
+                            ->options([
+                                'stacked' => 'Stacked cards',
+                                'single' => 'Single card',
+                            ])
+                            ->default('stacked')
+                            ->visible(fn (Forms\Get $get): bool => $get('placement_type') === 'checkout')
+                            ->label('Display mode (checkout)'),
                         Forms\Components\Textarea::make('payload')
                             ->label('Order/Cart JSON')
                             ->rows(14)
@@ -114,7 +123,9 @@ class Preview extends Page
         }
 
         $offerIds = $placement->getOfferIds();
+        $blockIds = $placement->getBlockIds();
         $maxOffers = (int) ($placement->config['max_offers'] ?? 1);
+        $displayMode = (string) ($data['display_mode'] ?? $placement->config['display_mode'] ?? 'stacked');
         $eligible = [];
         $ruleEngine = app(RuleEngine::class);
 
@@ -137,11 +148,25 @@ class Preview extends Page
 
         $matched = $eligible[0] ?? null;
         $this->result = [
+            'placement_type' => $placementType,
+            'display_mode' => $placementType === 'checkout' ? $displayMode : null,
             'match' => $matched ? [
                 'offerId' => $matched->id,
                 'title' => $matched->title,
                 'variantId' => $matched->product_variant_id,
+                'image_url' => $matched->image_url,
+                'description' => $matched->description,
+                'discount_type' => $matched->discount_type,
+                'discount_value' => $matched->discount_value?->toString(),
             ] : null,
+            'eligible_count' => count($eligible),
+            'eligible' => array_map(fn (Offer $o) => [
+                'id' => $o->id,
+                'title' => $o->title,
+                'variantId' => $o->product_variant_id,
+                'image_url' => $o->image_url,
+            ], $eligible),
+            'block_ids' => $placementType === 'thank_you' ? $blockIds : [],
             'context_used' => $context,
         ];
     }
@@ -152,6 +177,14 @@ class Preview extends Page
      */
     protected function normalizeContext(array $payload): array
     {
+        $utms = $payload['utms'] ?? [];
+        if (! is_array($utms)) {
+            $utms = [];
+        }
+        $urlParams = $payload['url_params'] ?? $payload['query'] ?? [];
+        if (! is_array($urlParams)) {
+            $urlParams = [];
+        }
         return [
             'order_id' => $payload['order_id'] ?? Arr::get($payload, 'order.id') ?? null,
             'subtotal' => $payload['subtotal'] ?? Arr::get($payload, 'order.subtotal') ?? 0,
@@ -159,6 +192,8 @@ class Preview extends Page
             'customer' => $payload['customer'] ?? [],
             'shipping_address' => $payload['shipping_address'] ?? $payload['shippingAddress'] ?? [],
             'shipping_country' => $payload['shipping_country'] ?? Arr::get($payload, 'shipping_address.country_code') ?? Arr::get($payload, 'shippingAddress.countryCode') ?? null,
+            'utms' => array_filter(array_map('strval', $utms)),
+            'url_params' => array_filter(array_map('strval', $urlParams)),
         ];
     }
 

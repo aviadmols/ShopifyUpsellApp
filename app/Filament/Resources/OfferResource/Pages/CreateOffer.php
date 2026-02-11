@@ -56,6 +56,7 @@ class CreateOffer extends CreateRecord
      */
     protected function basePayload(array $data, string $variantId): array
     {
+        $offerType = (string) ($data['offer_type'] ?? 'one_time');
         return [
             'shop_id' => (int) $data['shop_id'],
             'title' => (string) ($data['title'] ?? 'Upsell offer'),
@@ -66,6 +67,10 @@ class CreateOffer extends CreateRecord
                 ? ($data['discount_value'] ?? null)
                 : null,
             'image_url' => (string) ($data['image_url'] ?? ''),
+            'offer_type' => in_array($offerType, ['one_time', 'subscription', 'both'], true) ? $offerType : 'one_time',
+            'selling_plan_id' => trim((string) ($data['selling_plan_id'] ?? '')) ?: null,
+            'recharge_subscription_variant_id' => trim((string) ($data['recharge_subscription_variant_id'] ?? '')) ?: null,
+            'allow_subscription_in_post_purchase' => (bool) ($data['allow_subscription_in_post_purchase'] ?? false),
         ];
     }
 

@@ -17,6 +17,10 @@ class Offer extends Model
         'discount_type',
         'discount_value',
         'image_url',
+        'offer_type',
+        'selling_plan_id',
+        'recharge_subscription_variant_id',
+        'allow_subscription_in_post_purchase',
     ];
 
     protected function casts(): array
@@ -47,5 +51,18 @@ class Offer extends Model
     public static function discountTypes(): array
     {
         return ['none', 'percentage', 'fixed'];
+    }
+
+    /**
+     * Offer types: one_time, subscription (Recharge), or both.
+     */
+    public static function offerTypes(): array
+    {
+        return ['one_time', 'subscription', 'both'];
+    }
+
+    public function isSubscriptionOffer(): bool
+    {
+        return in_array($this->offer_type ?? 'one_time', ['subscription', 'both'], true);
     }
 }

@@ -58,6 +58,9 @@ class PostPurchaseController extends Controller
             ],
             'image_url' => $offer->image_url,
             'description' => $offer->description,
+            'offer_type' => (string) ($offer->offer_type ?? 'one_time'),
+            'selling_plan_id' => $offer->selling_plan_id ? (string) $offer->selling_plan_id : null,
+            'allow_subscription_in_post_purchase' => (bool) ($offer->allow_subscription_in_post_purchase ?? false),
         ]);
     }
 
@@ -119,7 +122,48 @@ class PostPurchaseController extends Controller
             'customer' => $request->input('customer') ?? [],
             'shipping_address' => $request->input('shipping_address') ?? $request->input('shippingAddress') ?? [],
             'shipping_country' => $request->input('shipping_address.country_code') ?? $request->input('shippingAddress.countryCode') ?? null,
+            'utms' => $this->utmsFromRequest($request),
+            'url_params' => $this->urlParamsFromRequest($request),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function utmsFromRequest(Request $request): array
+    {
+        $utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+        $fromInput = $request->input('utms');
+        if (is_array($fromInput)) {
+            return array_filter(array_map('strval', $fromInput));
+        }
+        $out = [];
+        foreach ($utmKeys as $key) {
+            $v = $request->query($key) ?? $request->input($key);
+            if ($v !== null && $v !== '') {
+                $out[$key] = (string) $v;
+            }
+        }
+        if ($request->hasSession() && $request->session()->has('utms')) {
+            $out = array_merge($out, (array) $request->session()->get('utms'));
+        }
+        return $out;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function urlParamsFromRequest(Request $request): array
+    {
+        $fromInput = $request->input('url_params');
+        if (is_array($fromInput)) {
+            return array_filter(array_map('strval', $fromInput));
+        }
+        $out = array_merge(
+            $request->query() ?? [],
+            (array) $request->input('query', [])
+        );
+        return array_filter(array_map('strval', $out));
     }
 
     /**

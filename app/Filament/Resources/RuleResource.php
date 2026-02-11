@@ -52,11 +52,18 @@ class RuleResource extends Resource
                                 'line_items_has_any_product_id' => 'Cart has any product IDs (comma separated)',
                                 'customer_has_tag' => 'Customer has tag',
                                 'shipping_country_in' => 'Shipping country in (comma separated ISO codes)',
+                                'utm_param_equals' => 'UTM param equals (param_name,value)',
+                                'utm_param_contains' => 'UTM param contains (param_name,substring)',
+                                'url_param_equals' => 'URL param equals (param_name,value)',
+                                'url_param_contains' => 'URL param contains (param_name,substring)',
+                                'line_item_property_equals' => 'Line item has property (key,value)',
+                                'line_item_property_exists' => 'Line item has property key',
                             ])
                             ->required(),
                         Forms\Components\TextInput::make('value')
                             ->required()
-                            ->maxLength(1000),
+                            ->maxLength(1000)
+                            ->placeholder('e.g. utm_source,google or _my_prop,value'),
                     ])
                     ->columns(2)
                     ->columnSpanFull(),

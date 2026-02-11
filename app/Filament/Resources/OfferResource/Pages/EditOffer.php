@@ -34,6 +34,7 @@ class EditOffer extends EditRecord
         /** @var Offer $offer */
         $offer = $record;
 
+        $offerType = (string) ($data['offer_type'] ?? $offer->offer_type ?? 'one_time');
         $offer->update([
             'shop_id' => (int) ($data['shop_id'] ?? $offer->shop_id),
             'title' => (string) ($data['title'] ?? $offer->title),
@@ -44,6 +45,10 @@ class EditOffer extends EditRecord
                 ? ($data['discount_value'] ?? null)
                 : null,
             'image_url' => (string) ($data['image_url'] ?? ''),
+            'offer_type' => in_array($offerType, ['one_time', 'subscription', 'both'], true) ? $offerType : 'one_time',
+            'selling_plan_id' => trim((string) ($data['selling_plan_id'] ?? $offer->selling_plan_id ?? '')) ?: null,
+            'recharge_subscription_variant_id' => trim((string) ($data['recharge_subscription_variant_id'] ?? $offer->recharge_subscription_variant_id ?? '')) ?: null,
+            'allow_subscription_in_post_purchase' => (bool) ($data['allow_subscription_in_post_purchase'] ?? $offer->allow_subscription_in_post_purchase ?? false),
         ]);
 
         $builder = app(OfferBuilderService::class);

@@ -68,6 +68,36 @@ class OfferResource extends Resource
                             ->url()
                             ->maxLength(500)
                             ->label('Image URL'),
+
+                        Forms\Components\Fieldset::make('Recharge / Subscription')
+                            ->description('Offer this product as a one-time purchase, subscription (Recharge), or both.')
+                            ->schema([
+                                Forms\Components\Select::make('offer_type')
+                                    ->options([
+                                        'one_time' => 'One-time only',
+                                        'subscription' => 'Subscription only (Recharge)',
+                                        'both' => 'One-time and subscription',
+                                    ])
+                                    ->default('one_time')
+                                    ->live()
+                                    ->label('Offer type'),
+                                Forms\Components\TextInput::make('selling_plan_id')
+                                    ->label('Selling plan ID (Shopify GID)')
+                                    ->placeholder('gid://shopify/SellingPlan/...')
+                                    ->maxLength(255)
+                                    ->visible(fn (Get $get): bool => in_array($get('offer_type'), ['subscription', 'both'], true))
+                                    ->helperText('Optional. From Shopify Admin → Products → Subscriptions / Recharge.'),
+                                Forms\Components\TextInput::make('recharge_subscription_variant_id')
+                                    ->label('Recharge subscription variant ID')
+                                    ->maxLength(255)
+                                    ->visible(fn (Get $get): bool => in_array($get('offer_type'), ['subscription', 'both'], true)),
+                                Forms\Components\Toggle::make('allow_subscription_in_post_purchase')
+                                    ->label('Allow adding as subscription in post-purchase')
+                                    ->default(false)
+                                    ->visible(fn (Get $get): bool => in_array($get('offer_type'), ['subscription', 'both'], true)),
+                            ])
+                            ->columns(2)
+                            ->collapsible(),
                     ])
                     ->columns(1),
 
@@ -88,6 +118,7 @@ class OfferResource extends Resource
 
                         Forms\Components\Fieldset::make('Checkout options')
                             ->visible(fn (Get $get): bool => in_array('checkout', (array) ($get('placement_types') ?? []), true))
+                            ->description('Checkout placement shows upsells during checkout.')
                             ->schema([
                                 Forms\Components\TextInput::make('checkout_max_offers')
                                     ->numeric()
@@ -109,10 +140,12 @@ class OfferResource extends Resource
                                     ->label('Render only when block is expanded')
                                     ->default(false),
                             ])
-                            ->columns(2),
+                            ->columns(2)
+                            ->helperText('To make Checkout work: (1) Deploy the checkout extension with shopify app deploy. (2) In Shopify Admin → Settings → Checkout → Checkout editor, add the app block. (3) In extension settings set API URL, Extension secret, and Shop domain.'),
 
                         Forms\Components\Fieldset::make('Post-purchase options')
                             ->visible(fn (Get $get): bool => in_array('post_purchase', (array) ($get('placement_types') ?? []), true))
+                            ->description('Post-purchase shows one or more offers after payment, before thank-you.')
                             ->schema([
                                 Forms\Components\TextInput::make('post_purchase_max_offers')
                                     ->numeric()
@@ -136,10 +169,12 @@ class OfferResource extends Resource
                                     ->minValue(0)
                                     ->label('Timer seconds'),
                             ])
-                            ->columns(2),
+                            ->columns(2)
+                            ->helperText('To make Post-purchase work: (1) Deploy the post-purchase extension. (2) In Shopify Admin → Settings → Checkout → Post-purchase, add the app. (3) Set API URL, secret, and shop domain in extension settings.'),
 
                         Forms\Components\Fieldset::make('Thank-you options')
                             ->visible(fn (Get $get): bool => in_array('thank_you', (array) ($get('placement_types') ?? []), true))
+                            ->description('Thank-you blocks appear on the order status / thank-you page.')
                             ->schema([
                                 Forms\Components\Toggle::make('thank_you_enable_product_card')
                                     ->default(true)
@@ -155,7 +190,8 @@ class OfferResource extends Resource
                                     ->numeric()
                                     ->default(100),
                             ])
-                            ->columns(1),
+                            ->columns(1)
+                            ->helperText('To make Thank you work: (1) Deploy the thank-you-blocks extension. (2) In Shopify Admin → Settings → Checkout → Order status page, add the app block. (3) Configure API URL, secret, and shop domain in extension settings.'),
                     ])
                     ->columns(1),
 
@@ -189,11 +225,18 @@ class OfferResource extends Resource
                                         'line_items_has_any_product_id' => 'Cart has any product IDs (comma separated)',
                                         'customer_has_tag' => 'Customer has tag',
                                         'shipping_country_in' => 'Shipping country in (comma separated ISO codes)',
+                                        'utm_param_equals' => 'UTM param equals (param_name,value)',
+                                        'utm_param_contains' => 'UTM param contains (param_name,substring)',
+                                        'url_param_equals' => 'URL param equals (param_name,value)',
+                                        'url_param_contains' => 'URL param contains (param_name,substring)',
+                                        'line_item_property_equals' => 'Line item has property (key,value)',
+                                        'line_item_property_exists' => 'Line item has property key',
                                     ])
                                     ->required(),
                                 Forms\Components\TextInput::make('value')
                                     ->required()
-                                    ->maxLength(1000),
+                                    ->maxLength(1000)
+                                    ->placeholder('e.g. utm_source,google or _my_prop,value'),
                             ])
                             ->columns(2)
                             ->columnSpanFull(),
@@ -216,6 +259,14 @@ class OfferResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('product_variant_id')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('offer_type')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => match ($state ?? 'one_time') {
+                        'subscription' => 'Subscription',
+                        'both' => 'One-time + Subscription',
+                        default => 'One-time',
+                    })
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('discount_type')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('discount_value')

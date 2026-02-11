@@ -103,6 +103,8 @@ function PostPurchaseOffer() {
 
   if (loading || !offer) return null;
 
+  const isSubscription = offer.allow_subscription_in_post_purchase && (offer.offer_type === 'subscription' || offer.offer_type === 'both');
+
   return (
     <BlockStack spacing="loose">
       <Text size="medium" emphasis="bold">
@@ -110,9 +112,10 @@ function PostPurchaseOffer() {
       </Text>
       <Divider />
       {offer.image_url && <Image url={offer.image_url} alt={offer.message} />}
+      {isSubscription && <Text appearance="subdued" size="small">Subscribe & save</Text>}
       {offer.description && <Text appearance="subdued">{offer.description}</Text>}
       <Button kind="primary" onPress={handleAccept} disabled={accepted}>
-        {accepted ? 'Added to order' : 'Add to order'}
+        {accepted ? 'Added to order' : (isSubscription ? 'Add as subscription' : 'Add to order')}
       </Button>
       <Button kind="secondary" onPress={() => {}}>
         No thanks

@@ -54,5 +54,22 @@ class OfferBuilderServiceTest extends TestCase
         $this->assertSame('shipping_country_in', $state['rows'][1]['field']);
         $this->assertSame('US,GB', $state['rows'][1]['value']);
     }
+
+    public function test_it_builds_utm_and_url_param_conditions(): void
+    {
+        $service = new OfferBuilderService();
+
+        $conditions = $service->buildConditions([
+            ['field' => 'utm_param_equals', 'value' => 'utm_source,google'],
+            ['field' => 'url_param_equals', 'value' => 'ref,affiliate'],
+            ['field' => 'line_item_property_exists', 'value' => '_subscription'],
+        ], 'and');
+
+        $this->assertArrayHasKey('and', $conditions);
+        $this->assertCount(3, $conditions['and']);
+        $this->assertSame(['utm_param_equals' => 'utm_source,google'], $conditions['and'][0]);
+        $this->assertSame(['url_param_equals' => 'ref,affiliate'], $conditions['and'][1]);
+        $this->assertSame(['line_item_property_exists' => '_subscription'], $conditions['and'][2]);
+    }
 }
 

@@ -55,6 +55,12 @@ class OfferBuilderService
             'line_items_has_any_product_id' => ['line_items_has_any_product_id' => $this->csvToIntArray($value)],
             'customer_has_tag' => ['customer_has_tag' => (string) $value],
             'shipping_country_in' => ['shipping_country_in' => $this->csvToUpperArray($value)],
+            'utm_param_equals' => ['utm_param_equals' => (string) $value],
+            'utm_param_contains' => ['utm_param_contains' => (string) $value],
+            'url_param_equals' => ['url_param_equals' => (string) $value],
+            'url_param_contains' => ['url_param_contains' => (string) $value],
+            'line_item_property_equals' => ['line_item_property_equals' => (string) $value],
+            'line_item_property_exists' => ['line_item_property_exists' => (string) $value],
             default => null,
         };
     }
@@ -244,6 +250,8 @@ class OfferBuilderService
             'image_url' => $offer->image_url,
             'discount_type' => $offer->discount_type,
             'discount_value' => $offer->discount_value?->toString(),
+            'offer_type' => (string) ($offer->offer_type ?? 'one_time'),
+            'selling_plan_id' => $offer->selling_plan_id ? (string) $offer->selling_plan_id : null,
         ];
 
         $sort = (int) ($data['thank_you_sort_order'] ?? 100);
@@ -325,6 +333,10 @@ class OfferBuilderService
     {
         $state = [
             'placement_types' => [],
+            'offer_type' => (string) ($offer->offer_type ?? 'one_time'),
+            'selling_plan_id' => (string) ($offer->selling_plan_id ?? ''),
+            'recharge_subscription_variant_id' => (string) ($offer->recharge_subscription_variant_id ?? ''),
+            'allow_subscription_in_post_purchase' => (bool) ($offer->allow_subscription_in_post_purchase ?? false),
             'checkout_max_offers' => 3,
             'checkout_priority' => 100,
             'checkout_display_mode' => 'stacked',

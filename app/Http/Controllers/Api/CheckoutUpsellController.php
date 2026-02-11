@@ -36,6 +36,7 @@ class CheckoutUpsellController extends Controller
         $context = $this->buildContext($request);
 
         $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
+        $displayMode = (string) ($placement->config['display_mode'] ?? 'stacked');
         $data = array_map(fn (Offer $o) => [
             'id' => $o->id,
             'title' => $o->title,
@@ -44,9 +45,14 @@ class CheckoutUpsellController extends Controller
             'discount_type' => $o->discount_type,
             'discount_value' => $o->discount_value?->toString(),
             'image_url' => $o->image_url,
+            'offer_type' => (string) ($o->offer_type ?? 'one_time'),
+            'selling_plan_id' => $o->selling_plan_id ? (string) $o->selling_plan_id : null,
         ], $eligible);
 
-        return response()->json(['offers' => $data]);
+        return response()->json([
+            'offers' => $data,
+            'display_mode' => $displayMode,
+        ]);
     }
 
     protected function resolveShop(Request $request): ?Shop
@@ -68,7 +74,48 @@ class CheckoutUpsellController extends Controller
             'line_items' => $request->input('line_items') ?? $request->input('cart.line_items') ?? $request->input('lineItems') ?? [],
             'customer' => $request->input('customer') ?? [],
             'shipping_country' => $request->input('shipping_country') ?? $request->input('shippingAddress.countryCode') ?? null,
+            'utms' => $this->utmsFromRequest($request),
+            'url_params' => $this->urlParamsFromRequest($request),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function utmsFromRequest(Request $request): array
+    {
+        $utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+        $fromInput = $request->input('utms');
+        if (is_array($fromInput)) {
+            return array_filter(array_map('strval', $fromInput));
+        }
+        $out = [];
+        foreach ($utmKeys as $key) {
+            $v = $request->query($key) ?? $request->input($key);
+            if ($v !== null && $v !== '') {
+                $out[$key] = (string) $v;
+            }
+        }
+        if ($request->hasSession() && $request->session()->has('utms')) {
+            $out = array_merge($out, (array) $request->session()->get('utms'));
+        }
+        return $out;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function urlParamsFromRequest(Request $request): array
+    {
+        $fromInput = $request->input('url_params');
+        if (is_array($fromInput)) {
+            return array_filter(array_map('strval', $fromInput));
+        }
+        $out = array_merge(
+            $request->query() ?? [],
+            (array) $request->input('query', [])
+        );
+        return array_filter(array_map('strval', $out));
     }
 
     /**
