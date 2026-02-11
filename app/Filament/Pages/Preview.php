@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Models\Offer;
 use App\Models\Placement;
+use App\Models\Shop;
 use App\Services\RuleEngine;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -58,7 +59,11 @@ class Preview extends Page
                     ->description('Select a shop and placement type, then paste sample order/cart JSON. Run to see which offer would be selected.')
                     ->schema([
                         Forms\Components\Select::make('shop_id')
-                            ->relationship('shop', 'shop_domain', fn ($q) => $q->whereNull('uninstalled_at'))
+                            ->options(fn (): array => Shop::query()
+                                ->whereNull('uninstalled_at')
+                                ->orderBy('shop_domain')
+                                ->pluck('shop_domain', 'id')
+                                ->toArray())
                             ->required()
                             ->searchable()
                             ->preload()
