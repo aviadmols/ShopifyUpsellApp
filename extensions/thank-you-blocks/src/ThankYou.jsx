@@ -1,6 +1,6 @@
 /**
  * Thank you page: fetches blocks from Laravel GET /api/thankyou/blocks and renders by type.
- * Types: banner, text, button, product_card. Product card "Buy now" links to product/checkout.
+ * Types: banner, text, button, product_card. Always shows BUILD_ID so you can verify the extension runs.
  */
 import {
   reactExtension,
@@ -14,6 +14,7 @@ import {
 } from '@shopify/ui-extensions-react/checkout';
 import { useEffect, useState } from 'react';
 
+const BUILD_ID = 'zyg-thankyou-20260210';
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
 const DEFAULT_SHOP_DOMAIN = 'millsdailypacks.myshopify.com';
 
@@ -22,25 +23,65 @@ export default reactExtension('purchase.thank-you.block.render', () => <ThankYou
 function ThankYouBlocks() {
   const settings = useSettings();
   const [blocks, setBlocks] = useState([]);
+  const [status, setStatus] = useState('loading'); // loading | ok | no_config | error
 
   const apiUrl = (settings.api_url || DEFAULT_API_URL || '').replace(/\/$/, '');
-  const secret = settings.extension_secret || '';
-  const shopDomain = settings.shop_domain || DEFAULT_SHOP_DOMAIN;
+  const secret = (settings.extension_secret || '').trim();
+  const shopDomain = (settings.shop_domain || DEFAULT_SHOP_DOMAIN).trim() || DEFAULT_SHOP_DOMAIN;
 
   useEffect(() => {
-    if (!apiUrl || !secret || !shopDomain) return;
+    if (!apiUrl || !secret) {
+      setStatus('no_config');
+      return;
+    }
+    setStatus('loading');
     fetch(`${apiUrl}/api/thankyou/blocks?shop=${encodeURIComponent(shopDomain)}`, {
       headers: { 'X-Extension-Secret': secret, Accept: 'application/json' },
     })
       .then((r) => (r.ok ? r.json() : { blocks: [] }))
-      .then((data) => setBlocks(data.blocks || []))
-      .catch(() => setBlocks([]));
+      .then((data) => {
+        setBlocks(data.blocks || []);
+        setStatus('ok');
+      })
+      .catch(() => {
+        setBlocks([]);
+        setStatus('error');
+      });
   }, [apiUrl, secret, shopDomain]);
 
-  if (blocks.length === 0) return null;
+  const statusLine =
+    status === 'no_config'
+      ? 'Not configured (set API URL + Extension secret in Block settings)'
+      : status === 'loading'
+        ? 'Loading…'
+        : status === 'error'
+          ? 'Connection error'
+          : blocks.length === 0
+            ? 'No blocks for this order'
+            : `${blocks.length} block(s)`;
+
+  const debugBlock = (
+    <BlockStack spacing="extraTight">
+      <Text size="small" appearance="subdued">Thank You Blocks · {BUILD_ID}</Text>
+      <Text size="small" appearance="subdued">Status: {statusLine}</Text>
+    </BlockStack>
+  );
+
+  if (blocks.length === 0) {
+    return (
+      <BlockStack spacing="loose">
+        {debugBlock}
+        {status === 'no_config' && (
+          <Text size="small" appearance="subdued">Add blocks in the app and set Extension secret in this block.</Text>
+        )}
+      </BlockStack>
+    );
+  }
 
   return (
     <BlockStack spacing="loose">
+      {debugBlock}
+      <Divider />
       {blocks.map((block) => (
         <Block key={block.id} block={block} />
       ))}

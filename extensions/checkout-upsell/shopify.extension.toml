@@ -1,6 +1,7 @@
 # Checkout upsell: show offers during checkout; add to cart with one click.
 # Create with: shopify app generate extension -> Checkout UI, then replace with this config.
-api_version = "2026-04"
+# Checkout UI דורש אחת מ: 2025-04, 2025-07, 2025-10, 2026-01, 2026-04. 2024-01 לא תקף יותר.
+api_version = "2025-04"
 
 [[extensions]]
 uid = "42a78221-416b-44aa-07ba-7ad811835d0691422ded"

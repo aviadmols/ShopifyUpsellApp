@@ -50,6 +50,6 @@ class ThankYouBlocksController extends Controller
         if (! $shopDomain) {
             return null;
         }
-        return Shop::where('shop_domain', $shopDomain)->whereNull('uninstalled_at')->first();
+        return Shop::findByDomainOrAlternates($shopDomain);
     }
 }

@@ -9,6 +9,7 @@ class Shop extends Model
 {
     protected $fillable = [
         'shop_domain',
+        'alternate_domains',
         'access_token',
         'scope',
         'installed_at',
@@ -19,6 +20,7 @@ class Shop extends Model
     {
         return [
             'access_token' => 'encrypted',
+            'alternate_domains' => 'array',
             'installed_at' => 'datetime',
             'uninstalled_at' => 'datetime',
         ];
@@ -55,5 +57,48 @@ class Shop extends Model
     public function isInstalled(): bool
     {
         return $this->uninstalled_at === null;
+    }
+
+    /**
+     * Find shop by domain, including common alternates and configured alternate_domains.
+     */
+    public static function findByDomainOrAlternates(string $domain): ?self
+    {
+        $domain = strtolower(trim($domain));
+        if ($domain === '') {
+            return null;
+        }
+
+        $shop = self::where('shop_domain', $domain)->whereNull('uninstalled_at')->first();
+        if ($shop) {
+            return $shop;
+        }
+
+        // Try built-in: xxx-usa.myshopify.com <-> xxx.myshopify.com
+        if (str_ends_with($domain, '-usa.myshopify.com')) {
+            $alt = str_replace('-usa.myshopify.com', '.myshopify.com', $domain);
+            $shop = self::where('shop_domain', $alt)->whereNull('uninstalled_at')->first();
+            if ($shop) {
+                return $shop;
+            }
+        }
+        if (str_ends_with($domain, '.myshopify.com') && ! str_contains(substr($domain, 0, -16), '-usa')) {
+            $alt = preg_replace('/(\.myshopify\.com)$/', '-usa$1', $domain);
+            $shop = self::where('shop_domain', $alt)->whereNull('uninstalled_at')->first();
+            if ($shop) {
+                return $shop;
+            }
+        }
+
+        // Find by alternate_domains (configured in Shops > Edit)
+        $shops = self::whereNull('uninstalled_at')->get();
+        foreach ($shops as $s) {
+            $alts = $s->alternate_domains ?? [];
+            if (in_array($domain, array_map('strtolower', array_map('trim', $alts)), true)) {
+                return $s;
+            }
+        }
+
+        return null;
     }
 }

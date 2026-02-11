@@ -9,14 +9,9 @@ embedded = true
 api_version = "2026-01"
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = ""
-optional_scopes = [
-  "read_orders",
-  "write_orders",
-  "read_products",
-  "write_products"
-]
+# הרשאות חובה בהתקנה – כך החנות תאשר אותן כשמוסיפים את האפליקציה. Checkout UI extensions לא דורשים scope נפרד.
+scopes = "read_products,write_products,read_orders,write_orders"
+optional_scopes = []
 use_legacy_install_flow = false
 
 [auth]
