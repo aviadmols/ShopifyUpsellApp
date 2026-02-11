@@ -1,0 +1,28 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "e4d706b8ae8ebda264ce739fc0156e06"
+name = "Zyg Upsell"
+application_url = "https://shopifyupsellapp-production.up.railway.app"
+embedded = true
+
+[webhooks]
+api_version = "2026-01"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = ""
+optional_scopes = [
+  "read_orders",
+  "write_orders",
+  "read_products",
+  "write_products"
+]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://shopifyupsellapp-production.up.railway.app/auth/callback"
+]
+
+[app_preferences]
+url = "https://shopifyupsellapp-production.up.railway.app/auth/callback"
