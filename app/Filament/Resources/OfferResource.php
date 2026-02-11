@@ -43,7 +43,7 @@ class OfferResource extends Resource
                             ->visible(fn (string $operation): bool => $operation === 'create')
                             ->helperText('You can select multiple variants. One offer will be created per variant.')
                             ->getSearchResultsUsing(fn (string $search, Get $get): array => self::variantOptions($get('shop_id'), $search))
-                            ->getOptionLabelsUsing(fn (array $values, Get $get): array => self::variantLabels($get('shop_id'), $values)),
+                            ->getOptionLabelsUsing(fn ($values, Get $get): array => self::variantLabels($get('shop_id'), (array) ($values ?? []))),
                         Forms\Components\TextInput::make('product_variant_id')
                             ->label('Single variant ID (manual fallback)')
                             ->maxLength(255)
