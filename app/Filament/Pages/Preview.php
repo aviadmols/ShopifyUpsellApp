@@ -108,7 +108,7 @@ class Preview extends Page
             return;
         }
 
-        $offerIds = $placement->config['offer_ids'] ?? [];
+        $offerIds = $placement->getOfferIds();
         $maxOffers = (int) ($placement->config['max_offers'] ?? 1);
         $eligible = [];
         $ruleEngine = app(RuleEngine::class);

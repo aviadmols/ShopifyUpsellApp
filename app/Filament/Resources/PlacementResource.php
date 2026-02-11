@@ -3,15 +3,13 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\PlacementResource\Pages;
-use App\Filament\Resources\PlacementResource\RelationManagers;
 use App\Models\Placement;
 use Filament\Forms;
+use Filament\Forms\Get;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class PlacementResource extends Resource
 {
@@ -34,9 +32,68 @@ class PlacementResource extends Resource
                     ->preload(),
                 Forms\Components\Select::make('placement_type')
                     ->options(array_combine(Placement::placementTypes(), Placement::placementTypes()))
-                    ->required(),
-                Forms\Components\KeyValue::make('config')
-                    ->reorderable(),
+                    ->required()
+                    ->live(),
+
+                Forms\Components\Fieldset::make('Checkout config')
+                    ->visible(fn (Get $get): bool => $get('placement_type') === 'checkout')
+                    ->schema([
+                        Forms\Components\TextInput::make('offer_ids_csv')
+                            ->label('Offer IDs (comma separated)')
+                            ->helperText('Example: 1,2,3')
+                            ->required(),
+                        Forms\Components\TextInput::make('max_offers')
+                            ->numeric()
+                            ->default(3)
+                            ->required(),
+                        Forms\Components\TextInput::make('priority')
+                            ->numeric()
+                            ->default(100),
+                        Forms\Components\Select::make('display_mode')
+                            ->options([
+                                'stacked' => 'Stacked cards',
+                                'single' => 'Single card',
+                            ])
+                            ->default('stacked'),
+                        Forms\Components\Toggle::make('require_expanded')
+                            ->default(false),
+                    ]),
+
+                Forms\Components\Fieldset::make('Post-purchase config')
+                    ->visible(fn (Get $get): bool => $get('placement_type') === 'post_purchase')
+                    ->schema([
+                        Forms\Components\TextInput::make('offer_ids_csv')
+                            ->label('Offer IDs (comma separated)')
+                            ->helperText('Example: 1,2,3')
+                            ->required(),
+                        Forms\Components\TextInput::make('max_offers')
+                            ->numeric()
+                            ->default(1)
+                            ->required(),
+                        Forms\Components\TextInput::make('cooldown_hours')
+                            ->numeric()
+                            ->default(24),
+                        Forms\Components\Toggle::make('allow_reoffer')
+                            ->default(false),
+                        Forms\Components\Toggle::make('show_timer')
+                            ->default(false),
+                        Forms\Components\TextInput::make('timer_seconds')
+                            ->numeric()
+                            ->default(300),
+                    ]),
+
+                Forms\Components\Fieldset::make('Thank you config')
+                    ->visible(fn (Get $get): bool => $get('placement_type') === 'thank_you')
+                    ->schema([
+                        Forms\Components\TextInput::make('block_ids_csv')
+                            ->label('Block IDs (comma separated)')
+                            ->helperText('Example: 5,8,12'),
+                    ]),
+
+                Forms\Components\KeyValue::make('extra_config')
+                    ->label('Additional config (optional)')
+                    ->reorderable()
+                    ->helperText('Advanced: merged into generated config for this placement.'),
             ]);
     }
 

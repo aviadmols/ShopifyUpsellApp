@@ -35,7 +35,7 @@ class PostPurchaseController extends Controller
             return response()->json(['render' => false]);
         }
 
-        $offerIds = $placement->config['offer_ids'] ?? [];
+        $offerIds = $placement->getOfferIds();
         $maxOffers = (int) ($placement->config['max_offers'] ?? 1);
         $context = $this->buildContext($request);
 

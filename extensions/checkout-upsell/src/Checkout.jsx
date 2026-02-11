@@ -2,8 +2,8 @@
  * Checkout upsell: fetches offers from Laravel and adds selected variant to cart.
  * Requires extension settings: api_url, extension_secret.
  */
-import reactExtension from '@shopify/ui-extensions-react/checkout';
 import {
+  reactExtension,
   useSettings,
   BlockStack,
   Button,
@@ -14,6 +14,9 @@ import {
 } from '@shopify/ui-extensions-react/checkout';
 import { useEffect, useState } from 'react';
 
+const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
+const DEFAULT_SHOP_DOMAIN = 'millsdailypacks.myshopify.com';
+
 export default reactExtension('purchase.checkout.block.render', () => <CheckoutUpsell />);
 
 function CheckoutUpsell() {
@@ -23,9 +26,9 @@ function CheckoutUpsell() {
   const [loading, setLoading] = useState(true);
   const [added, setAdded] = useState(new Set());
 
-  const apiUrl = (settings.api_url || '').replace(/\/$/, '');
+  const apiUrl = (settings.api_url || DEFAULT_API_URL || '').replace(/\/$/, '');
   const secret = settings.extension_secret || '';
-  const shopDomain = settings.shop_domain || '';
+  const shopDomain = settings.shop_domain || DEFAULT_SHOP_DOMAIN;
 
   useEffect(() => {
     if (!apiUrl || !secret || !shopDomain) {

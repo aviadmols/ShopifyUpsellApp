@@ -78,6 +78,82 @@ class ShopifyGraphQLService
     }
 
     /**
+     * Search product variants for admin picker.
+     *
+     * @return array<int, array{id: string, label: string, product_title: string, variant_title: string, image_url: string|null, price: string|null}>
+     */
+    public function searchProductVariants(Shop $shop, string $search = '', int $limit = 25): array
+    {
+        $query = <<<'GRAPHQL'
+            query searchProducts($query: String!, $first: Int!) {
+                products(query: $query, first: $first) {
+                    nodes {
+                        id
+                        title
+                        featuredImage { url }
+                        variants(first: 25) {
+                            nodes {
+                                id
+                                title
+                                price
+                                displayName
+                                availableForSale
+                            }
+                        }
+                    }
+                }
+            }
+        GRAPHQL;
+
+        $searchQuery = trim($search) !== ''
+            ? "status:active AND ({$search})"
+            : 'status:active';
+
+        $data = $this->request($shop, $query, [
+            'query' => $searchQuery,
+            'first' => max(1, min($limit, 50)),
+        ]);
+
+        $items = [];
+        foreach (($data['products']['nodes'] ?? []) as $product) {
+            $productTitle = (string) ($product['title'] ?? 'Untitled product');
+            $image = $product['featuredImage']['url'] ?? null;
+
+            foreach (($product['variants']['nodes'] ?? []) as $variant) {
+                if (($variant['availableForSale'] ?? true) === false) {
+                    continue;
+                }
+
+                $variantTitle = (string) ($variant['title'] ?? 'Default');
+                $price = isset($variant['price']) ? (string) $variant['price'] : null;
+                $id = (string) ($variant['id'] ?? '');
+                if ($id === '') {
+                    continue;
+                }
+
+                $label = $productTitle;
+                if (strtolower($variantTitle) !== 'default title') {
+                    $label .= " - {$variantTitle}";
+                }
+                if ($price !== null && $price !== '') {
+                    $label .= " (${$price})";
+                }
+
+                $items[] = [
+                    'id' => $id,
+                    'label' => $label,
+                    'product_title' => $productTitle,
+                    'variant_title' => $variantTitle,
+                    'image_url' => $image,
+                    'price' => $price,
+                ];
+            }
+        }
+
+        return array_slice($items, 0, $limit);
+    }
+
+    /**
      * Fetch order by Shopify GID (optional; for validation).
      *
      * @return array<string, mixed>|null

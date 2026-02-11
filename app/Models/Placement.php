@@ -32,4 +32,37 @@ class Placement extends Model
     {
         return ['checkout', 'post_purchase', 'thank_you'];
     }
+
+    /**
+     * Normalized offer_ids from config (supports array or comma-separated string from Filament KeyValue).
+     *
+     * @return array<int, int>
+     */
+    public function getOfferIds(): array
+    {
+        return self::normalizeIntList($this->config['offer_ids'] ?? []);
+    }
+
+    /**
+     * Normalized block_ids from config (supports array or comma-separated string).
+     *
+     * @return array<int, int>
+     */
+    public function getBlockIds(): array
+    {
+        return self::normalizeIntList($this->config['block_ids'] ?? []);
+    }
+
+    /**
+     * @param  array<int, int>|string  $value
+     * @return array<int, int>
+     */
+    public static function normalizeIntList(array|string $value): array
+    {
+        if (is_string($value)) {
+            $value = array_filter(array_map('intval', explode(',', $value)));
+        }
+
+        return array_values(array_filter((array) $value, fn ($id) => (int) $id > 0));
+    }
 }

@@ -3,15 +3,12 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\RuleResource\Pages;
-use App\Filament\Resources\RuleResource\RelationManagers;
 use App\Models\Rule;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class RuleResource extends Resource
 {
@@ -35,8 +32,35 @@ class RuleResource extends Resource
                 Forms\Components\TextInput::make('name')
                     ->required()
                     ->maxLength(255),
-                Forms\Components\KeyValue::make('conditions')
-                    ->reorderable(),
+                Forms\Components\Select::make('rule_match_type')
+                    ->label('Match type')
+                    ->options([
+                        'and' => 'All conditions (AND)',
+                        'or' => 'Any condition (OR)',
+                    ])
+                    ->default('and')
+                    ->required(),
+                Forms\Components\Repeater::make('rule_conditions')
+                    ->label('Conditions')
+                    ->defaultItems(1)
+                    ->schema([
+                        Forms\Components\Select::make('field')
+                            ->options([
+                                'subtotal_gte' => 'Subtotal >=',
+                                'subtotal_lte' => 'Subtotal <=',
+                                'line_items_has_product_id' => 'Cart has product ID',
+                                'line_items_has_any_product_id' => 'Cart has any product IDs (comma separated)',
+                                'customer_has_tag' => 'Customer has tag',
+                                'shipping_country_in' => 'Shipping country in (comma separated ISO codes)',
+                            ])
+                            ->required(),
+                        Forms\Components\TextInput::make('value')
+                            ->required()
+                            ->maxLength(1000),
+                    ])
+                    ->columns(2)
+                    ->columnSpanFull(),
+                Forms\Components\Hidden::make('conditions'),
             ]);
     }
 
@@ -49,6 +73,15 @@ class RuleResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('conditions')
+                    ->label('Conditions')
+                    ->formatStateUsing(function ($state): string {
+                        $conditions = is_array($state) ? $state : [];
+                        $type = isset($conditions['or']) ? 'OR' : 'AND';
+                        $items = (array) ($conditions[strtolower($type)] ?? []);
+
+                        return count($items) . " ({$type})";
+                    }),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

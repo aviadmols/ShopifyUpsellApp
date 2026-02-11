@@ -31,7 +31,7 @@ class CheckoutUpsellController extends Controller
             return response()->json(['offers' => []]);
         }
 
-        $offerIds = $placement->config['offer_ids'] ?? [];
+        $offerIds = $placement->getOfferIds();
         $maxOffers = (int) ($placement->config['max_offers'] ?? 3);
         $context = $this->buildContext($request);
 

@@ -26,7 +26,7 @@ class ThankYouBlocksController extends Controller
             return response()->json(['blocks' => []]);
         }
 
-        $blockIds = $placement->config['block_ids'] ?? [];
+        $blockIds = $placement->getBlockIds();
         if (empty($blockIds)) {
             $blocks = ThankYouBlock::where('shop_id', $shop->id)->orderBy('sort_order')->get();
         } else {

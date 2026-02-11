@@ -1,7 +1,8 @@
 # Thank you / order status page blocks. Fetches blocks from Laravel and renders by type.
-api_version = "2024-01"
+api_version = "2026-04"
 
 [[extensions]]
+uid = "28265bef-6b73-8ff2-b435-ff7dfe76cd4e78b69818"
 type = "ui_extension"
 name = "Thank You Blocks"
 handle = "thank-you-blocks"
@@ -17,7 +18,7 @@ network_access = true
 [[extensions.settings.fields]]
 key = "api_url"
 type = "single_line_text_field"
-name = "Laravel API URL"
+name = "API URL"
 [[extensions.settings.fields]]
 key = "extension_secret"
 type = "single_line_text_field"

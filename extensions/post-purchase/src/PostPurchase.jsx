@@ -4,8 +4,8 @@
  * Configure in Shopify app: extension settings for api_url, extension_secret.
  * Uses Shopify post-purchase extension API (run.*).
  */
-import reactExtension from '@shopify/ui-extensions-react/checkout';
 import {
+  reactExtension,
   useApi,
   BlockStack,
   Button,
