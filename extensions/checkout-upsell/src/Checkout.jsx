@@ -427,11 +427,11 @@ function CheckoutUpsell() {
       </BlockStack>
     );
 
-    // Row layout: image left, title + price + button right (like cart line item)
+    // Row layout: [image] [title + price] [Add button on the right] — like "You may also like"
     const renderOfferRow = (offer, index, showDivider) => (
       <BlockStack key={offer.id} spacing="tight">
         {showDivider && ui.divider_between_cards && <Divider />}
-        <InlineLayout columns={['auto', 'fill']} spacing="base" blockAlignment="center">
+        <InlineLayout columns={['auto', 'fill', 'auto']} spacing="base" blockAlignment="center">
           {offer.image_url ? (
             <Image
               source={offer.image_url}
@@ -444,7 +444,7 @@ function CheckoutUpsell() {
             <BlockStack spacing="none" />
           )}
           <BlockStack spacing="extraTight">
-            <Text size={titleSize} {...(titleAppearance ? { appearance: titleAppearance } : {})}>
+            <Text size={titleSize} emphasis="bold" {...(titleAppearance ? { appearance: titleAppearance } : {})}>
               {offer.title}
             </Text>
             {ui.show_price && offer.price != null && offer.price !== '' && (
@@ -456,15 +456,15 @@ function CheckoutUpsell() {
             {ui.show_description && offer.description && (
               <Text appearance="subdued" size="small">{offer.description}</Text>
             )}
-            <Button
-              kind={buttonKind}
-              {...(buttonAppearance ? { appearance: buttonAppearance } : {})}
-              onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null)}
-              disabled={added.has(offer.variant_id)}
-            >
-              {added.has(offer.variant_id) ? 'Added' : (offer.offer_type === 'subscription' ? 'Add as subscription' : 'Add to order')}
-            </Button>
           </BlockStack>
+          <Button
+            kind={buttonKind}
+            {...(buttonAppearance ? { appearance: buttonAppearance } : {})}
+            onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null)}
+            disabled={added.has(offer.variant_id)}
+          >
+            {added.has(offer.variant_id) ? 'Added' : (offer.offer_type === 'subscription' ? 'Add as subscription' : 'Add to order')}
+          </Button>
         </InlineLayout>
       </BlockStack>
     );
