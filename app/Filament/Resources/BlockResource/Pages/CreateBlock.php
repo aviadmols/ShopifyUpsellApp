@@ -190,6 +190,7 @@ class CreateBlock extends CreateRecord
                 'button_appearance' => (string) ($data['button_appearance'] ?? 'default'),
                 'card_spacing' => (string) ($data['card_spacing'] ?? 'loose'),
                 'divider_between_cards' => (bool) ($data['divider_between_cards'] ?? false),
+                'show_quantity' => (bool) ($data['show_quantity'] ?? true),
             ];
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {
             $config = [

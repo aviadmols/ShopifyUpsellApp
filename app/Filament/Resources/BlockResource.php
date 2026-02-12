@@ -237,6 +237,10 @@ class BlockResource extends Resource
                     ->options(['tight' => 'Tight', 'loose' => 'Loose', 'extraLoose' => 'Extra loose'])
                     ->default('loose'),
                 Forms\Components\Toggle::make('divider_between_cards')->default(false),
+                Forms\Components\Toggle::make('show_quantity')
+                    ->label('Show quantity selector')
+                    ->default(true)
+                    ->helperText('When on, customers can choose quantity (1–max) before adding to cart. Requires Checkout Experience → Quantity in upsell block to be enabled for the shop.'),
             ])
             ->columns(2)
             ->visible(fn (Get $get): bool => $get('surface') === 'checkout' && $get('type') === 'upsell');

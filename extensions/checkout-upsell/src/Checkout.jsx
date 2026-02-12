@@ -406,6 +406,19 @@ function CheckoutUpsell() {
   }
 
   if (offers.length > 0 && !loading && status.type !== 'error' && status.type !== 'not_configured') {
+    // Hide offers that were already added to cart so they disappear from the block
+    const offersNotAdded = offers.filter((o) => !added.has(o.variant_id));
+    if (offersNotAdded.length === 0) {
+      if (progressBar) {
+        return (
+          <BlockStack spacing="tight">
+            <Text size="medium" emphasis="bold">{progressMessage}</Text>
+            <Progress value={progress} max={1} accessibilityLabel={progressMessage} />
+          </BlockStack>
+        );
+      }
+      return <BlockStack spacing="none" />;
+    }
     // Prefer ui.display_mode from API so layout matches server even if state was set by older extension code
     const dmStr = String(ui.display_mode || '').toLowerCase().trim();
     const effectiveDisplayMode =
@@ -416,7 +429,7 @@ function CheckoutUpsell() {
           : displayMode === 'single'
             ? 'single'
             : 'stacked';
-    const offersToShow = effectiveDisplayMode === 'single' ? offers.slice(0, 1) : offers;
+    const offersToShow = effectiveDisplayMode === 'single' ? offersNotAdded.slice(0, 1) : offersNotAdded;
     const sectionSpacing = ui.card_spacing === 'tight' ? 'tight' : ui.card_spacing === 'extraLoose' ? 'extraLoose' : 'loose';
     const cardSpacing = ui.card_spacing === 'tight' ? 'tight' : ui.card_spacing === 'extraLoose' ? 'extraLoose' : 'loose';
     const titleSize = ['small', 'medium', 'large', 'extraLarge'].includes(ui.title_size) ? ui.title_size : 'medium';

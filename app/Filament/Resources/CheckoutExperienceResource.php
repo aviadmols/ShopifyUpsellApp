@@ -108,6 +108,10 @@ class CheckoutExperienceResource extends Resource
     {
         return $table
             ->columns([
+                Tables\Columns\TextColumn::make('id')
+                    ->label('ID')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
                 Tables\Columns\TextColumn::make('shop.shop_domain')
                     ->label('Shop')
                     ->sortable()

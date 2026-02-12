@@ -178,6 +178,7 @@ class EditBlock extends EditRecord
             $data['button_appearance'] = (string) ($config['button_appearance'] ?? 'default');
             $data['card_spacing'] = (string) ($config['card_spacing'] ?? 'loose');
             $data['divider_between_cards'] = (bool) ($config['divider_between_cards'] ?? false);
+            $data['show_quantity'] = (bool) ($config['show_quantity'] ?? true);
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {
             $data['progress_bar_type'] = (string) ($config['progress_bar_type'] ?? 'free_shipping');
             $data['progress_bar_goal'] = (float) ($config['progress_bar_goal'] ?? 100);

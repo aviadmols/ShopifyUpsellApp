@@ -251,7 +251,11 @@ class CheckoutUpsellController extends Controller
         }
 
         $experience = $shop->checkoutExperience;
-        $payload['quantity'] = $experience ? $experience->quantityPayload() : ['enabled' => false, 'default' => 1, 'min' => 1, 'max' => 10];
+        $quantityPayload = $experience ? $experience->quantityPayload() : ['enabled' => false, 'default' => 1, 'min' => 1, 'max' => 10];
+        if (isset($config['show_quantity']) && $config['show_quantity'] === false) {
+            $quantityPayload['enabled'] = false;
+        }
+        $payload['quantity'] = $quantityPayload;
         $payload['subscription_upgrade'] = $experience ? $experience->subscriptionUpgradePayload() : ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'];
 
         return $payload;
