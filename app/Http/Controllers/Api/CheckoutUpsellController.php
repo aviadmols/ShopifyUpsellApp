@@ -319,7 +319,7 @@ class CheckoutUpsellController extends Controller
                                 : $productTitle;
                         }
                         if ($imageUrl === '') {
-                            $imageUrl = (string) ($variant['product']['featuredImage']['url'] ?? '');
+                            $imageUrl = (string) ($variant['image']['url'] ?? $variant['product']['featuredImage']['url'] ?? '');
                         }
                         $price = isset($variant['price']) ? (string) $variant['price'] : null;
                     }

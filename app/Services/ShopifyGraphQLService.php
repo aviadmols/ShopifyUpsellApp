@@ -90,6 +90,7 @@ class ShopifyGraphQLService
                     id
                     title
                     price
+                    image { url }
                     product {
                         id
                         title
