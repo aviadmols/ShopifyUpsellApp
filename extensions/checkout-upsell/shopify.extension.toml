@@ -6,7 +6,7 @@ api_version = "2025-04"
 [[extensions]]
 uid = "42a78221-416b-44aa-07ba-7ad811835d0691422ded"
 type = "ui_extension"
-name = "Checkout Upsell"
+name = "Zyg Blocks"
 handle = "checkout-upsell"
 
 [[extensions.targeting]]
