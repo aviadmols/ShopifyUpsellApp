@@ -90,7 +90,13 @@ class ShopifyGraphQLService
                     id
                     title
                     price
-                    image { url }
+                    media(first: 1) {
+                        nodes {
+                            ... on MediaImage {
+                                image { url }
+                            }
+                        }
+                    }
                     product {
                         id
                         title

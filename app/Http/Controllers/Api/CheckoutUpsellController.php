@@ -319,7 +319,12 @@ class CheckoutUpsellController extends Controller
                                 : $productTitle;
                         }
                         if ($imageUrl === '') {
-                            $imageUrl = (string) ($variant['image']['url'] ?? $variant['product']['featuredImage']['url'] ?? '');
+                            $variantImageUrl = null;
+                            $mediaNodes = $variant['media']['nodes'] ?? [];
+                            if (is_array($mediaNodes) && isset($mediaNodes[0]['image']['url'])) {
+                                $variantImageUrl = (string) $mediaNodes[0]['image']['url'];
+                            }
+                            $imageUrl = (string) ($variantImageUrl ?? $variant['product']['featuredImage']['url'] ?? '');
                         }
                         $price = isset($variant['price']) ? (string) $variant['price'] : null;
                     }

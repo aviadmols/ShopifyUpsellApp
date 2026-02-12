@@ -427,16 +427,18 @@ function CheckoutUpsell() {
       </BlockStack>
     );
 
-    // Row layout: [image] [title + price] [Add button on the right] — like "You may also like"
+    // Row layout: [small thumbnail] [title + price] [Add button on the right] — like "You may also like"
+    const rowImageAspectRatio = ui.image_aspect_ratio ? (parseFloat(ui.image_aspect_ratio) || 1) : 1;
+    const rowImageSize = 80; // fixed width in px so image stays thumbnail-sized
     const renderOfferRow = (offer, index, showDivider) => (
       <BlockStack key={offer.id} spacing="tight">
         {showDivider && ui.divider_between_cards && <Divider />}
-        <InlineLayout columns={['auto', 'fill', 'auto']} spacing="base" blockAlignment="center">
+        <InlineLayout columns={[rowImageSize, 'fill', 'auto']} spacing="base" blockAlignment="center">
           {offer.image_url ? (
             <Image
               source={offer.image_url}
               accessibilityDescription={offer.title || 'Product'}
-              {...(ui.image_aspect_ratio && { aspectRatio: parseFloat(ui.image_aspect_ratio) || undefined })}
+              aspectRatio={rowImageAspectRatio}
               {...(ui.image_fit && { fit: ui.image_fit })}
               {...(ui.image_corner_radius && { cornerRadius: ui.image_corner_radius })}
             />

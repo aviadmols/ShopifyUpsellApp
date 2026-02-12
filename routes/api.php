@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\OfferController;
 use App\Http\Controllers\Api\PostPurchaseController;
 use App\Http\Controllers\Api\PreviewController;
 use App\Http\Controllers\Api\RuleController;
+use App\Http\Controllers\Api\SurveyController;
 use App\Http\Controllers\Api\ThankYouBlocksController;
 use App\Http\Controllers\Api\PlacementController;
 use App\Http\Controllers\WebhookController;
@@ -28,6 +29,8 @@ Route::options('checkout/logs', $corsPreflight);
 Route::options('post-purchase/should-render', $corsPreflight);
 Route::options('post-purchase/accept', $corsPreflight);
 Route::options('thankyou/blocks', $corsPreflight);
+Route::options('surveys/active', $corsPreflight);
+Route::options('surveys/respond', $corsPreflight);
 
 /*
 |--------------------------------------------------------------------------
@@ -41,6 +44,8 @@ Route::middleware(['cors.extensions', 'checkout.extension.signature'])->group(fu
     Route::post('/checkout/offers', [CheckoutUpsellController::class, 'index']);
     Route::post('/checkout/logs', [CheckoutUpsellController::class, 'log']);
     Route::get('/thankyou/blocks', [ThankYouBlocksController::class, 'index']);
+    Route::post('/surveys/active', [SurveyController::class, 'active']);
+    Route::post('/surveys/respond', [SurveyController::class, 'respond']);
 });
 
 /*
