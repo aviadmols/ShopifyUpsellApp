@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\BlockResource\Pages;
 
 use App\Filament\Resources\BlockResource;
+use App\Filament\Resources\CheckoutExperienceResource;
 use App\Http\Controllers\Api\CheckoutUpsellController;
+use App\Models\CheckoutExperience;
 use App\Models\Offer;
 use App\Models\Placement;
 use Filament\Actions;
@@ -42,6 +44,23 @@ class EditBlock extends EditRecord
                     }
                     return view('filament.components.block-preview', $data);
                 }),
+            Actions\Action::make('edit_checkout_experience')
+                ->label('Edit Checkout Experience')
+                ->icon('heroicon-o-shopping-cart')
+                ->color('gray')
+                ->visible(fn (): bool => $this->record !== null && $this->record->surface === 'checkout')
+                ->url(function (): string {
+                    $shop = $this->record?->shop;
+                    if (! $shop) {
+                        return CheckoutExperienceResource::getUrl('index');
+                    }
+                    $experience = CheckoutExperience::where('shop_id', $shop->id)->first();
+                    if ($experience) {
+                        return CheckoutExperienceResource::getUrl('edit', ['record' => $experience]);
+                    }
+                    return CheckoutExperienceResource::getUrl('create', ['shop_id' => $shop->id]);
+                })
+                ->openUrlInNewTab(false),
             Actions\Action::make('checkout_health')
                 ->label('Check checkout health')
                 ->icon('heroicon-o-signal')
@@ -60,7 +79,7 @@ class EditBlock extends EditRecord
     /**
      * Run checkout health check and return result for modal display.
      *
-     * @return array{error?: bool, message?: string, success?: bool, count?: int, block_error?: string|null, display_settings?: array<string, mixed>}
+     * @return array{error?: bool, message?: string, success?: bool, count?: int, block_error?: string|null, display_settings?: array<string, mixed>, experience?: array<string, mixed>}
      */
     protected function getCheckoutHealthResult(): array
     {
@@ -75,10 +94,12 @@ class EditBlock extends EditRecord
         if ($shop->uninstalled_at !== null) {
             return ['error' => true, 'message' => 'Store is not connected. Reinstall the app for this store.'];
         }
+
+        $experienceSummary = $this->getCheckoutExperienceSummary($shop);
         try {
             $controller = app(CheckoutUpsellController::class);
             $context = ['subtotal' => 0, 'line_items' => [], 'customer' => [], 'shipping_country' => null, 'utms' => [], 'url_params' => []];
-            $payload = $controller->buildUpsellPayloadForBlock($block, $shop, $context);
+            $payload = $controller->buildUpsellPayloadForBlock($block, $shop, $context, null);
             $count = count($payload['offers'] ?? []);
             $blockError = $payload['block_error'] ?? null;
             $displaySettings = array_merge(
@@ -95,13 +116,42 @@ class EditBlock extends EditRecord
                 'count' => $count,
                 'block_error' => $blockError,
                 'display_settings' => $displaySettings,
+                'experience' => $experienceSummary,
             ];
         } catch (\Throwable $e) {
             return [
                 'error' => true,
                 'message' => $e->getMessage().' in '.$e->getFile().':'.$e->getLine(),
+                'experience' => $experienceSummary,
             ];
         }
+    }
+
+    /**
+     * Summary of Checkout Experience for this shop (for health modal).
+     *
+     * @return array{exists: bool, id?: int, quantity_upsell: bool, quantity_cart: bool, subscription_upgrade: bool, message: string}
+     */
+    protected function getCheckoutExperienceSummary(\App\Models\Shop $shop): array
+    {
+        $experience = CheckoutExperience::where('shop_id', $shop->id)->first();
+        if (! $experience) {
+            return [
+                'exists' => false,
+                'quantity_upsell' => false,
+                'quantity_cart' => false,
+                'subscription_upgrade' => false,
+                'message' => 'No Checkout Experience for this store. In Checkout block settings you can set "Checkout Experience ID" only after creating one in Admin → Checkout experience.',
+            ];
+        }
+        return [
+            'exists' => true,
+            'id' => $experience->id,
+            'quantity_upsell' => (bool) $experience->quantity_in_upsell_enabled,
+            'quantity_cart' => (bool) $experience->quantity_in_cart_enabled,
+            'subscription_upgrade' => (bool) $experience->subscription_upgrade_enabled,
+            'message' => 'Checkout Experience is configured. Use its ID in the block\'s "Checkout Experience ID" in Shopify Checkout settings to enable quantity/subscription for this widget.',
+        ];
     }
 
     /**

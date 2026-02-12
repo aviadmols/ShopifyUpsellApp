@@ -42,8 +42,13 @@ description = "Optional. Store myshopify.com domain. Leave empty for default."
 [[extensions.settings.fields]]
 key = "block_id"
 type = "single_line_text_field"
-name = "Widget ID (optional)"
-description = "ID from Admin → Widgets. Use one widget per block instance (e.g. Upsell, Progress bar, or Content). Leave empty for legacy Placement."
+name = "Widget ID (required for upsell)"
+description = "ID from Admin → Widgets (table column ID of a widget with Surface = Checkout). Not the Checkout Experience ID."
+[[extensions.settings.fields]]
+key = "checkout_experience_id"
+type = "single_line_text_field"
+name = "Checkout Experience ID (optional)"
+description = "ID from Admin → Checkout experience. If set, quantity and subscription upgrade use this experience; if empty, they are off."
 [[extensions.settings.fields]]
 key = "show_debug_when_empty"
 type = "boolean"

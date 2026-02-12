@@ -156,6 +156,10 @@ function CheckoutUpsell() {
   const shop = shopDomain || runtimeShop || DEFAULT_SHOP;
   const blockIdRaw = getSetting(settings, 'block_id');
   const blockId = blockIdRaw != null && String(blockIdRaw).trim() !== '' ? String(blockIdRaw).trim() : undefined;
+  const checkoutExperienceIdRaw = getSetting(settings, 'checkout_experience_id');
+  const checkoutExperienceId = (checkoutExperienceIdRaw != null && String(checkoutExperienceIdRaw).trim() !== '')
+    ? (parseInt(String(checkoutExperienceIdRaw).trim(), 10) || undefined)
+    : undefined;
   const showDebugWhenEmpty = getSetting(settings, 'show_debug_when_empty') === true;
 
   const [displayMode, setDisplayMode] = useState('stacked');
@@ -209,6 +213,7 @@ function CheckoutUpsell() {
     const body = {
       shop,
       ...(blockId !== undefined && { block_id: parseInt(blockId, 10) || blockId }),
+      ...(checkoutExperienceId !== undefined && checkoutExperienceId > 0 && { checkout_experience_id: checkoutExperienceId }),
       subtotal: subtotalMoney?.amount ?? 0,
       line_items: lineItemsNormalized,
     };
@@ -586,7 +591,16 @@ function CheckoutUpsell() {
         <Text size="small" appearance="subdued">Fix Block settings or check the app, then refresh checkout.</Text>
       )}
       {showDebugWhenEmpty && offers.length === 0 && !hasContent && !loading && status.type === 'connected' && (
-        <Text size="small" appearance="subdued">Add a widget in Admin → Widgets and set Widget ID in this block settings.</Text>
+        <BlockStack spacing="tight">
+          {!blockId && (
+            <Text size="small" emphasis="bold">Widget ID is required.</Text>
+          )}
+          <Text size="small" appearance="subdued">
+            {!blockId
+              ? 'In Admin → Widgets create a widget with Surface = Checkout and Type = Upsell, add offers, then copy its ID (table column ID) into "Widget ID" above. Checkout Experience ID is separate — it only enables quantity/subscription for that widget.'
+              : 'Add a widget in Admin → Widgets and set Widget ID in this block settings.'}
+          </Text>
+        </BlockStack>
       )}
     </BlockStack>
   );

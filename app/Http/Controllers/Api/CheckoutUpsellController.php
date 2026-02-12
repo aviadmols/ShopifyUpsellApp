@@ -162,7 +162,7 @@ class CheckoutUpsellController extends Controller
         if ($type === 'upsell') {
             $this->logExt('checkout_offers_block_upsell_start', ['block_id' => $block->id]);
             try {
-                $payload = $this->buildUpsellPayloadForBlock($block, $shop, $context);
+                $payload = $this->buildUpsellPayloadForBlock($block, $shop, $context, $request);
                 $this->logExt('checkout_offers_block_upsell_response', [
                     'block_id' => $block->id,
                     'shop_id' => $shop->id,
@@ -235,11 +235,12 @@ class CheckoutUpsellController extends Controller
 
     /**
      * Build upsell payload for a block (for API response or admin health check).
+     * When checkout_experience_id is sent in the request and valid, quantity/subscription_upgrade use that experience; otherwise they are disabled.
      *
      * @param  array<string, mixed>  $context  Request context (subtotal, line_items, etc.)
-     * @return array{offers: array, display_mode: string, ui: array, block_error?: string}
+     * @return array{offers: array, display_mode: string, ui: array, quantity: array, subscription_upgrade: array, block_error?: string}
      */
-    public function buildUpsellPayloadForBlock(Block $block, Shop $shop, array $context = []): array
+    public function buildUpsellPayloadForBlock(Block $block, Shop $shop, array $context = [], ?Request $request = null): array
     {
         $config = $block->config ?? [];
         $offerIds = $block->getOfferIds();
@@ -258,7 +259,11 @@ class CheckoutUpsellController extends Controller
             $payload['block_error'] = 'Widget '.$block->id.' found but has no offers. Add offers in Admin → Widgets for this widget.';
         }
 
-        $experience = $shop->checkoutExperience;
+        $experience = null;
+        $expId = $request ? (int) $request->input('checkout_experience_id') : 0;
+        if ($expId > 0) {
+            $experience = CheckoutExperience::where('shop_id', $shop->id)->find($expId);
+        }
         $quantityPayload = $experience ? $experience->quantityPayload() : ['enabled' => false, 'default' => 1, 'min' => 1, 'max' => 10];
         if (isset($config['show_quantity']) && $config['show_quantity'] === false) {
             $quantityPayload['enabled'] = false;
