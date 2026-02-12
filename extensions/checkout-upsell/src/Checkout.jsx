@@ -159,6 +159,7 @@ function CheckoutUpsell() {
 
   const [displayMode, setDisplayMode] = useState('stacked');
   const [ui, setUi] = useState({
+    display_mode: 'stacked',
     section_heading: 'Add to your order',
     title_size: 'medium',
     title_appearance: 'default',
@@ -214,7 +215,7 @@ function CheckoutUpsell() {
           return r.json().then((data) => {
             setOffers(data.offers || []);
             setContentBlocks(Array.isArray(data.blocks) ? data.blocks : []);
-            const dm = data.display_mode ?? data.ui?.display_mode ?? 'stacked';
+            const dm = String(data.display_mode ?? data.ui?.display_mode ?? 'stacked').toLowerCase().trim();
             setDisplayMode(dm === 'single' ? 'single' : dm === 'grid' ? 'grid' : 'stacked');
             if (data.ui && typeof data.ui === 'object') {
               setUi((prev) => ({ ...prev, ...data.ui }));
@@ -368,7 +369,14 @@ function CheckoutUpsell() {
   }
 
   if (offers.length > 0 && !loading && status.type !== 'error' && status.type !== 'not_configured') {
-    const offersToShow = displayMode === 'single' ? offers.slice(0, 1) : offers;
+    // Prefer ui.display_mode from API so layout matches server even if state was set by older extension code
+    const effectiveDisplayMode =
+      displayMode === 'grid' || String(ui.display_mode || '').toLowerCase().trim() === 'grid'
+        ? 'grid'
+        : displayMode === 'single'
+          ? 'single'
+          : 'stacked';
+    const offersToShow = effectiveDisplayMode === 'single' ? offers.slice(0, 1) : offers;
     const sectionSpacing = ui.card_spacing === 'tight' ? 'tight' : ui.card_spacing === 'extraLoose' ? 'extraLoose' : 'loose';
     const cardSpacing = ui.card_spacing === 'tight' ? 'tight' : ui.card_spacing === 'extraLoose' ? 'extraLoose' : 'loose';
     const titleSize = ['small', 'medium', 'large', 'extraLarge'].includes(ui.title_size) ? ui.title_size : 'medium';
@@ -414,7 +422,7 @@ function CheckoutUpsell() {
     );
 
     const offersContent =
-      displayMode === 'grid' ? (
+      effectiveDisplayMode === 'grid' ? (
         <Grid columns={['fill', 'fill']} spacing={sectionSpacing}>
           {offersToShow.map((offer, index) => renderOfferCard(offer, index, index > 0))}
         </Grid>

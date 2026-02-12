@@ -187,7 +187,7 @@ class OfferBuilderService
         $config['priority'] = (int) ($data['checkout_priority'] ?? $config['priority'] ?? 100);
         // display_mode and require_expanded: only set from Placement edit, not from offer save (keep existing config)
         if (! isset($config['display_mode'])) {
-            $config['display_mode'] = 'stacked';
+            $config['display_mode'] = 'grid';
         }
         if (! isset($config['require_expanded'])) {
             $config['require_expanded'] = false;

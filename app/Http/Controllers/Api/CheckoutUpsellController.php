@@ -233,9 +233,10 @@ class CheckoutUpsellController extends Controller
         $data = $this->enrichOffersFromShopify($shop, $eligible);
         $ui = $this->buildUiFromBlockConfig($config, false);
 
+        $displayMode = (string) ($config['display_mode'] ?? 'stacked');
         $payload = [
             'offers' => $data,
-            'display_mode' => (string) ($config['display_mode'] ?? 'stacked'),
+            'display_mode' => $displayMode,
             'ui' => $ui,
         ];
         if (count($data) === 0 && count($offerIds) === 0) {
