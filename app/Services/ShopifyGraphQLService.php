@@ -111,6 +111,60 @@ class ShopifyGraphQLService
     }
 
     /**
+     * Get selling plans available for a product variant (for "upgrade to subscription" in checkout).
+     * Returns first selling plan per group (Recharge / Shopify subscriptions).
+     *
+     * @return array<int, array{id: string, name: string}>
+     */
+    public function getSellingPlansForVariant(Shop $shop, string $variantGid): array
+    {
+        $variant = $this->getProductVariant($shop, $variantGid);
+        if (! $variant || ! isset($variant['product']['id'])) {
+            return [];
+        }
+        $productId = (string) $variant['product']['id'];
+
+        $query = <<<'GRAPHQL'
+            query getProductSellingPlans($id: ID!) {
+                product(id: $id) {
+                    id
+                    sellingPlanGroups(first: 20) {
+                        nodes {
+                            id
+                            name
+                            sellingPlans(first: 5) {
+                                nodes {
+                                    id
+                                    name
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        GRAPHQL;
+
+        $data = $this->request($shop, $query, ['id' => $productId]);
+        $product = $data['product'] ?? null;
+        if (! $product) {
+            return [];
+        }
+        $groups = $product['sellingPlanGroups']['nodes'] ?? [];
+        $plans = [];
+        foreach ($groups as $group) {
+            $sellingPlans = $group['sellingPlans']['nodes'] ?? [];
+            foreach ($sellingPlans as $plan) {
+                $id = (string) ($plan['id'] ?? '');
+                $name = (string) ($plan['name'] ?? $group['name'] ?? 'Subscription');
+                if ($id !== '') {
+                    $plans[] = ['id' => $id, 'name' => $name];
+                }
+            }
+        }
+        return $plans;
+    }
+
+    /**
      * Search product variants for admin picker.
      *
      * @return array<int, array{id: string, label: string, product_title: string, variant_title: string, image_url: string|null, price: string|null}>

@@ -51,6 +51,11 @@ class Shop extends Model
         return $this->hasMany(PostPurchaseLog::class);
     }
 
+    public function checkoutExperience(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(CheckoutExperience::class);
+    }
+
     /**
      * Check if shop is currently installed (not uninstalled).
      */

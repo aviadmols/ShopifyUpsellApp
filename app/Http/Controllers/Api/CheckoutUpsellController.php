@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Block;
+use App\Models\CheckoutExperience;
 use App\Models\Offer;
 use App\Models\Placement;
 use App\Models\Shop;
@@ -118,10 +119,16 @@ class CheckoutUpsellController extends Controller
             'returned_count' => count($data),
         ]);
 
+        $experience = $shop->checkoutExperience;
+        $quantity = $experience ? $experience->quantityPayload() : ['enabled' => false, 'default' => 1, 'min' => 1, 'max' => 10];
+        $subscriptionUpgrade = $experience ? $experience->subscriptionUpgradePayload() : ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'];
+
         return response()->json([
             'offers' => $data,
             'display_mode' => $ui['display_mode'],
             'ui' => $ui,
+            'quantity' => $quantity,
+            'subscription_upgrade' => $subscriptionUpgrade,
         ]);
     }
 
@@ -242,6 +249,10 @@ class CheckoutUpsellController extends Controller
         if (count($data) === 0 && count($offerIds) === 0) {
             $payload['block_error'] = 'Widget '.$block->id.' found but has no offers. Add offers in Admin → Widgets for this widget.';
         }
+
+        $experience = $shop->checkoutExperience;
+        $payload['quantity'] = $experience ? $experience->quantityPayload() : ['enabled' => false, 'default' => 1, 'min' => 1, 'max' => 10];
+        $payload['subscription_upgrade'] = $experience ? $experience->subscriptionUpgradePayload() : ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'];
 
         return $payload;
     }
@@ -403,6 +414,53 @@ class CheckoutUpsellController extends Controller
         $numeric = preg_replace('/\D/', '', $id);
 
         return $numeric !== '' ? 'gid://shopify/ProductVariant/'.$numeric : $id;
+    }
+
+    /**
+     * Return checkout experience config for cart-line-item extension (quantity on lines, subscription upgrade).
+     */
+    public function experience(Request $request): JsonResponse
+    {
+        $shop = $this->resolveShop($request);
+        if (! $shop) {
+            return response()->json([
+                'quantity_in_cart_enabled' => false,
+                'subscription_upgrade' => ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'],
+            ]);
+        }
+        $experience = $shop->checkoutExperience;
+        return response()->json([
+            'quantity_in_cart_enabled' => $experience ? (bool) $experience->quantity_in_cart_enabled : false,
+            'subscription_upgrade' => $experience ? $experience->subscriptionUpgradePayload() : ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'],
+        ]);
+    }
+
+    /**
+     * Return selling plans available for a variant (for "upgrade to subscription" in cart-line-item).
+     */
+    public function sellingPlansForVariant(Request $request): JsonResponse
+    {
+        $shop = $this->resolveShop($request);
+        if (! $shop) {
+            return response()->json(['selling_plans' => []], 200);
+        }
+        $variantId = $request->input('variant_id') ?? $request->query('variant_id') ?? '';
+        $variantGid = $this->normalizeVariantIdToGid($variantId);
+        if ($variantGid === '') {
+            return response()->json(['selling_plans' => []], 200);
+        }
+        try {
+            $service = app(ShopifyGraphQLService::class);
+            $plans = $service->getSellingPlansForVariant($shop, $variantGid);
+            return response()->json(['selling_plans' => $plans]);
+        } catch (\Throwable $e) {
+            Log::channel('checkout_extension')->warning('selling_plans_for_variant_error', [
+                'shop_id' => $shop->id,
+                'variant_id' => $variantGid,
+                'message' => $e->getMessage(),
+            ]);
+            return response()->json(['selling_plans' => []], 200);
+        }
     }
 
     protected function resolveShop(Request $request): ?Shop

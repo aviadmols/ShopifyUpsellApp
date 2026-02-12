@@ -47,7 +47,7 @@ class SurveyResource extends Resource
                         ])
                         ->default(['checkout'])
                         ->columns(1)
-                        ->helperText('Choose where this survey can be shown. Post-purchase requires Shopify Plus.')
+                        ->helperText('Choose where this survey can be shown. Note: Post-purchase is not available (Shopify allows only one post-purchase extension per app; this app uses it for offers).')
                         ->required(),
                 ])
                 ->columns(2),

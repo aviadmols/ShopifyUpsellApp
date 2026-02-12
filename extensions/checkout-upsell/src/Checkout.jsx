@@ -159,6 +159,13 @@ function CheckoutUpsell() {
   const showDebugWhenEmpty = getSetting(settings, 'show_debug_when_empty') === true;
 
   const [displayMode, setDisplayMode] = useState('stacked');
+  const [quantityConfig, setQuantityConfig] = useState({
+    enabled: false,
+    default: 1,
+    min: 1,
+    max: 10,
+  });
+  const [offerQuantities, setOfferQuantities] = useState({});
   const [ui, setUi] = useState({
     display_mode: 'stacked',
     section_heading: 'Add to your order',
@@ -223,6 +230,15 @@ function CheckoutUpsell() {
             if (data.ui && typeof data.ui === 'object') {
               setUi((prev) => ({ ...prev, ...data.ui }));
             }
+            if (data.quantity && typeof data.quantity === 'object') {
+              const q = data.quantity;
+              setQuantityConfig({
+                enabled: Boolean(q.enabled),
+                default: Math.max(1, Math.min(100, parseInt(q.default, 10) || 1)),
+                min: Math.max(1, Math.min(100, parseInt(q.min, 10) || 1)),
+                max: Math.max(1, Math.min(100, parseInt(q.max, 10) || 10)),
+              });
+            }
             const count = (data.offers || []).length;
             const blockCount = (data.blocks || []).length;
             const blockError = data.block_error || data.error;
@@ -280,13 +296,31 @@ function CheckoutUpsell() {
       .finally(() => setLoading(false));
   }, [apiUrl, secret, shopDomain, blockId, subtotalMoney?.amount, JSON.stringify(normalizeLineItemsForApi(lineItems))]);
 
-  const addToCart = async (variantId, sellingPlanId = null) => {
+  const getQuantityForOffer = (variantId) => {
+    const q = offerQuantities[variantId];
+    if (typeof q === 'number' && !Number.isNaN(q)) {
+      return Math.max(quantityConfig.min, Math.min(quantityConfig.max, q));
+    }
+    return Math.max(quantityConfig.min, Math.min(quantityConfig.max, quantityConfig.default));
+  };
+
+  const setQuantityForOffer = (variantId, value) => {
+    const num = parseInt(value, 10);
+    if (Number.isNaN(num)) return;
+    const clamped = Math.max(quantityConfig.min, Math.min(quantityConfig.max, num));
+    setOfferQuantities((prev) => ({ ...prev, [variantId]: clamped }));
+  };
+
+  const addToCart = async (variantId, sellingPlanId = null, qty = null) => {
     if (added.has(variantId)) return;
+    const quantity = quantityConfig.enabled
+      ? (typeof qty === 'number' ? Math.max(1, qty) : getQuantityForOffer(variantId))
+      : 1;
     try {
       const line = {
         type: 'addCartLine',
         merchandiseId: variantId,
-        quantity: 1,
+        quantity: Math.max(1, quantity),
       };
       if (sellingPlanId) {
         line.sellingPlanId = sellingPlanId;
@@ -415,10 +449,17 @@ function CheckoutUpsell() {
           <Text appearance="subdued">{offer.description}</Text>
         )}
         <BlockStack spacing="tight">
+          {quantityConfig.enabled && (
+            <InlineLayout spacing="tight" blockAlignment="center">
+              <Button kind="plain" onPress={() => setQuantityForOffer(offer.variant_id, getQuantityForOffer(offer.variant_id) - 1)} disabled={getQuantityForOffer(offer.variant_id) <= quantityConfig.min}>−</Button>
+              <Text>{String(getQuantityForOffer(offer.variant_id))}</Text>
+              <Button kind="plain" onPress={() => setQuantityForOffer(offer.variant_id, getQuantityForOffer(offer.variant_id) + 1)} disabled={getQuantityForOffer(offer.variant_id) >= quantityConfig.max}>+</Button>
+            </InlineLayout>
+          )}
           <Button
             kind={buttonKind}
             {...(buttonAppearance ? { appearance: buttonAppearance } : {})}
-            onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null)}
+            onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null, getQuantityForOffer(offer.variant_id))}
             disabled={added.has(offer.variant_id)}
           >
             {added.has(offer.variant_id) ? 'Added' : (offer.offer_type === 'subscription' ? 'Add as subscription' : 'Add to order')}
@@ -459,14 +500,23 @@ function CheckoutUpsell() {
               <Text appearance="subdued" size="small">{offer.description}</Text>
             )}
           </BlockStack>
-          <Button
-            kind={buttonKind}
-            {...(buttonAppearance ? { appearance: buttonAppearance } : {})}
-            onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null)}
-            disabled={added.has(offer.variant_id)}
-          >
-            {added.has(offer.variant_id) ? 'Added' : (offer.offer_type === 'subscription' ? 'Add as subscription' : 'Add to order')}
-          </Button>
+          <BlockStack spacing="extraTight">
+            {quantityConfig.enabled && (
+              <InlineLayout spacing="tight" blockAlignment="center">
+                <Button kind="plain" onPress={() => setQuantityForOffer(offer.variant_id, getQuantityForOffer(offer.variant_id) - 1)} disabled={getQuantityForOffer(offer.variant_id) <= quantityConfig.min}>−</Button>
+                <Text size="small">{String(getQuantityForOffer(offer.variant_id))}</Text>
+                <Button kind="plain" onPress={() => setQuantityForOffer(offer.variant_id, getQuantityForOffer(offer.variant_id) + 1)} disabled={getQuantityForOffer(offer.variant_id) >= quantityConfig.max}>+</Button>
+              </InlineLayout>
+            )}
+            <Button
+              kind={buttonKind}
+              {...(buttonAppearance ? { appearance: buttonAppearance } : {})}
+              onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null, getQuantityForOffer(offer.variant_id))}
+              disabled={added.has(offer.variant_id)}
+            >
+              {added.has(offer.variant_id) ? 'Added' : (offer.offer_type === 'subscription' ? 'Add as subscription' : 'Add to order')}
+            </Button>
+          </BlockStack>
         </InlineLayout>
       </BlockStack>
     );
