@@ -13,6 +13,7 @@ use App\Services\ShopifyGraphQLService;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class CheckoutUpsellController extends Controller
@@ -259,10 +260,11 @@ class CheckoutUpsellController extends Controller
             $payload['block_error'] = 'Widget '.$block->id.' found but has no offers. Add offers in Admin → Widgets for this widget.';
         }
 
-        $experience = null;
         $expId = $request ? (int) $request->input('checkout_experience_id') : 0;
         if ($expId > 0) {
             $experience = CheckoutExperience::where('shop_id', $shop->id)->find($expId);
+        } else {
+            $experience = $shop->checkoutExperience;
         }
         $quantityPayload = $experience ? $experience->quantityPayload() : ['enabled' => false, 'default' => 1, 'min' => 1, 'max' => 10];
         if (isset($config['show_quantity']) && $config['show_quantity'] === false) {
@@ -434,7 +436,34 @@ class CheckoutUpsellController extends Controller
     }
 
     /**
+     * Store checkout experience ID for this session (called by Checkout Experience block).
+     * Key: checkout_experience:{shop}:{session_key}, TTL 1 hour.
+     */
+    public function setExperience(Request $request): JsonResponse
+    {
+        $shop = $this->resolveShop($request);
+        if (! $shop) {
+            return response()->json(['ok' => false, 'message' => 'Shop not found'], 400);
+        }
+        $sessionKey = $request->input('session_key') ?? $request->query('session_key') ?? '';
+        $experienceId = (int) ($request->input('checkout_experience_id') ?? $request->query('checkout_experience_id') ?? 0);
+        if ($sessionKey === '' || $experienceId < 1) {
+            return response()->json(['ok' => false, 'message' => 'session_key and checkout_experience_id required'], 400);
+        }
+        $experience = CheckoutExperience::where('shop_id', $shop->id)->find($experienceId);
+        if (! $experience) {
+            return response()->json(['ok' => false, 'message' => 'Checkout Experience not found for this shop'], 404);
+        }
+        $cacheKey = 'checkout_experience:'.preg_replace('/[^a-zA-Z0-9._-]/', '_', $shop->shop_domain ?? (string) $shop->id).':'.$sessionKey;
+        Cache::put($cacheKey, $experienceId, now()->addHour());
+        $this->logExt('checkout_experience_set', ['shop_id' => $shop->id, 'experience_id' => $experienceId, 'session_key_preview' => substr($sessionKey, 0, 12).'…']);
+        return response()->json(['ok' => true]);
+    }
+
+    /**
      * Return checkout experience config for cart-line-item extension (quantity on lines, subscription upgrade).
+     * If session_key is sent and we have a stored experience for that session, use it; otherwise shop default.
+     * Also accepts checkout_experience_id directly to override per-request.
      */
     public function experience(Request $request): JsonResponse
     {
@@ -445,7 +474,24 @@ class CheckoutUpsellController extends Controller
                 'subscription_upgrade' => ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'],
             ]);
         }
-        $experience = $shop->checkoutExperience;
+        $experience = null;
+        $experienceId = (int) ($request->input('checkout_experience_id') ?? $request->query('checkout_experience_id') ?? 0);
+        if ($experienceId > 0) {
+            $experience = CheckoutExperience::where('shop_id', $shop->id)->find($experienceId);
+        }
+        if (! $experience) {
+            $sessionKey = $request->input('session_key') ?? $request->query('session_key') ?? '';
+            if ($sessionKey !== '') {
+                $cacheKey = 'checkout_experience:'.preg_replace('/[^a-zA-Z0-9._-]/', '_', $shop->shop_domain ?? (string) $shop->id).':'.$sessionKey;
+                $storedId = Cache::get($cacheKey);
+                if ($storedId !== null) {
+                    $experience = CheckoutExperience::where('shop_id', $shop->id)->find((int) $storedId);
+                }
+            }
+        }
+        if (! $experience) {
+            $experience = $shop->checkoutExperience;
+        }
         return response()->json([
             'quantity_in_cart_enabled' => $experience ? (bool) $experience->quantity_in_cart_enabled : false,
             'subscription_upgrade' => $experience ? $experience->subscriptionUpgradePayload() : ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'],

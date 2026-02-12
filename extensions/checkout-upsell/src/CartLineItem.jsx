@@ -6,6 +6,7 @@ import {
   reactExtension,
   useSettings,
   useApi,
+  useCheckoutToken,
   BlockStack,
   Text,
   Button,
@@ -30,12 +31,14 @@ function CartLineItem() {
   const settings = useSettings();
   const api = useApi();
   const applyCartLinesChange = useApplyCartLinesChange();
+  const checkoutToken = useCheckoutToken();
 
   const apiUrl = (getSetting(settings, 'api_url') || DEFAULT_API_URL || '').replace(/\/$/, '');
   const secret = (getSetting(settings, 'extension_secret') || '').trim();
   const shopDomain = (getSetting(settings, 'shop_domain') || '').trim();
   const runtimeShop = typeof api?.shop?.myshopifyDomain === 'string' ? api.shop.myshopifyDomain : null;
   const shop = shopDomain || runtimeShop || '';
+  const sessionKey = (typeof checkoutToken === 'string' && checkoutToken) ? checkoutToken : '';
 
   const [line, setLine] = useState(null);
   const [experience, setExperience] = useState({ quantity_in_cart_enabled: false, subscription_upgrade: { enabled: false, cta: 'Upgrade to subscription' } });
@@ -55,10 +58,12 @@ function CartLineItem() {
 
   useEffect(() => {
     if (!apiUrl || !secret || !shop) return;
+    const body = { shop };
+    if (sessionKey) body.session_key = sessionKey;
     fetch(`${apiUrl}/api/checkout/experience`, {
       method: 'POST',
       headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ shop }),
+      body: JSON.stringify(body),
     })
       .then((r) => (r.ok ? r.json() : {}))
       .then((data) => {
@@ -70,7 +75,7 @@ function CartLineItem() {
         });
       })
       .catch(() => {});
-  }, [apiUrl, secret, shop]);
+  }, [apiUrl, secret, shop, sessionKey]);
 
   useEffect(() => {
     if (!experience.subscription_upgrade?.enabled || !line?.merchandise?.id || line.merchandise.sellingPlan) {
