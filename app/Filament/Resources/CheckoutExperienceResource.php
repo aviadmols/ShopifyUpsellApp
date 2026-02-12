@@ -17,9 +17,11 @@ class CheckoutExperienceResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
 
-    protected static ?string $navigationGroup = 'Widgets';
+    protected static ?string $navigationGroup = 'Checkout';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 1;
+
+    protected static ?string $navigationLabel = 'Checkout experience';
 
     protected static ?string $modelLabel = 'Checkout experience';
 

@@ -89,7 +89,15 @@ class CheckoutUpsellController extends Controller
                 return $emptyResponse('Widget found but store is not connected. Reinstall the app for this store.');
             }
             $this->logExt('checkout_offers_block_not_found', ['block_id' => $blockIdInt]);
-            return $emptyResponse('Block not found. Check Widget ID and that the widget exists in Admin → Widgets.');
+            $otherBlock = Block::find($blockIdInt);
+            if ($otherBlock) {
+                return $emptyResponse(
+                    'Widget ID '.$blockIdInt.' exists but is for "'.ucfirst(str_replace('_', ' ', $otherBlock->surface)).'", not Checkout. In Admin → Widgets create a widget with Surface = Checkout (and Type = Upsell), then put its ID in this block settings.'
+                );
+            }
+            return $emptyResponse(
+                'No widget with ID '.$blockIdInt.'. In Admin → Widgets open the list, check the ID column for a Checkout Upsell widget, and enter that number in "Widget ID" here.'
+            );
         }
 
         $shop = $this->resolveShop($request);
