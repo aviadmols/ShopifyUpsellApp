@@ -150,7 +150,8 @@ function CheckoutUpsell() {
   const apiUrl = (getSetting(settings, 'api_url') || DEFAULT_API_URL || '').replace(/\/$/, '');
   const secret = (getSetting(settings, 'extension_secret') || '').trim();
   const shopDomain = (getSetting(settings, 'shop_domain') || '').trim();
-  const shop = shopDomain || DEFAULT_SHOP;
+  const runtimeShop = (typeof api?.shop?.myshopifyDomain === 'string' && api.shop.myshopifyDomain) ? api.shop.myshopifyDomain : null;
+  const shop = shopDomain || runtimeShop || DEFAULT_SHOP;
   const blockIdRaw = getSetting(settings, 'block_id');
   const blockId = blockIdRaw != null && String(blockIdRaw).trim() !== '' ? String(blockIdRaw).trim() : undefined;
   const showDebugWhenEmpty = getSetting(settings, 'show_debug_when_empty') === true;

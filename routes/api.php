@@ -13,6 +13,24 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
+| CORS preflight (OPTIONS) – must match before 404 so browser allows POST/GET
+|--------------------------------------------------------------------------
+*/
+$corsPreflight = function () {
+    return response('', 204)
+        ->header('Access-Control-Allow-Origin', '*')
+        ->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        ->header('Access-Control-Allow-Headers', 'Content-Type, X-Extension-Secret, X-Checkout-Extension-Secret, X-Shop-Domain');
+};
+
+Route::options('checkout/offers', $corsPreflight);
+Route::options('checkout/logs', $corsPreflight);
+Route::options('post-purchase/should-render', $corsPreflight);
+Route::options('post-purchase/accept', $corsPreflight);
+Route::options('thankyou/blocks', $corsPreflight);
+
+/*
+|--------------------------------------------------------------------------
 | Extension endpoints (signed; CORS allowed for Shopify)
 |--------------------------------------------------------------------------
 */
