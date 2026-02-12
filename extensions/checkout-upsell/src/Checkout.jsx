@@ -13,6 +13,7 @@ import {
   Image,
   Divider,
   Progress,
+  Grid,
   useApplyCartLinesChange,
   useSubtotalAmount,
 } from '@shopify/ui-extensions-react/checkout';
@@ -214,7 +215,7 @@ function CheckoutUpsell() {
             setOffers(data.offers || []);
             setContentBlocks(Array.isArray(data.blocks) ? data.blocks : []);
             const dm = data.display_mode ?? data.ui?.display_mode ?? 'stacked';
-            setDisplayMode(dm === 'single' ? 'single' : 'stacked');
+            setDisplayMode(dm === 'single' ? 'single' : dm === 'grid' ? 'grid' : 'stacked');
             if (data.ui && typeof data.ui === 'object') {
               setUi((prev) => ({ ...prev, ...data.ui }));
             }
@@ -375,6 +376,52 @@ function CheckoutUpsell() {
     const buttonKind = ['primary', 'secondary', 'plain'].includes(ui.button_kind) ? ui.button_kind : 'secondary';
     const buttonAppearance = ui.button_appearance && ui.button_appearance !== 'default' ? ui.button_appearance : undefined;
 
+    const renderOfferCard = (offer, index, showDivider) => (
+      <BlockStack key={offer.id} spacing={cardSpacing}>
+        {showDivider && ui.divider_between_cards && <Divider />}
+        {offer.image_url && (
+          <Image
+            source={offer.image_url}
+            accessibilityDescription={offer.title || 'Product'}
+            {...(ui.image_aspect_ratio && { aspectRatio: parseFloat(ui.image_aspect_ratio) || undefined })}
+            {...(ui.image_fit && { fit: ui.image_fit })}
+            {...(ui.image_corner_radius && { cornerRadius: ui.image_corner_radius })}
+          />
+        )}
+        <Text size={titleSize} {...(titleAppearance ? { appearance: titleAppearance } : {})}>
+          {offer.title}
+        </Text>
+        {ui.show_price && offer.price != null && offer.price !== '' && (
+          <Text appearance="subdued" size="small">${offer.price}</Text>
+        )}
+        {(offer.offer_type === 'subscription' || offer.offer_type === 'both') && (
+          <Text appearance="subdued" size="small">Subscribe & save</Text>
+        )}
+        {ui.show_description && offer.description && (
+          <Text appearance="subdued">{offer.description}</Text>
+        )}
+        <BlockStack spacing="tight">
+          <Button
+            kind={buttonKind}
+            {...(buttonAppearance ? { appearance: buttonAppearance } : {})}
+            onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null)}
+            disabled={added.has(offer.variant_id)}
+          >
+            {added.has(offer.variant_id) ? 'Added' : (offer.offer_type === 'subscription' ? 'Add as subscription' : 'Add to order')}
+          </Button>
+        </BlockStack>
+      </BlockStack>
+    );
+
+    const offersContent =
+      displayMode === 'grid' ? (
+        <Grid columns={['fill', 'fill']} spacing={sectionSpacing}>
+          {offersToShow.map((offer, index) => renderOfferCard(offer, index, index > 0))}
+        </Grid>
+      ) : (
+        offersToShow.map((offer, index) => renderOfferCard(offer, index, index > 0))
+      );
+
     return (
       <BlockStack spacing={sectionSpacing}>
         {progressBar && (
@@ -386,42 +433,7 @@ function CheckoutUpsell() {
         <Text size={titleSize} emphasis="bold" {...(titleAppearance ? { appearance: titleAppearance } : {})}>
           {ui.section_heading || 'Add to your order'}
         </Text>
-        {offersToShow.map((offer, index) => (
-          <BlockStack key={offer.id} spacing={cardSpacing}>
-            {index > 0 && ui.divider_between_cards && <Divider />}
-            {offer.image_url && (
-              <Image
-                source={offer.image_url}
-                accessibilityDescription={offer.title || 'Product'}
-                {...(ui.image_aspect_ratio && { aspectRatio: parseFloat(ui.image_aspect_ratio) || undefined })}
-                {...(ui.image_fit && { fit: ui.image_fit })}
-                {...(ui.image_corner_radius && { cornerRadius: ui.image_corner_radius })}
-              />
-            )}
-            <Text size={titleSize} {...(titleAppearance ? { appearance: titleAppearance } : {})}>
-              {offer.title}
-            </Text>
-            {ui.show_price && offer.price != null && offer.price !== '' && (
-              <Text appearance="subdued" size="small">${offer.price}</Text>
-            )}
-            {(offer.offer_type === 'subscription' || offer.offer_type === 'both') && (
-              <Text appearance="subdued" size="small">Subscribe & save</Text>
-            )}
-            {ui.show_description && offer.description && (
-              <Text appearance="subdued">{offer.description}</Text>
-            )}
-            <BlockStack spacing="tight">
-              <Button
-                kind={buttonKind}
-                {...(buttonAppearance ? { appearance: buttonAppearance } : {})}
-                onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null)}
-                disabled={added.has(offer.variant_id)}
-              >
-                {added.has(offer.variant_id) ? 'Added' : (offer.offer_type === 'subscription' ? 'Add as subscription' : 'Add to order')}
-              </Button>
-            </BlockStack>
-          </BlockStack>
-        ))}
+        {offersContent}
       </BlockStack>
     );
   }

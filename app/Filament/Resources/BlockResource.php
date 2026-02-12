@@ -203,7 +203,7 @@ class BlockResource extends Resource
                     ->default(3)
                     ->minValue(1),
                 Forms\Components\Select::make('display_mode')
-                    ->options(['stacked' => 'Stacked', 'single' => 'Single card'])
+                    ->options(['stacked' => 'Stacked', 'single' => 'Single card', 'grid' => 'Grid'])
                     ->default('stacked'),
                 Forms\Components\Toggle::make('require_expanded')
                     ->default(false),
