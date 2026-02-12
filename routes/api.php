@@ -21,6 +21,7 @@ Route::middleware(['cors.extensions', 'checkout.extension.signature'])->group(fu
     Route::post('/post-purchase/accept', [PostPurchaseController::class, 'accept']);
     Route::get('/checkout/offers', [CheckoutUpsellController::class, 'index']);
     Route::post('/checkout/offers', [CheckoutUpsellController::class, 'index']);
+    Route::post('/checkout/logs', [CheckoutUpsellController::class, 'log']);
     Route::get('/thankyou/blocks', [ThankYouBlocksController::class, 'index']);
 });
 

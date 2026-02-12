@@ -12,6 +12,7 @@ use App\Services\ShopifyGraphQLService;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class CheckoutUpsellController extends Controller
 {
@@ -20,12 +21,49 @@ class CheckoutUpsellController extends Controller
     ) {}
 
     /**
+     * Write structured logs for checkout extension debugging.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    protected function logExt(string $event, array $context = []): void
+    {
+        try {
+            Log::channel('checkout_extension')->info($event, $context);
+        } catch (\Throwable) {
+            // Never break checkout due to logging.
+        }
+    }
+
+    /**
+     * Receive logs from the Checkout extension (widget load, fetch result, errors).
+     * Writes to storage/logs/checkout_extension.log.
+     */
+    public function log(Request $request): JsonResponse
+    {
+        $payload = $request->all();
+        // Avoid accidentally storing huge payloads.
+        if (is_array($payload) && isset($payload['line_items']) && is_array($payload['line_items'])) {
+            $payload['line_items_count'] = count($payload['line_items']);
+            unset($payload['line_items']);
+        }
+        $this->logExt('checkout_widget_log', $payload);
+
+        return response()->json(['ok' => true], 200);
+    }
+
+    /**
      * Return list of offers eligible for checkout (cart context). GET or POST.
      * If block_id is provided, use Block (surface=checkout); otherwise fallback to Placement (legacy).
      */
     public function index(Request $request): JsonResponse
     {
         $blockId = $request->input('block_id') ?? $request->query('block_id');
+        $this->logExt('checkout_offers_request', [
+            'block_id' => $blockId,
+            'shop' => $request->input('shop') ?? $request->query('shop'),
+            'subtotal' => $request->input('subtotal') ?? null,
+            'line_items_count' => is_array($request->input('line_items')) ? count((array) $request->input('line_items')) : null,
+        ]);
         $emptyResponse = fn (string $blockError = null) => response()->json(array_filter([
             'offers' => [],
             'blocks' => [],
@@ -36,26 +74,32 @@ class CheckoutUpsellController extends Controller
         if ($blockId !== null && $blockId !== '') {
             $blockIdInt = (int) $blockId;
             if ($blockIdInt < 1) {
+                $this->logExt('checkout_offers_block_invalid', ['block_id' => $blockId]);
                 return $emptyResponse('Widget ID must be the number from Admin → Widgets (e.g. 5 or 12). You entered: '.((string) $blockId));
             }
             $block = Block::where('surface', 'checkout')->find($blockIdInt);
             if ($block) {
+                $this->logExt('checkout_offers_block_found', ['block_id' => $block->id, 'type' => (string) $block->type, 'shop_id' => $block->shop_id]);
                 $shop = $block->shop;
                 if ($shop && $shop->uninstalled_at === null) {
                     return $this->responseForBlock($request, $shop, $block);
                 }
+                $this->logExt('checkout_offers_shop_not_connected', ['block_id' => $block->id, 'shop_id' => $block->shop_id]);
                 return $emptyResponse('Widget found but store is not connected. Reinstall the app for this store.');
             }
+            $this->logExt('checkout_offers_block_not_found', ['block_id' => $blockIdInt]);
             return $emptyResponse('Block not found. Check Widget ID and that the widget exists in Admin → Widgets.');
         }
 
         $shop = $this->resolveShop($request);
         if (! $shop) {
+            $this->logExt('checkout_offers_shop_not_found', ['block_id' => $blockId]);
             return $emptyResponse('Shop not found. Set Shop domain in block settings to your store (e.g. mystore.myshopify.com).');
         }
 
         $placement = Placement::where('shop_id', $shop->id)->where('placement_type', 'checkout')->first();
         if (! $placement) {
+            $this->logExt('checkout_offers_placement_missing', ['shop_id' => $shop->id]);
             return response()->json(['offers' => []]);
         }
 
@@ -66,6 +110,13 @@ class CheckoutUpsellController extends Controller
         $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
         $data = $this->enrichOffersFromShopify($shop, $eligible);
         $ui = $this->buildUiFromPlacement($placement);
+
+        $this->logExt('checkout_offers_placement_response', [
+            'shop_id' => $shop->id,
+            'offer_ids_count' => count($offerIds),
+            'eligible_count' => count($eligible),
+            'returned_count' => count($data),
+        ]);
 
         return response()->json([
             'offers' => $data,
@@ -84,6 +135,7 @@ class CheckoutUpsellController extends Controller
         if ($block->rule_id) {
             $rule = $block->rule;
             if (! $rule || ! $this->ruleEngine->evaluate($rule->conditions, $context)) {
+                $this->logExt('checkout_offers_block_rule_failed', ['block_id' => $block->id, 'rule_id' => $block->rule_id]);
                 return response()->json(['offers' => [], 'blocks' => [], 'ui' => []]);
             }
         }
@@ -108,11 +160,26 @@ class CheckoutUpsellController extends Controller
                 $payload['block_error'] = 'Widget '.$block->id.' found but has no offers. Add offers in Admin → Widgets for this widget.';
             }
 
+            $this->logExt('checkout_offers_block_upsell_response', [
+                'block_id' => $block->id,
+                'shop_id' => $shop->id,
+                'offer_ids_count' => count($offerIds),
+                'eligible_count' => count($eligible),
+                'returned_count' => count($data),
+                'block_error' => $payload['block_error'] ?? null,
+            ]);
+
             return response()->json($payload);
         }
 
         if ($type === 'progress_bar') {
             $ui = $this->buildUiFromBlockConfig($config, true);
+
+            $this->logExt('checkout_offers_block_progress_bar_response', [
+                'block_id' => $block->id,
+                'shop_id' => $shop->id,
+                'goal' => $ui['progress_bar']['goal'] ?? null,
+            ]);
 
             return response()->json([
                 'offers' => [],
@@ -130,6 +197,13 @@ class CheckoutUpsellController extends Controller
                 ],
             ];
 
+            $this->logExt('checkout_offers_block_content_response', [
+                'block_id' => $block->id,
+                'shop_id' => $shop->id,
+                'type' => $typeLower,
+                'config_keys' => array_keys((array) $config),
+            ]);
+
             return response()->json([
                 'offers' => [],
                 'blocks' => $blocksPayload,
@@ -138,6 +212,7 @@ class CheckoutUpsellController extends Controller
             ]);
         }
 
+        $this->logExt('checkout_offers_block_unknown_type', ['block_id' => $block->id, 'type' => $type]);
         return response()->json(['offers' => [], 'blocks' => [], 'ui' => []]);
     }
 

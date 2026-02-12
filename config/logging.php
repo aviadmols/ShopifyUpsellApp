@@ -134,6 +134,13 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'checkout_extension' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/checkout_extension.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

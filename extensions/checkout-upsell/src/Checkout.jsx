@@ -41,6 +41,22 @@ function getSetting(settings, key) {
   return raw;
 }
 
+/** Send a log payload to the server (fire-and-forget). No sensitive data in payload. */
+function sendLog(apiUrl, secret, payload) {
+  if (!apiUrl || !secret) return;
+  const url = `${apiUrl.replace(/\/$/, '')}/api/checkout/logs`;
+  const body = {
+    ts: new Date().toISOString(),
+    build_id: BUILD_ID,
+    ...payload,
+  };
+  fetch(url, {
+    method: 'POST',
+    headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+}
+
 export default reactExtension('purchase.checkout.block.render', () => <CheckoutUpsell />);
 
 function ContentBlockRender({ block }) {
@@ -170,11 +186,20 @@ function CheckoutUpsell() {
     }
     setStatus({ type: 'loading', message: 'Connecting to app…', detail: '' });
 
+    const lineItemsNormalized = normalizeLineItemsForApi(lineItems);
+    sendLog(apiUrl, secret, {
+      phase: 'load',
+      block_id: blockId ?? null,
+      shop,
+      line_items_count: lineItemsNormalized.length,
+      subtotal: subtotalMoney?.amount ?? 0,
+    });
+
     const body = {
       shop,
       ...(blockId !== undefined && { block_id: parseInt(blockId, 10) || blockId }),
       subtotal: subtotalMoney?.amount ?? 0,
-      line_items: normalizeLineItemsForApi(lineItems),
+      line_items: lineItemsNormalized,
     };
 
     fetch(`${apiUrl}/api/checkout/offers`, {
@@ -195,6 +220,15 @@ function CheckoutUpsell() {
             const count = (data.offers || []).length;
             const blockCount = (data.blocks || []).length;
             const blockError = data.block_error || data.error;
+            sendLog(apiUrl, secret, {
+              phase: 'fetch_success',
+              block_id: blockId ?? null,
+              shop,
+              offers_count: count,
+              blocks_count: blockCount,
+              block_error: blockError || null,
+              status_type: blockError ? 'block_error' : (count ? 'offers' : blockCount ? 'content' : 'no_offers'),
+            });
             if (blockError) {
               setStatus({ type: 'connected', message: blockError, detail: '' });
             } else {
@@ -211,11 +245,24 @@ function CheckoutUpsell() {
         if (statusCode === 401) detail = 'Invalid Extension secret. Check CHECKOUT_EXTENSION_SECRET in Railway.';
         else if (statusCode === 404) detail = 'Shop not found. Check Shop domain or add shop in the app.';
         else if (statusCode >= 500) detail = 'Server error. Check app logs on Railway.';
+        sendLog(apiUrl, secret, {
+          phase: 'fetch_error',
+          block_id: blockId ?? null,
+          shop,
+          status_code: statusCode,
+          detail,
+        });
         setStatus({ type: 'error', message: 'Connection failed', detail });
         setOffers([]);
         setContentBlocks([]);
       })
       .catch((err) => {
+        sendLog(apiUrl, secret, {
+          phase: 'fetch_exception',
+          block_id: blockId ?? null,
+          shop,
+          message: err && err.message ? err.message : 'Network error',
+        });
         setStatus({
           type: 'error',
           message: 'Connection failed',
@@ -266,7 +313,7 @@ function CheckoutUpsell() {
         : status.type === 'error'
           ? (status.detail || 'Error')
           : status.type === 'connected'
-            ? (offers.length ? 'Connected' : 'No offers')
+            ? (status.message || (offers.length ? 'Connected' : 'No offers'))
             : status.message;
 
   const fullDebugBlock = (
@@ -276,7 +323,12 @@ function CheckoutUpsell() {
       <Text appearance="subdued" size="small">API: {shortenUrl(apiUrl)}</Text>
       <Text appearance="subdued" size="small">Shop: {shortenShop(shop)}</Text>
       <Text appearance="subdued" size="small">Widget ID: {blockId ?? '(not set)'}</Text>
+      <Text appearance="subdued" size="small">Offers: {offers.length}</Text>
+      <Text appearance="subdued" size="small">Blocks: {contentBlocks.length}</Text>
       <Text appearance="subdued" size="small">Status: {statusLine}</Text>
+      {status.message && (
+        <Text appearance="subdued" size="small">Message: {status.message}</Text>
+      )}
       {status.detail && status.type === 'error' && (
         <Text appearance="subdued" size="small">{status.detail}</Text>
       )}
