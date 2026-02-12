@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\BlockResource\Pages;
 
 use App\Filament\Resources\BlockResource;
+use App\Http\Controllers\Api\CheckoutUpsellController;
 use App\Models\Offer;
 use App\Models\Placement;
 use Filament\Actions;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\View\View;
 
@@ -40,6 +42,60 @@ class EditBlock extends EditRecord
                         $data['config'] = is_array($this->record->config) ? $this->record->config : [];
                     }
                     return view('filament.components.block-preview', $data);
+                }),
+            Actions\Action::make('checkout_health')
+                ->label('Check checkout health')
+                ->icon('heroicon-o-signal')
+                ->color('gray')
+                ->visible(fn (): bool => $this->record !== null && $this->record->surface === 'checkout' && $this->record->type === 'upsell')
+                ->action(function (): void {
+                    $block = $this->record;
+                    if (! $block || $block->surface !== 'checkout' || $block->type !== 'upsell') {
+                        return;
+                    }
+                    $shop = $block->shop;
+                    if (! $shop) {
+                        Notification::make()
+                            ->title('Checkout health check')
+                            ->body('Block has no shop. Assign a shop to this widget.')
+                            ->danger()
+                            ->send();
+                        return;
+                    }
+                    if ($shop->uninstalled_at !== null) {
+                        Notification::make()
+                            ->title('Checkout health check')
+                            ->body('Store is not connected. Reinstall the app for this store.')
+                            ->danger()
+                            ->send();
+                        return;
+                    }
+                    try {
+                        $controller = app(CheckoutUpsellController::class);
+                        $context = ['subtotal' => 0, 'line_items' => [], 'customer' => [], 'shipping_country' => null, 'utms' => [], 'url_params' => []];
+                        $payload = $controller->buildUpsellPayloadForBlock($block, $shop, $context);
+                        $count = count($payload['offers'] ?? []);
+                        $blockError = $payload['block_error'] ?? null;
+                        if ($blockError) {
+                            Notification::make()
+                                ->title('Checkout health check')
+                                ->body('Block is configured but: '.$blockError)
+                                ->warning()
+                                ->send();
+                        } else {
+                            Notification::make()
+                                ->title('Checkout health check')
+                                ->body($count > 0 ? "Block is OK. Would return {$count} offer(s) for this cart context." : 'Block is OK. No offers for empty cart context (add products to cart to see offers).')
+                                ->success()
+                                ->send();
+                        }
+                    } catch (\Throwable $e) {
+                        Notification::make()
+                            ->title('Checkout health check failed')
+                            ->body($e->getMessage().' in '.$e->getFile().':'.$e->getLine())
+                            ->danger()
+                            ->send();
+                    }
                 }),
             Actions\DeleteAction::make(),
         ];

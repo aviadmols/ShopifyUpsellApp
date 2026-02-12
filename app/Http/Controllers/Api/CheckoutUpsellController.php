@@ -145,31 +145,33 @@ class CheckoutUpsellController extends Controller
         $config = $block->config ?? [];
 
         if ($type === 'upsell') {
-            $offerIds = $block->getOfferIds();
-            $maxOffers = (int) ($config['max_offers'] ?? 3);
-            $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
-            $data = $this->enrichOffersFromShopify($shop, $eligible);
-            $ui = $this->buildUiFromBlockConfig($config, false);
+            $this->logExt('checkout_offers_block_upsell_start', ['block_id' => $block->id]);
+            try {
+                $payload = $this->buildUpsellPayloadForBlock($block, $shop, $context);
+                $this->logExt('checkout_offers_block_upsell_response', [
+                    'block_id' => $block->id,
+                    'shop_id' => $shop->id,
+                    'offer_ids_count' => count($block->getOfferIds()),
+                    'returned_count' => count($payload['offers'] ?? []),
+                    'block_error' => $payload['block_error'] ?? null,
+                ]);
 
-            $payload = [
-                'offers' => $data,
-                'display_mode' => (string) ($config['display_mode'] ?? 'stacked'),
-                'ui' => $ui,
-            ];
-            if (count($data) === 0 && count($offerIds) === 0) {
-                $payload['block_error'] = 'Widget '.$block->id.' found but has no offers. Add offers in Admin → Widgets for this widget.';
+                return response()->json($payload);
+            } catch (\Throwable $e) {
+                $this->logExt('checkout_offers_block_upsell_error', [
+                    'block_id' => $block->id,
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ]);
+
+                return response()->json([
+                    'offers' => [],
+                    'blocks' => [],
+                    'ui' => [],
+                    'block_error' => 'Temporary error loading offers. Please try again.',
+                ]);
             }
-
-            $this->logExt('checkout_offers_block_upsell_response', [
-                'block_id' => $block->id,
-                'shop_id' => $shop->id,
-                'offer_ids_count' => count($offerIds),
-                'eligible_count' => count($eligible),
-                'returned_count' => count($data),
-                'block_error' => $payload['block_error'] ?? null,
-            ]);
-
-            return response()->json($payload);
         }
 
         if ($type === 'progress_bar') {
@@ -214,6 +216,33 @@ class CheckoutUpsellController extends Controller
 
         $this->logExt('checkout_offers_block_unknown_type', ['block_id' => $block->id, 'type' => $type]);
         return response()->json(['offers' => [], 'blocks' => [], 'ui' => []]);
+    }
+
+    /**
+     * Build upsell payload for a block (for API response or admin health check).
+     *
+     * @param  array<string, mixed>  $context  Request context (subtotal, line_items, etc.)
+     * @return array{offers: array, display_mode: string, ui: array, block_error?: string}
+     */
+    public function buildUpsellPayloadForBlock(Block $block, Shop $shop, array $context = []): array
+    {
+        $config = $block->config ?? [];
+        $offerIds = $block->getOfferIds();
+        $maxOffers = (int) ($config['max_offers'] ?? 3);
+        $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
+        $data = $this->enrichOffersFromShopify($shop, $eligible);
+        $ui = $this->buildUiFromBlockConfig($config, false);
+
+        $payload = [
+            'offers' => $data,
+            'display_mode' => (string) ($config['display_mode'] ?? 'stacked'),
+            'ui' => $ui,
+        ];
+        if (count($data) === 0 && count($offerIds) === 0) {
+            $payload['block_error'] = 'Widget '.$block->id.' found but has no offers. Add offers in Admin → Widgets for this widget.';
+        }
+
+        return $payload;
     }
 
     /**

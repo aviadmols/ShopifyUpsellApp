@@ -25,8 +25,11 @@ class CheckoutExtensionLogs extends Page
 
     public bool $fileExists = false;
 
+    public ?string $extensionSecret = null;
+
     public function mount(): void
     {
+        $this->extensionSecret = (string) config('shopify.checkout_extension_secret');
         $this->refreshLog();
     }
 
