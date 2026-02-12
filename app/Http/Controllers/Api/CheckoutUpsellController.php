@@ -333,7 +333,7 @@ class CheckoutUpsellController extends Controller
                 'description' => $o->description,
                 'variant_id' => $variantId,
                 'discount_type' => $o->discount_type,
-                'discount_value' => $o->discount_value?->toString(),
+                'discount_value' => $o->discount_value === null ? null : (is_object($o->discount_value) && method_exists($o->discount_value, 'toString') ? $o->discount_value->toString() : (string) $o->discount_value),
                 'image_url' => $imageUrl ?: $o->image_url,
                 'price' => $price,
                 'offer_type' => (string) ($o->offer_type ?? 'one_time'),
