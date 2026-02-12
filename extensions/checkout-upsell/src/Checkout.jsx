@@ -14,6 +14,7 @@ import {
   Divider,
   Progress,
   Grid,
+  InlineLayout,
   useApplyCartLinesChange,
   useSubtotalAmount,
 } from '@shopify/ui-extensions-react/checkout';
@@ -216,7 +217,9 @@ function CheckoutUpsell() {
             setOffers(data.offers || []);
             setContentBlocks(Array.isArray(data.blocks) ? data.blocks : []);
             const dm = String(data.display_mode ?? data.ui?.display_mode ?? 'stacked').toLowerCase().trim();
-            setDisplayMode(dm === 'single' ? 'single' : dm === 'grid' ? 'grid' : 'stacked');
+            setDisplayMode(
+              dm === 'single' ? 'single' : dm === 'grid' ? 'grid' : dm === 'row' ? 'row' : 'stacked'
+            );
             if (data.ui && typeof data.ui === 'object') {
               setUi((prev) => ({ ...prev, ...data.ui }));
             }
@@ -370,12 +373,15 @@ function CheckoutUpsell() {
 
   if (offers.length > 0 && !loading && status.type !== 'error' && status.type !== 'not_configured') {
     // Prefer ui.display_mode from API so layout matches server even if state was set by older extension code
+    const dmStr = String(ui.display_mode || '').toLowerCase().trim();
     const effectiveDisplayMode =
-      displayMode === 'grid' || String(ui.display_mode || '').toLowerCase().trim() === 'grid'
+      displayMode === 'grid' || dmStr === 'grid'
         ? 'grid'
-        : displayMode === 'single'
-          ? 'single'
-          : 'stacked';
+        : displayMode === 'row' || dmStr === 'row'
+          ? 'row'
+          : displayMode === 'single'
+            ? 'single'
+            : 'stacked';
     const offersToShow = effectiveDisplayMode === 'single' ? offers.slice(0, 1) : offers;
     const sectionSpacing = ui.card_spacing === 'tight' ? 'tight' : ui.card_spacing === 'extraLoose' ? 'extraLoose' : 'loose';
     const cardSpacing = ui.card_spacing === 'tight' ? 'tight' : ui.card_spacing === 'extraLoose' ? 'extraLoose' : 'loose';
@@ -421,11 +427,55 @@ function CheckoutUpsell() {
       </BlockStack>
     );
 
+    // Row layout: image left, title + price + button right (like cart line item)
+    const renderOfferRow = (offer, index, showDivider) => (
+      <BlockStack key={offer.id} spacing="tight">
+        {showDivider && ui.divider_between_cards && <Divider />}
+        <InlineLayout columns={['auto', 'fill']} spacing="base" blockAlignment="center">
+          {offer.image_url ? (
+            <Image
+              source={offer.image_url}
+              accessibilityDescription={offer.title || 'Product'}
+              {...(ui.image_aspect_ratio && { aspectRatio: parseFloat(ui.image_aspect_ratio) || undefined })}
+              {...(ui.image_fit && { fit: ui.image_fit })}
+              {...(ui.image_corner_radius && { cornerRadius: ui.image_corner_radius })}
+            />
+          ) : (
+            <BlockStack spacing="none" />
+          )}
+          <BlockStack spacing="extraTight">
+            <Text size={titleSize} {...(titleAppearance ? { appearance: titleAppearance } : {})}>
+              {offer.title}
+            </Text>
+            {ui.show_price && offer.price != null && offer.price !== '' && (
+              <Text appearance="subdued" size="small">${offer.price}</Text>
+            )}
+            {(offer.offer_type === 'subscription' || offer.offer_type === 'both') && (
+              <Text appearance="subdued" size="small">Subscribe & save</Text>
+            )}
+            {ui.show_description && offer.description && (
+              <Text appearance="subdued" size="small">{offer.description}</Text>
+            )}
+            <Button
+              kind={buttonKind}
+              {...(buttonAppearance ? { appearance: buttonAppearance } : {})}
+              onPress={() => addToCart(offer.variant_id, offer.selling_plan_id || null)}
+              disabled={added.has(offer.variant_id)}
+            >
+              {added.has(offer.variant_id) ? 'Added' : (offer.offer_type === 'subscription' ? 'Add as subscription' : 'Add to order')}
+            </Button>
+          </BlockStack>
+        </InlineLayout>
+      </BlockStack>
+    );
+
     const offersContent =
       effectiveDisplayMode === 'grid' ? (
         <Grid columns={['fill', 'fill']} spacing={sectionSpacing}>
           {offersToShow.map((offer, index) => renderOfferCard(offer, index, index > 0))}
         </Grid>
+      ) : effectiveDisplayMode === 'row' ? (
+        offersToShow.map((offer, index) => renderOfferRow(offer, index, index > 0))
       ) : (
         offersToShow.map((offer, index) => renderOfferCard(offer, index, index > 0))
       );
