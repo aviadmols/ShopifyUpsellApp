@@ -178,6 +178,12 @@ function CheckoutUpsell() {
     if (experienceSetSentRef.current) return;
     experienceSetSentRef.current = true;
     setExperienceSetStatus('sent');
+    sendLog(apiUrl, secret, {
+      phase: 'experience_set_sent',
+      checkout_experience_id: checkoutExperienceId,
+      shop,
+      session_key_preview: sessionKey ? sessionKey.slice(0, 8) + '…' : '',
+    });
     fetch(`${apiUrl}/api/checkout/experience/set`, {
       method: 'POST',
       headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -220,6 +226,9 @@ function CheckoutUpsell() {
     if (experienceOnly) {
       setLoading(false);
       setStatus({ type: 'connected', message: 'Checkout Experience active', detail: '' });
+      if (apiUrl && secret) {
+        sendLog(apiUrl, secret, { phase: 'experience_block_active', checkout_experience_id: checkoutExperienceId, shop });
+      }
       return;
     }
     if (!apiUrl || !secret) {
