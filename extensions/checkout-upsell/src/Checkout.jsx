@@ -642,6 +642,9 @@ function CheckoutUpsell() {
     return <BlockStack spacing="none" />;
   }
 
+  // Never show debug/error/loading messages to the customer — only when show_debug_when_empty is on (Admin/Customize).
+  if (!showDebugWhenEmpty) return null;
+
   return (
     <BlockStack spacing="tight">
       {progressBar && (

@@ -77,7 +77,8 @@ function CartLineItem() {
   const retryRef = useRef(null);
 
   useEffect(() => {
-    sendLog(apiUrl, secret, {
+    const urlForLog = apiUrl || DEFAULT_API_URL;
+    sendLog(urlForLog, secret, {
       phase: 'cart_line_mount',
       has_api: !!apiUrl,
       has_secret: !!secret,

@@ -462,9 +462,16 @@ class CheckoutUpsellController extends Controller
         if (! $experience) {
             $experience = $shop->checkoutExperience;
         }
+        $quantityInCartEnabled = $experience ? (bool) $experience->quantity_in_cart_enabled : false;
+        $subscriptionUpgrade = $experience ? $experience->subscriptionUpgradePayload() : ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'];
+        $this->logExt('checkout_experience_response', [
+            'shop_id' => $shop->id,
+            'quantity_in_cart_enabled' => $quantityInCartEnabled,
+            'subscription_upgrade_enabled' => $subscriptionUpgrade['enabled'] ?? false,
+        ]);
         return response()->json([
-            'quantity_in_cart_enabled' => $experience ? (bool) $experience->quantity_in_cart_enabled : false,
-            'subscription_upgrade' => $experience ? $experience->subscriptionUpgradePayload() : ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'],
+            'quantity_in_cart_enabled' => $quantityInCartEnabled,
+            'subscription_upgrade' => $subscriptionUpgrade,
         ]);
     }
 
