@@ -456,16 +456,20 @@ function CheckoutUpsell() {
   if (experienceOnly) {
     if (!showDebugWhenEmpty) return null;
     const debugLines = [
-      { label: 'Checkout Experience', value: BUILD_ID },
+      { label: 'Build ID', value: BUILD_ID },
       { label: 'API', value: shortenUrl(apiUrl) },
       { label: 'Shop', value: shortenShop(shop) },
-      { label: 'Experience ID', value: String(checkoutExperienceId) },
+      { label: 'Experience ID (from block setting)', value: String(checkoutExperienceId) },
+      { label: 'Admin URL', value: `Checkout experience #${checkoutExperienceId}` },
       { label: 'Status', value: experienceSetStatus === 'ok' ? 'Experience set for session' : experienceSetStatus === 'sent' ? 'Sending…' : experienceSetStatus === 'no_token' ? 'No checkout token yet' : experienceSetStatus === 'error' ? 'Set request failed' : experienceSetStatus },
     ];
     return (
       <BlockStack spacing="tight">
         <Text appearance="subdued" size="small">
           Checkout Experience (quantity and subscription) active for this checkout.
+        </Text>
+        <Text appearance="subdued" size="small">
+          Experience ID is from &quot;Checkout Experience ID (optional)&quot; in block settings → Admin → Checkout experience. Save the block after changing it.
         </Text>
         <BlockStack spacing="extraTight">
           {debugLines.map(({ label, value }) => (
