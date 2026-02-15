@@ -34,12 +34,19 @@ async function safeJson(res) {
 }
 
 function sendLog(apiUrl, secret, payload) {
-  if (!apiUrl || !secret) return;
+  if (!apiUrl) return;
   const url = `${String(apiUrl).replace(/\/$/, '')}/api/checkout/logs`;
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  if (secret) headers['X-Extension-Secret'] = secret;
   fetch(url, {
     method: 'POST',
-    headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ ts: new Date().toISOString(), build_id: CART_LINE_BUILD_ID, ...payload }),
+    headers,
+    body: JSON.stringify({
+      ts: new Date().toISOString(),
+      build_id: CART_LINE_BUILD_ID,
+      secret_present: !!secret,
+      ...payload,
+    }),
   }).catch(() => {});
 }
 
