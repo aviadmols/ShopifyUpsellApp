@@ -7,8 +7,27 @@
   $blockError = $result['block_error'] ?? null;
   $displaySettings = $result['display_settings'] ?? [];
   $experience = $result['experience'] ?? null;
+  $ai = $result['ai'] ?? [];
+  $resolvedBlockId = $result['resolved_block_id'] ?? null;
 @endphp
 <div class="space-y-4">
+  @if(is_array($ai))
+    <div class="rounded-lg border border-gray-200 dark:border-white/10 p-3 bg-gray-50 dark:bg-gray-800/50">
+      <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">AI widget detection (ZYG Blocks)</p>
+      <ul class="text-sm text-gray-600 dark:text-gray-400 list-disc list-inside space-y-0.5">
+        <li>Current widget ID: <code>{{ $ai['current_block_id'] ?? '—' }}</code></li>
+        <li>Current widget created by AI: {{ ($ai['is_ai_generated'] ?? false) ? 'Yes' : 'No' }}</li>
+        <li>Checkout AI widget IDs for this store: <code>{{ count($ai['checkout_ai_block_ids'] ?? []) > 0 ? implode(', ', $ai['checkout_ai_block_ids']) : 'None found' }}</code></li>
+        @if($resolvedBlockId)
+          <li>Resolved widget ID in payload: <code>{{ $resolvedBlockId }}</code></li>
+        @endif
+      </ul>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+        In Shopify Checkout editor (Zyg Blocks), set <strong>Widget ID</strong> to one of the AI widget IDs above to target an AI-generated checkout widget.
+      </p>
+    </div>
+  @endif
+
   @if($experience)
     <div class="rounded-lg border border-gray-200 dark:border-white/10 p-3 bg-gray-50 dark:bg-gray-800/50">
       <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Checkout Experience</p>

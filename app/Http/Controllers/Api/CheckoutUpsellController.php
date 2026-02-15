@@ -123,7 +123,13 @@ class CheckoutUpsellController extends Controller
             $rule = $block->rule;
             if (! $rule || ! $this->ruleEngine->evaluate($rule->conditions, $context)) {
                 $this->logExt('checkout_offers_block_rule_failed', ['block_id' => $block->id, 'rule_id' => $block->rule_id]);
-                return response()->json(['offers' => [], 'blocks' => [], 'ui' => []]);
+                return response()->json([
+                    'offers' => [],
+                    'blocks' => [],
+                    'ui' => [],
+                    'resolved_block_id' => $block->id,
+                    'is_ai_generated_widget' => $this->isAiGeneratedBlock($block),
+                ]);
             }
         }
 
@@ -174,6 +180,8 @@ class CheckoutUpsellController extends Controller
                 'offers' => [],
                 'display_mode' => 'stacked',
                 'ui' => $ui,
+                'resolved_block_id' => $block->id,
+                'is_ai_generated_widget' => $this->isAiGeneratedBlock($block),
             ]);
         }
 
@@ -198,11 +206,19 @@ class CheckoutUpsellController extends Controller
                 'blocks' => $blocksPayload,
                 'display_mode' => 'stacked',
                 'ui' => [],
+                'resolved_block_id' => $block->id,
+                'is_ai_generated_widget' => $this->isAiGeneratedBlock($block),
             ]);
         }
 
         $this->logExt('checkout_offers_block_unknown_type', ['block_id' => $block->id, 'type' => $type]);
-        return response()->json(['offers' => [], 'blocks' => [], 'ui' => []]);
+        return response()->json([
+            'offers' => [],
+            'blocks' => [],
+            'ui' => [],
+            'resolved_block_id' => $block->id,
+            'is_ai_generated_widget' => $this->isAiGeneratedBlock($block),
+        ]);
     }
 
     /**
@@ -226,6 +242,8 @@ class CheckoutUpsellController extends Controller
             'offers' => $data,
             'display_mode' => $displayMode,
             'ui' => $ui,
+            'resolved_block_id' => $block->id,
+            'is_ai_generated_widget' => $this->isAiGeneratedBlock($block),
         ];
         if (count($data) === 0 && count($offerIds) === 0) {
             $payload['block_error'] = 'Widget '.$block->id.' found but has no offers. Add offers in Admin → Widgets for this widget.';
@@ -600,6 +618,13 @@ class CheckoutUpsellController extends Controller
             return null;
         }
         return Shop::findByDomainOrAlternates($shopDomain);
+    }
+
+    protected function isAiGeneratedBlock(Block $block): bool
+    {
+        return trim((string) ($block->ai_generated_php ?? '')) !== ''
+            || trim((string) ($block->ai_generated_description ?? '')) !== ''
+            || trim((string) ($block->ai_prompt ?? '')) !== '';
     }
 
     /**

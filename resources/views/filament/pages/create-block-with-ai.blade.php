@@ -26,7 +26,10 @@
             @if(!empty($generated['php_snippet'] ?? ''))
                 <div>
                     <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">PHP / logic (for reference)</h4>
-                    <pre class="mt-1 rounded-lg bg-gray-100 dark:bg-gray-800 p-4 text-xs overflow-x-auto whitespace-pre-wrap font-mono">{{ e($generated['php_snippet']) }}</pre>
+                    <details class="mt-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40">
+                        <summary class="cursor-pointer px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300">Open full generated PHP / logic code</summary>
+                        <pre class="rounded-b-lg bg-gray-100 dark:bg-gray-800 p-4 text-xs overflow-x-auto whitespace-pre font-mono">{{ e($generated['php_snippet']) }}</pre>
+                    </details>
                 </div>
             @endif
 

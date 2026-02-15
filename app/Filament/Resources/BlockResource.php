@@ -123,7 +123,20 @@ class BlockResource extends Resource
                             ->content(fn ($record): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-600 dark:text-gray-400">' . e($record?->ai_generated_description ?? '') . '</p>')),
                         Forms\Components\Placeholder::make('ai_php')
                             ->label('PHP / logic (reference)')
-                            ->content(fn ($record): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString('<pre class="mt-1 rounded-lg bg-gray-100 dark:bg-gray-800 p-4 text-xs overflow-x-auto whitespace-pre-wrap font-mono">' . e($record?->ai_generated_php ?? '') . '</pre>')),
+                            ->content(function ($record): \Illuminate\Support\HtmlString {
+                                $code = (string) ($record?->ai_generated_php ?? '');
+                                if ($code === '') {
+                                    return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500 dark:text-gray-400">No PHP reference was generated for this widget.</p>');
+                                }
+
+                                $summary = 'Open full generated PHP / logic code';
+                                $html = '<details class="mt-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-900/40">'
+                                    . '<summary class="cursor-pointer px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300">' . e($summary) . '</summary>'
+                                    . '<pre class="rounded-b-lg bg-gray-100 dark:bg-gray-800 p-4 text-xs overflow-x-auto whitespace-pre font-mono">' . e($code) . '</pre>'
+                                    . '</details>';
+
+                                return new \Illuminate\Support\HtmlString($html);
+                            }),
                     ])
                     ->visible(fn (?Block $record): bool => $record && (strlen($record->ai_generated_php ?? '') > 0 || strlen($record->ai_generated_description ?? '') > 0))
                     ->collapsible()

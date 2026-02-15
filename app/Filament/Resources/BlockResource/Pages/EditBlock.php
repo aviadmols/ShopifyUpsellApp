@@ -5,6 +5,7 @@ namespace App\Filament\Resources\BlockResource\Pages;
 use App\Filament\Resources\BlockResource;
 use App\Filament\Resources\CheckoutExperienceResource;
 use App\Http\Controllers\Api\CheckoutUpsellController;
+use App\Models\Block;
 use App\Models\CheckoutExperience;
 use App\Models\Offer;
 use App\Models\Placement;
@@ -134,7 +135,7 @@ class EditBlock extends EditRecord
     /**
      * Run checkout health check and return result for modal display.
      *
-     * @return array{error?: bool, message?: string, success?: bool, count?: int, block_error?: string|null, display_settings?: array<string, mixed>, experience?: array<string, mixed>}
+     * @return array{error?: bool, message?: string, success?: bool, count?: int, block_error?: string|null, display_settings?: array<string, mixed>, experience?: array<string, mixed>, ai?: array<string, mixed>, resolved_block_id?: int|null}
      */
     protected function getCheckoutHealthResult(): array
     {
@@ -151,6 +152,7 @@ class EditBlock extends EditRecord
         }
 
         $experienceSummary = $this->getCheckoutExperienceSummary($shop);
+        $aiInsights = $this->getCheckoutAiInsights($block);
         try {
             $controller = app(CheckoutUpsellController::class);
             $context = ['subtotal' => 0, 'line_items' => [], 'customer' => [], 'shipping_country' => null, 'utms' => [], 'url_params' => []];
@@ -172,14 +174,58 @@ class EditBlock extends EditRecord
                 'block_error' => $blockError,
                 'display_settings' => $displaySettings,
                 'experience' => $experienceSummary,
+                'ai' => $aiInsights,
+                'resolved_block_id' => isset($payload['resolved_block_id']) ? (int) $payload['resolved_block_id'] : null,
             ];
         } catch (\Throwable $e) {
             return [
                 'error' => true,
                 'message' => $e->getMessage().' in '.$e->getFile().':'.$e->getLine(),
                 'experience' => $experienceSummary,
+                'ai' => $aiInsights,
             ];
         }
+    }
+
+    /**
+     * @return array{is_ai_generated: bool, current_block_id: int|null, checkout_ai_block_ids: array<int, int>}
+     */
+    protected function getCheckoutAiInsights(?Block $block): array
+    {
+        $shopId = $block?->shop_id;
+        $isAiGenerated = strlen((string) ($block?->ai_generated_php ?? '')) > 0
+            || strlen((string) ($block?->ai_generated_description ?? '')) > 0
+            || strlen((string) ($block?->ai_prompt ?? '')) > 0;
+
+        if (! $shopId) {
+            return [
+                'is_ai_generated' => $isAiGenerated,
+                'current_block_id' => $block?->id,
+                'checkout_ai_block_ids' => [],
+            ];
+        }
+
+        $checkoutAiBlockIds = Block::query()
+            ->where('shop_id', $shopId)
+            ->where('surface', 'checkout')
+            ->where(function ($query): void {
+                $query->whereNotNull('ai_generated_php')
+                    ->where('ai_generated_php', '!=', '')
+                    ->orWhereNotNull('ai_generated_description')
+                    ->where('ai_generated_description', '!=', '')
+                    ->orWhereNotNull('ai_prompt')
+                    ->where('ai_prompt', '!=', '');
+            })
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        return [
+            'is_ai_generated' => $isAiGenerated,
+            'current_block_id' => $block?->id,
+            'checkout_ai_block_ids' => $checkoutAiBlockIds,
+        ];
     }
 
     /**
