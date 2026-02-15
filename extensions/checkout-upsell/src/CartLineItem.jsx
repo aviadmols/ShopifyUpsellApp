@@ -15,7 +15,7 @@ import {
   Disclosure,
   useApplyCartLinesChange,
 } from '@shopify/ui-extensions-react/checkout';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
 
@@ -45,10 +45,12 @@ function CartLineItem() {
   const [experience, setExperience] = useState({ quantity_in_cart_enabled: false, subscription_upgrade: { enabled: false, cta: 'Upgrade to subscription' } });
   const [sellingPlans, setSellingPlans] = useState([]);
   const [upgrading, setUpgrading] = useState(false);
+  const [qtyLoading, setQtyLoading] = useState(false);
 
   const line = useCartLineTarget();
+  const retryRef = useRef(null);
 
-  useEffect(() => {
+  const fetchExperience = useCallback(() => {
     if (!apiUrl || !secret || !shop) return;
     const body = { shop };
     if (sessionKey) body.session_key = sessionKey;
@@ -59,18 +61,31 @@ function CartLineItem() {
     })
       .then((r) => (r.ok ? r.json() : {}))
       .then((data) => {
-        setExperience({
+        const next = {
           quantity_in_cart_enabled: Boolean(data.quantity_in_cart_enabled),
           subscription_upgrade: data.subscription_upgrade && typeof data.subscription_upgrade === 'object'
             ? data.subscription_upgrade
             : { enabled: false, headline: '', cta: 'Upgrade to subscription' },
-        });
+        };
+        setExperience(next);
+        if (sessionKey && !next.quantity_in_cart_enabled && !next.subscription_upgrade?.enabled) {
+          retryRef.current = setTimeout(() => fetchExperience(), 2000);
+        }
       })
       .catch(() => {});
   }, [apiUrl, secret, shop, sessionKey]);
 
   useEffect(() => {
-    if (!experience.subscription_upgrade?.enabled || !line?.merchandise?.id || line.merchandise.sellingPlan) {
+    fetchExperience();
+    return () => {
+      if (retryRef.current) clearTimeout(retryRef.current);
+    };
+  }, [fetchExperience]);
+
+  const hasSellingPlan = Boolean(line?.merchandise?.sellingPlan ?? line?.sellingPlanAllocation?.sellingPlan?.id);
+
+  useEffect(() => {
+    if (!experience.subscription_upgrade?.enabled || !line?.merchandise?.id || hasSellingPlan) {
       setSellingPlans([]);
       return;
     }
@@ -83,36 +98,49 @@ function CartLineItem() {
       .then((r) => (r.ok ? r.json() : {}))
       .then((data) => setSellingPlans(Array.isArray(data.selling_plans) ? data.selling_plans : []))
       .catch(() => setSellingPlans([]));
-  }, [experience.subscription_upgrade?.enabled, line?.merchandise?.id, line?.merchandise?.sellingPlan, apiUrl, secret, shop]);
+  }, [experience.subscription_upgrade?.enabled, line?.merchandise?.id, hasSellingPlan, apiUrl, secret, shop]);
 
   const canChangeCart = true;
 
   if (!line || !line.id || !applyCartLinesChange) return null;
 
   const quantity = Number(line.quantity) || 1;
-  const hasSellingPlan = line.merchandise?.sellingPlan != null;
   const showQuantity = experience.quantity_in_cart_enabled && canChangeCart;
   const showUpgrade = experience.subscription_upgrade?.enabled && !hasSellingPlan && sellingPlans.length > 0 && canChangeCart;
   const firstPlan = sellingPlans[0];
 
-  const handleQuantityChange = (newQty) => {
+  const handleQuantityChange = async (newQty) => {
     const n = Math.max(1, parseInt(newQty, 10));
-    if (n === quantity) return;
-    applyCartLinesChange({ type: 'updateCartLine', id: line.id, quantity: n }).catch(() => {});
+    if (n === quantity || qtyLoading) return;
+    if (typeof console !== 'undefined' && console.log) console.log('qty_change', { lineId: line.id, from: quantity, to: n });
+    setQtyLoading(true);
+    try {
+      const res = await applyCartLinesChange({ type: 'updateCartLine', id: line.id, quantity: n });
+      if (typeof console !== 'undefined' && console.log) console.log('qty_change_result', res);
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.log) console.log('qty_change_error', String(e?.message ?? e));
+    } finally {
+      setQtyLoading(false);
+    }
   };
 
   const handleUpgradeToSubscription = async () => {
     if (!firstPlan || upgrading) return;
+    if (typeof console !== 'undefined' && console.log) console.log('upgrade_start', { lineId: line.id, sellingPlanId: firstPlan.id });
     setUpgrading(true);
     try {
-      await applyCartLinesChange({ type: 'removeCartLine', id: line.id, quantity });
       await applyCartLinesChange({
         type: 'addCartLine',
         merchandiseId: line.merchandise.id,
         quantity,
         sellingPlanId: firstPlan.id,
       });
-    } catch (_) {}
+      if (typeof console !== 'undefined' && console.log) console.log('upgrade_add_ok');
+      await applyCartLinesChange({ type: 'removeCartLine', id: line.id, quantity });
+      if (typeof console !== 'undefined' && console.log) console.log('upgrade_remove_ok');
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.log) console.log('upgrade_error', String(e?.message ?? e));
+    }
     setUpgrading(false);
   };
 
@@ -127,12 +155,12 @@ function CartLineItem() {
           <Button kind="plain" size="small" appearance="monochrome">
             Modify
           </Button>
-          <BlockStack spacing="tight">
+          <BlockStack spacing="tight" id="modify-qty-content">
             <InlineLayout spacing="tight" blockAlignment="center">
               <Text appearance="subdued" size="small">Qty</Text>
-              <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity - 1)} disabled={quantity <= 1}>−</Button>
+              <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity - 1)} disabled={quantity <= 1 || qtyLoading}>−</Button>
               <Text size="small">{String(quantity)}</Text>
-              <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity + 1)}>+</Button>
+              <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity + 1)} disabled={qtyLoading}>+</Button>
             </InlineLayout>
           </BlockStack>
         </Disclosure>

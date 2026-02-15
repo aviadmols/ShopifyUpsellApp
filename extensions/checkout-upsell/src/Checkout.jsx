@@ -427,25 +427,24 @@ function CheckoutUpsell() {
   const hideWhenNoOffers = !loading && status.type === 'connected' && offers.length === 0 && !hasContent && !showDebugWhenEmpty;
 
   if (experienceOnly) {
-    const debugLines = showDebugWhenEmpty ? [
+    if (!showDebugWhenEmpty) return null;
+    const debugLines = [
       { label: 'Checkout Experience', value: BUILD_ID },
       { label: 'API', value: shortenUrl(apiUrl) },
       { label: 'Shop', value: shortenShop(shop) },
       { label: 'Experience ID', value: String(checkoutExperienceId) },
       { label: 'Status', value: experienceSetStatus === 'ok' ? 'Experience set for session' : experienceSetStatus === 'sent' ? 'Sending…' : experienceSetStatus === 'no_token' ? 'No checkout token yet' : experienceSetStatus === 'error' ? 'Set request failed' : experienceSetStatus },
-    ] : [];
+    ];
     return (
       <BlockStack spacing="tight">
         <Text appearance="subdued" size="small">
           Checkout Experience (quantity and subscription) active for this checkout.
         </Text>
-        {showDebugWhenEmpty && debugLines.length > 0 && (
-          <BlockStack spacing="extraTight">
-            {debugLines.map(({ label, value }) => (
-              <Text key={label} appearance="subdued" size="small">{label}: {value}</Text>
-            ))}
-          </BlockStack>
-        )}
+        <BlockStack spacing="extraTight">
+          {debugLines.map(({ label, value }) => (
+            <Text key={label} appearance="subdued" size="small">{label}: {value}</Text>
+          ))}
+        </BlockStack>
       </BlockStack>
     );
   }
