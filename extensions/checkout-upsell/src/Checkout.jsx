@@ -157,6 +157,7 @@ function CheckoutUpsell() {
   const shop = shopDomain || runtimeShop || DEFAULT_SHOP;
   const blockIdRaw = getSetting(settings, 'block_id');
   const blockId = blockIdRaw != null && String(blockIdRaw).trim() !== '' ? String(blockIdRaw).trim() : undefined;
+  // Checkout Experience ID = ID from Admin → Checkout experience (/admin/checkout-experiences), NOT the Widget/Block ID.
   const checkoutExperienceIdRaw = getSetting(settings, 'checkout_experience_id');
   const checkoutExperienceId = (checkoutExperienceIdRaw != null && String(checkoutExperienceIdRaw).trim() !== '')
     ? (parseInt(String(checkoutExperienceIdRaw).trim(), 10) || undefined)
@@ -189,10 +190,27 @@ function CheckoutUpsell() {
       headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ shop, session_key: sessionKey, checkout_experience_id: checkoutExperienceId }),
     })
-      .then((r) => {
-        setExperienceSetStatus(r.ok ? 'ok' : 'error');
+      .then(async (r) => {
+        if (r.ok) {
+          setExperienceSetStatus('ok');
+          return;
+        }
+        const body = await r.text();
+        sendLog(apiUrl, secret, {
+          phase: 'experience_set_failed',
+          status: r.status,
+          statusText: r.statusText,
+          body_preview: body ? body.slice(0, 200) : '',
+        });
+        setExperienceSetStatus('error');
       })
-      .catch(() => setExperienceSetStatus('error'));
+      .catch((err) => {
+        sendLog(apiUrl, secret, {
+          phase: 'experience_set_network_error',
+          message: err && err.message ? err.message : 'fetch failed',
+        });
+        setExperienceSetStatus('error');
+      });
   }, [experienceOnly, apiUrl, secret, shop, checkoutExperienceId, checkoutToken]);
 
   const [displayMode, setDisplayMode] = useState('stacked');

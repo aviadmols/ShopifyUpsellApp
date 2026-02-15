@@ -406,8 +406,9 @@ class CheckoutUpsellController extends Controller
     }
 
     /**
-     * Store checkout experience ID for this session (called by Checkout Experience block).
-     * Key: checkout_experience:{shop}:{session_key}, TTL 1 hour.
+     * Store checkout experience ID for this session (called by the widget when "Checkout Experience ID" is set).
+     * checkout_experience_id = ID from Admin → Checkout experience (/admin/checkout-experiences), i.e. CheckoutExperience.id.
+     * Not the Block/Widget ID. Key: checkout_experience:{shop}:{session_key}, TTL 1 hour.
      */
     public function setExperience(Request $request): JsonResponse
     {
@@ -420,6 +421,7 @@ class CheckoutUpsellController extends Controller
         if ($sessionKey === '' || $experienceId < 1) {
             return response()->json(['ok' => false, 'message' => 'session_key and checkout_experience_id required'], 400);
         }
+        // Load the Checkout Experience record from admin/checkout-experiences (same ID as in the URL edit page).
         $experience = CheckoutExperience::where('shop_id', $shop->id)->find($experienceId);
         if (! $experience) {
             return response()->json(['ok' => false, 'message' => 'Checkout Experience not found for this shop'], 404);
@@ -432,8 +434,9 @@ class CheckoutUpsellController extends Controller
 
     /**
      * Return checkout experience config for cart-line-item extension (quantity on lines, subscription upgrade).
+     * checkout_experience_id = ID from Admin → Checkout experience (/admin/checkout-experiences), not Block/Widget ID.
+     * The experience record holds the settings that control line items: quantity_in_cart_enabled, subscription_upgrade_*.
      * If session_key is sent and we have a stored experience for that session, use it; otherwise shop default.
-     * Also accepts checkout_experience_id directly to override per-request.
      */
     public function experience(Request $request): JsonResponse
     {
@@ -447,6 +450,7 @@ class CheckoutUpsellController extends Controller
         $experience = null;
         $experienceId = (int) ($request->input('checkout_experience_id') ?? $request->query('checkout_experience_id') ?? 0);
         if ($experienceId > 0) {
+            // Load from checkout_experiences table (Admin → Checkout experience); this record defines line-item behaviour.
             $experience = CheckoutExperience::where('shop_id', $shop->id)->find($experienceId);
         }
         if (! $experience) {
@@ -462,10 +466,12 @@ class CheckoutUpsellController extends Controller
         if (! $experience) {
             $experience = $shop->checkoutExperience;
         }
+        // These flags come from the Checkout Experience form: "Quantity on cart lines" and "Subscription upgrade".
         $quantityInCartEnabled = $experience ? (bool) $experience->quantity_in_cart_enabled : false;
         $subscriptionUpgrade = $experience ? $experience->subscriptionUpgradePayload() : ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'];
         $this->logExt('checkout_experience_response', [
             'shop_id' => $shop->id,
+            'experience_id' => $experience?->id,
             'quantity_in_cart_enabled' => $quantityInCartEnabled,
             'subscription_upgrade_enabled' => $subscriptionUpgrade['enabled'] ?? false,
         ]);
