@@ -1,0 +1,33 @@
+# Cart line item only: quantity (+/-) and Upgrade to subscription per line.
+# Must be a separate extension from the block — Shopify only renders one target per extension in production.
+api_version = "2025-04"
+
+[[extensions]]
+type = "ui_extension"
+name = "Zyg Cart Line"
+handle = "checkout-cart-line"
+
+[[extensions.targeting]]
+target = "purchase.checkout.cart-line-item.render-after"
+module = "./src/CartLineItem.jsx"
+
+[extensions.capabilities]
+network_access = true
+api_access = true
+
+[extensions.settings]
+[[extensions.settings.fields]]
+key = "extension_secret"
+type = "single_line_text_field"
+name = "Extension secret (required)"
+description = "Same as Zyg Blocks block. Set CHECKOUT_EXTENSION_SECRET from Railway or .env."
+[[extensions.settings.fields]]
+key = "api_url"
+type = "single_line_text_field"
+name = "API URL (optional)"
+description = "Full app URL. Leave empty for default."
+[[extensions.settings.fields]]
+key = "shop_domain"
+type = "single_line_text_field"
+name = "Shop domain (optional)"
+description = "Store myshopify.com domain. Leave empty for default."

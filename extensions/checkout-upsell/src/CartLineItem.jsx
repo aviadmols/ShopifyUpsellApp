@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
+const DEFAULT_EXTENSION_SECRET = '89987874564648484';
 const CART_LINE_BUILD_ID = 'zyg-cart-line-20260212';
 
 function getSetting(settings, key) {
@@ -60,7 +61,7 @@ function CartLineItem() {
   const line = useCartLineTarget();
 
   const apiUrl = (getSetting(settings, 'api_url') || DEFAULT_API_URL || '').replace(/\/$/, '');
-  const secret = (getSetting(settings, 'extension_secret') || '').trim();
+  const secret = (getSetting(settings, 'extension_secret') || DEFAULT_EXTENSION_SECRET).trim();
   const shopDomain = (getSetting(settings, 'shop_domain') || '').trim();
   const runtimeShop = typeof api?.shop?.myshopifyDomain === 'string' ? api.shop.myshopifyDomain : null;
   const shop = shopDomain || runtimeShop || '';

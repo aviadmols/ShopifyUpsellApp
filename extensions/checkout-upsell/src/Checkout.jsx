@@ -24,6 +24,7 @@ import { useEffect, useRef, useState } from 'react';
 const BUILD_ID = 'zyg-upsell-checkout-20260212-widgets';
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
 const DEFAULT_SHOP = 'millsdailypacks.myshopify.com';
+const DEFAULT_EXTENSION_SECRET = '89987874564648484';
 
 function shortenUrl(url) {
   if (!url || url.length < 40) return url || '';
@@ -151,7 +152,7 @@ function CheckoutUpsell() {
   });
 
   const apiUrl = (getSetting(settings, 'api_url') || DEFAULT_API_URL || '').replace(/\/$/, '');
-  const secret = (getSetting(settings, 'extension_secret') || '').trim();
+  const secret = (getSetting(settings, 'extension_secret') || DEFAULT_EXTENSION_SECRET).trim();
   const shopDomain = (getSetting(settings, 'shop_domain') || '').trim();
   const runtimeShop = (typeof api?.shop?.myshopifyDomain === 'string' && api.shop.myshopifyDomain) ? api.shop.myshopifyDomain : null;
   const shop = shopDomain || runtimeShop || DEFAULT_SHOP;
