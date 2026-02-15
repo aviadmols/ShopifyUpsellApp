@@ -3,6 +3,7 @@
 api_version = "2025-04"
 
 [[extensions]]
+uid = "5ee52131-3087-7e28-f1f3-1ac6eed6000d28892d81"
 type = "ui_extension"
 name = "Zyg Cart Line"
 handle = "checkout-cart-line"
@@ -20,7 +21,12 @@ api_access = true
 key = "extension_secret"
 type = "single_line_text_field"
 name = "Extension secret (required)"
-description = "Same as Zyg Blocks block. Set CHECKOUT_EXTENSION_SECRET from Railway or .env."
+description = "Same as Zyg Blocks. Leave empty to use default."
+[[extensions.settings.fields]]
+key = "checkout_experience_id"
+type = "single_line_text_field"
+name = "Checkout Experience ID (optional)"
+description = "ID from Admin → Checkout experience (/admin/checkout-experiences). If set, uses this experience for quantity and subscription on cart lines; if empty, uses the shop default (if any)."
 [[extensions.settings.fields]]
 key = "api_url"
 type = "single_line_text_field"

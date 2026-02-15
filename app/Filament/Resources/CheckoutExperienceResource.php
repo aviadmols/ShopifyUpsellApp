@@ -33,7 +33,7 @@ class CheckoutExperienceResource extends Resource
     {
         return $form->schema([
             Forms\Components\Section::make('Shop')
-                ->description('One Checkout experience config per store. Controls quantity and subscription upgrade in Checkout.')
+                ->description('One Checkout experience config per store. Controls quantity and subscription upgrade in Checkout. Use this experience ID in Checkout Editor → Zyg Cart Line → Checkout Experience ID. Leave empty there to use the shop default.')
                 ->schema([
                     Forms\Components\Select::make('shop_id')
                         ->relationship('shop', 'shop_domain', fn (Builder $query) => $query->whereNull('uninstalled_at'))

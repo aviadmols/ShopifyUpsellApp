@@ -41,11 +41,6 @@ type = "single_line_text_field"
 name = "Widget ID (required for upsell)"
 description = "ID from Admin → Widgets (table column ID of a widget with Surface = Checkout). Not the Checkout Experience ID."
 [[extensions.settings.fields]]
-key = "checkout_experience_id"
-type = "single_line_text_field"
-name = "Checkout Experience ID (optional)"
-description = "ID from Admin → Checkout experience. If set, uses this experience; if empty, uses the shop's default Checkout Experience (if any)."
-[[extensions.settings.fields]]
 key = "show_debug_when_empty"
 type = "boolean"
 name = "Show debug info when no offers or error"

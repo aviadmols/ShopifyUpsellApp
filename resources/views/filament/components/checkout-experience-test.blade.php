@@ -11,8 +11,11 @@
   ];
 @endphp
 <div class="space-y-4">
+  <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+    Zyg Cart Line extension: set <strong>Checkout Experience ID</strong> to <code>{{ $record->id }}</code> in Checkout Editor to use this experience for quantity and subscription on cart lines.
+  </p>
   <p class="text-sm text-gray-700 dark:text-gray-300">
-    When this Experience is used in Checkout (upsell block or Checkout Experience block), Cart Line Item will show:
+    When this Experience is used in Checkout (Zyg Cart Line with this ID), Cart Line Item will show:
   </p>
   <ul class="text-sm text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
     <li><strong>Quantity (+/−) on cart lines:</strong> {{ $record->quantity_in_cart_enabled ? 'On' : 'Off' }}</li>
