@@ -10,10 +10,12 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 
 class CheckoutExperienceResource extends Resource
 {
     protected static ?string $model = CheckoutExperience::class;
+    protected static ?bool $supportsAdvancedCartLineConfig = null;
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
 
@@ -150,7 +152,8 @@ class CheckoutExperienceResource extends Resource
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                 ])
                 ->columns(2)
-                ->collapsible(),
+                ->collapsible()
+                ->visible(fn (): bool => static::supportsAdvancedCartLineConfig()),
 
             Forms\Components\Section::make('Cart line rules')
                 ->description('Limit quantity editor and subscription upgrade by products, collections, tags, cart conditions. Leave "Rule mode" at All to show for every line.')
@@ -295,7 +298,8 @@ class CheckoutExperienceResource extends Resource
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('subscription_upgrade_enabled')),
                 ])
                 ->columns(2)
-                ->collapsible(),
+                ->collapsible()
+                ->visible(fn (): bool => static::supportsAdvancedCartLineConfig()),
 
             Forms\Components\Section::make('Subscription upgrade')
                 ->description('Show a message to upgrade one-time items to subscription (Recharge / Shopify Selling Plans).')
@@ -369,5 +373,24 @@ class CheckoutExperienceResource extends Resource
             'create' => Pages\CreateCheckoutExperience::route('/create'),
             'edit' => Pages\EditCheckoutExperience::route('/{record}/edit'),
         ];
+    }
+
+    protected static function supportsAdvancedCartLineConfig(): bool
+    {
+        if (static::$supportsAdvancedCartLineConfig !== null) {
+            return static::$supportsAdvancedCartLineConfig;
+        }
+
+        try {
+            static::$supportsAdvancedCartLineConfig = Schema::hasColumns('checkout_experiences', [
+                'cart_line_popover_width_mode',
+                'quantity_rule_mode',
+                'subscription_rule_mode',
+            ]);
+        } catch (\Throwable) {
+            static::$supportsAdvancedCartLineConfig = false;
+        }
+
+        return static::$supportsAdvancedCartLineConfig;
     }
 }
