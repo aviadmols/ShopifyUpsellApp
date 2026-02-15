@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\CheckoutUpsellController;
 use App\Models\CheckoutExperience;
 use App\Models\Offer;
 use App\Models\Placement;
+use App\Services\OpenRouterService;
+use App\Services\RuleEngine;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\View\View;
@@ -18,6 +20,9 @@ class EditBlock extends EditRecord
 
     /** @var array<string, mixed> */
     public array $blockPreviewData = [];
+
+    /** @var array{log: string, summary: string|null}|null */
+    public ?array $aiTestResult = null;
 
     /** @var array<int, array<string, mixed>> */
     public array $widgetOffersData = [];
@@ -72,8 +77,58 @@ class EditBlock extends EditRecord
                 ->modalContent(fn (): View => view('filament.components.checkout-health-result', [
                     'result' => $this->getCheckoutHealthResult(),
                 ])),
+            Actions\Action::make('test_ai_widget')
+                ->label('Test AI widget')
+                ->icon('heroicon-o-beaker')
+                ->color('gray')
+                ->visible(fn (): bool => $this->record !== null && (strlen($this->record->ai_generated_php ?? '') > 0 || $this->record->rule_id !== null))
+                ->action(function (): void {
+                    $this->aiTestResult = $this->runAiWidgetTest();
+                })
+                ->modalHeading('AI widget test')
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Close')
+                ->modalContent(fn (): View => view('filament.components.ai-widget-test-result', [
+                    'result' => $this->aiTestResult ?? ['log' => '', 'summary' => null],
+                ])),
             Actions\DeleteAction::make(),
         ];
+    }
+
+    protected function runAiWidgetTest(): array
+    {
+        $block = $this->record;
+        $log = [];
+        $log[] = 'Block ID: ' . ($block?->id ?? '—');
+        $log[] = 'Surface: ' . ($block?->surface ?? '—');
+        $log[] = 'Type: ' . ($block?->type ?? '—');
+        $log[] = '';
+        $conditions = $block?->rule?->conditions ?? [];
+        if ($conditions === []) {
+            $log[] = 'No rule conditions.';
+            return ['log' => implode("\n", $log), 'summary' => null];
+        }
+        $engine = app(RuleEngine::class);
+        $dummyContext = [
+            'subtotal' => 150,
+            'line_items' => [['product_id' => 123, 'variant_id' => 456, 'properties' => []]],
+            'customer' => ['tags' => []],
+            'shipping_country' => 'IL',
+            'utms' => [],
+            'url_params' => [],
+        ];
+        $passed = $engine->evaluate($conditions, $dummyContext);
+        $log[] = 'Rule conditions: ' . json_encode($conditions, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        $log[] = '';
+        $log[] = 'Dummy context: ' . json_encode($dummyContext, JSON_PRETTY_PRINT);
+        $log[] = 'Result: ' . ($passed ? 'PASS' : 'FAIL');
+        $summary = app(OpenRouterService::class)->summarizeTestResult([
+            'conditions' => $conditions,
+            'context' => $dummyContext,
+            'result' => $passed ? 'pass' : 'fail',
+            'log' => implode("\n", $log),
+        ]);
+        return ['log' => implode("\n", $log), 'summary' => $summary];
     }
 
     /**

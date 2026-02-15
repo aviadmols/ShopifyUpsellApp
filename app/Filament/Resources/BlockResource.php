@@ -114,6 +114,21 @@ class BlockResource extends Resource
                 self::schemaPostPurchaseFunnel($form),
 
                 self::schemaWidgetOffers($form),
+
+                Forms\Components\Section::make('AI-generated widget')
+                    ->description('This widget was created with AI. Below are the generated description and code (for reference only).')
+                    ->schema([
+                        Forms\Components\Placeholder::make('ai_description')
+                            ->label('What it does')
+                            ->content(fn ($record): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-600 dark:text-gray-400">' . e($record?->ai_generated_description ?? '') . '</p>')),
+                        Forms\Components\Placeholder::make('ai_php')
+                            ->label('PHP / logic (reference)')
+                            ->content(fn ($record): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString('<pre class="mt-1 rounded-lg bg-gray-100 dark:bg-gray-800 p-4 text-xs overflow-x-auto whitespace-pre-wrap font-mono">' . e($record?->ai_generated_php ?? '') . '</pre>')),
+                    ])
+                    ->visible(fn (?Block $record): bool => $record && (strlen($record->ai_generated_php ?? '') > 0 || strlen($record->ai_generated_description ?? '') > 0))
+                    ->collapsible()
+                    ->collapsed(false),
+
                 Forms\Components\KeyValue::make('extra_config')
                     ->label('Extra config (optional)')
                     ->reorderable()
