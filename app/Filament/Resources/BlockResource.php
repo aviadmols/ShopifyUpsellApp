@@ -116,29 +116,20 @@ class BlockResource extends Resource
                 self::schemaWidgetOffers($form),
 
                 Forms\Components\Section::make('AI-generated widget')
-                    ->description('This widget was created with AI. Below are the generated description and code (for reference only).')
+                    ->description('This widget was created with AI. You can review and edit the generated description and PHP logic below.')
                     ->schema([
-                        Forms\Components\Placeholder::make('ai_description')
+                        Forms\Components\Textarea::make('ai_generated_description')
                             ->label('What it does')
-                            ->content(fn ($record): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-600 dark:text-gray-400">' . e($record?->ai_generated_description ?? '') . '</p>')),
-                        Forms\Components\Placeholder::make('ai_php')
+                            ->rows(3)
+                            ->columnSpanFull(),
+                        Forms\Components\Textarea::make('ai_generated_php')
                             ->label('PHP / logic (reference)')
-                            ->content(function ($record): \Illuminate\Support\HtmlString {
-                                $code = (string) ($record?->ai_generated_php ?? '');
-                                if ($code === '') {
-                                    return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500 dark:text-gray-400">No PHP reference was generated for this widget.</p>');
-                                }
-
-                                $summary = 'Open full generated PHP / logic code';
-                                $html = '<details class="mt-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-900/40">'
-                                    . '<summary class="cursor-pointer px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300">' . e($summary) . '</summary>'
-                                    . '<pre class="rounded-b-lg bg-gray-100 dark:bg-gray-800 p-4 text-xs overflow-x-auto whitespace-pre font-mono">' . e($code) . '</pre>'
-                                    . '</details>';
-
-                                return new \Illuminate\Support\HtmlString($html);
-                            }),
+                            ->helperText('Editable: you can adjust the generated logic here.')
+                            ->rows(18)
+                            ->extraAttributes(['class' => 'font-mono'])
+                            ->columnSpanFull(),
                     ])
-                    ->visible(fn (?Block $record): bool => $record && (strlen($record->ai_generated_php ?? '') > 0 || strlen($record->ai_generated_description ?? '') > 0))
+                    ->visible(fn (?Block $record): bool => $record && (strlen($record->ai_generated_php ?? '') > 0 || strlen($record->ai_generated_description ?? '') > 0 || strlen($record->ai_prompt ?? '') > 0))
                     ->collapsible()
                     ->collapsed(false),
 
