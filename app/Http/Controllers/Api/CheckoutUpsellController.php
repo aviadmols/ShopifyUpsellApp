@@ -107,38 +107,8 @@ class CheckoutUpsellController extends Controller
             return $emptyResponse('Shop not found. Set Shop domain in block settings to your store (e.g. mystore.myshopify.com).');
         }
 
-        $placement = Placement::where('shop_id', $shop->id)->where('placement_type', 'checkout')->first();
-        if (! $placement) {
-            $this->logExt('checkout_offers_placement_missing', ['shop_id' => $shop->id]);
-            return response()->json(['offers' => []]);
-        }
-
-        $offerIds = $placement->getOfferIds();
-        $maxOffers = (int) ($placement->config['max_offers'] ?? 3);
-        $context = $this->buildContext($request);
-
-        $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
-        $data = $this->enrichOffersFromShopify($shop, $eligible);
-        $ui = $this->buildUiFromPlacement($placement);
-
-        $this->logExt('checkout_offers_placement_response', [
-            'shop_id' => $shop->id,
-            'offer_ids_count' => count($offerIds),
-            'eligible_count' => count($eligible),
-            'returned_count' => count($data),
-        ]);
-
-        $experience = $shop->checkoutExperience;
-        $quantity = $experience ? $experience->quantityPayload() : ['enabled' => false, 'default' => 1, 'min' => 1, 'max' => 10];
-        $subscriptionUpgrade = $experience ? $experience->subscriptionUpgradePayload() : ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'];
-
-        return response()->json([
-            'offers' => $data,
-            'display_mode' => $ui['display_mode'],
-            'ui' => $ui,
-            'quantity' => $quantity,
-            'subscription_upgrade' => $subscriptionUpgrade,
-        ]);
+        // Experience-only mode (no block_id): return empty offers without requiring Placement.
+        return $emptyResponse();
     }
 
     /**

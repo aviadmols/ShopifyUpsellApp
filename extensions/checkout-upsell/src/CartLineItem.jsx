@@ -18,6 +18,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
+const CART_LINE_BUILD_ID = 'zyg-cart-line-20260212';
 
 function getSetting(settings, key) {
   if (!settings || typeof settings !== 'object') return undefined;
@@ -25,6 +26,16 @@ function getSetting(settings, key) {
   if (raw === undefined || raw === null) return undefined;
   if (typeof raw === 'object' && raw !== null && 'value' in raw) return raw.value;
   return raw;
+}
+
+function sendLog(apiUrl, secret, payload) {
+  if (!apiUrl || !secret) return;
+  const url = `${String(apiUrl).replace(/\/$/, '')}/api/checkout/logs`;
+  fetch(url, {
+    method: 'POST',
+    headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ ts: new Date().toISOString(), build_id: CART_LINE_BUILD_ID, ...payload }),
+  }).catch(() => {});
 }
 
 export default reactExtension('purchase.checkout.cart-line-item.render-after', () => <CartLineItem />);
@@ -50,6 +61,17 @@ function CartLineItem() {
   const line = useCartLineTarget();
   const retryRef = useRef(null);
 
+  useEffect(() => {
+    sendLog(apiUrl, secret, {
+      phase: 'cart_line_mount',
+      has_api: !!apiUrl,
+      has_secret: !!secret,
+      has_shop: !!shop,
+      has_session_key: !!sessionKey,
+      shop_preview: shop ? `${shop.slice(0, 8)}…` : '',
+    });
+  }, [apiUrl, secret, shop, sessionKey]);
+
   const fetchExperience = useCallback(() => {
     if (!apiUrl || !secret || !shop) return;
     const body = { shop };
@@ -59,15 +81,25 @@ function CartLineItem() {
       headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(body),
     })
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((data) => {
+      .then((r) => {
+        const ok = r.ok;
+        return r.json().then((data) => ({ ok, status: r.status, data }));
+      })
+      .then(({ ok, status, data }) => {
         const next = {
-          quantity_in_cart_enabled: Boolean(data.quantity_in_cart_enabled),
-          subscription_upgrade: data.subscription_upgrade && typeof data.subscription_upgrade === 'object'
+          quantity_in_cart_enabled: Boolean(data?.quantity_in_cart_enabled),
+          subscription_upgrade: data?.subscription_upgrade && typeof data.subscription_upgrade === 'object'
             ? data.subscription_upgrade
             : { enabled: false, headline: '', cta: 'Upgrade to subscription' },
         };
         setExperience(next);
+        sendLog(apiUrl, secret, {
+          phase: 'cart_line_experience_response',
+          status,
+          ok,
+          quantity_in_cart_enabled: next.quantity_in_cart_enabled,
+          subscription_upgrade_enabled: next.subscription_upgrade?.enabled,
+        });
         if (sessionKey && !next.quantity_in_cart_enabled && !next.subscription_upgrade?.enabled) {
           retryRef.current = setTimeout(() => fetchExperience(), 2000);
         }
