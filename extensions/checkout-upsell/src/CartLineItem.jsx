@@ -1,7 +1,3 @@
-/**
- * Cart line item extension: "Modify" (Disclosure with quantity +/-) and "Upgrade to subscription" per line.
- * Target: purchase.checkout.cart-line-item.render-after
- */
 import {
   reactExtension,
   useSettings,
@@ -28,6 +24,15 @@ function getSetting(settings, key) {
   return raw;
 }
 
+async function safeJson(res) {
+  const text = await res.text();
+  try {
+    return { ok: res.ok, status: res.status, data: JSON.parse(text) };
+  } catch {
+    return { ok: res.ok, status: res.status, data: null, raw: text };
+  }
+}
+
 function sendLog(apiUrl, secret, payload) {
   if (!apiUrl || !secret) return;
   const url = `${String(apiUrl).replace(/\/$/, '')}/api/checkout/logs`;
@@ -45,20 +50,23 @@ function CartLineItem() {
   const api = useApi();
   const applyCartLinesChange = useApplyCartLinesChange();
   const checkoutToken = useCheckoutToken();
+  const line = useCartLineTarget();
 
   const apiUrl = (getSetting(settings, 'api_url') || DEFAULT_API_URL || '').replace(/\/$/, '');
   const secret = (getSetting(settings, 'extension_secret') || '').trim();
   const shopDomain = (getSetting(settings, 'shop_domain') || '').trim();
   const runtimeShop = typeof api?.shop?.myshopifyDomain === 'string' ? api.shop.myshopifyDomain : null;
   const shop = shopDomain || runtimeShop || '';
-  const sessionKey = (typeof checkoutToken === 'string' && checkoutToken) ? checkoutToken : '';
+  const sessionKey = typeof checkoutToken === 'string' && checkoutToken ? checkoutToken : '';
 
-  const [experience, setExperience] = useState({ quantity_in_cart_enabled: false, subscription_upgrade: { enabled: false, cta: 'Upgrade to subscription' } });
+  const [experience, setExperience] = useState({
+    quantity_in_cart_enabled: false,
+    subscription_upgrade: { enabled: false, cta: 'Upgrade to subscription' },
+  });
   const [sellingPlans, setSellingPlans] = useState([]);
   const [upgrading, setUpgrading] = useState(false);
   const [qtyLoading, setQtyLoading] = useState(false);
 
-  const line = useCartLineTarget();
   const retryRef = useRef(null);
 
   useEffect(() => {
@@ -68,43 +76,59 @@ function CartLineItem() {
       has_secret: !!secret,
       has_shop: !!shop,
       has_session_key: !!sessionKey,
-      shop_preview: shop ? `${shop.slice(0, 8)}…` : '',
+      shop: shop || null,
     });
   }, [apiUrl, secret, shop, sessionKey]);
 
-  const fetchExperience = useCallback(() => {
+  const fetchExperience = useCallback(async () => {
     if (!apiUrl || !secret || !shop) return;
+
+    if (retryRef.current) {
+      clearTimeout(retryRef.current);
+      retryRef.current = null;
+    }
+
     const body = { shop };
     if (sessionKey) body.session_key = sessionKey;
-    fetch(`${apiUrl}/api/checkout/experience`, {
-      method: 'POST',
-      headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(body),
-    })
-      .then((r) => {
-        const ok = r.ok;
-        return r.json().then((data) => ({ ok, status: r.status, data }));
-      })
-      .then(({ ok, status, data }) => {
-        const next = {
-          quantity_in_cart_enabled: Boolean(data?.quantity_in_cart_enabled),
-          subscription_upgrade: data?.subscription_upgrade && typeof data.subscription_upgrade === 'object'
+
+    try {
+      const res = await fetch(`${apiUrl}/api/checkout/experience`, {
+        method: 'POST',
+        headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const parsed = await safeJson(res);
+      const data = parsed.data || {};
+
+      const next = {
+        quantity_in_cart_enabled: Boolean(data?.quantity_in_cart_enabled),
+        subscription_upgrade:
+          data?.subscription_upgrade && typeof data.subscription_upgrade === 'object'
             ? data.subscription_upgrade
             : { enabled: false, headline: '', cta: 'Upgrade to subscription' },
-        };
-        setExperience(next);
-        sendLog(apiUrl, secret, {
-          phase: 'cart_line_experience_response',
-          status,
-          ok,
-          quantity_in_cart_enabled: next.quantity_in_cart_enabled,
-          subscription_upgrade_enabled: next.subscription_upgrade?.enabled,
-        });
-        if (sessionKey && !next.quantity_in_cart_enabled && !next.subscription_upgrade?.enabled) {
-          retryRef.current = setTimeout(() => fetchExperience(), 2000);
-        }
-      })
-      .catch(() => {});
+      };
+
+      setExperience(next);
+
+      sendLog(apiUrl, secret, {
+        phase: 'cart_line_experience_response',
+        ok: parsed.ok,
+        status: parsed.status,
+        quantity_in_cart_enabled: next.quantity_in_cart_enabled,
+        subscription_upgrade_enabled: Boolean(next.subscription_upgrade?.enabled),
+        non_json_response: parsed.data ? false : true,
+      });
+
+      if (sessionKey && !next.quantity_in_cart_enabled && !next.subscription_upgrade?.enabled) {
+        retryRef.current = setTimeout(() => fetchExperience(), 2000);
+      }
+    } catch (e) {
+      sendLog(apiUrl, secret, {
+        phase: 'cart_line_experience_error',
+        error: String(e?.message ?? e),
+      });
+    }
   }, [apiUrl, secret, shop, sessionKey]);
 
   useEffect(() => {
@@ -114,7 +138,7 @@ function CartLineItem() {
     };
   }, [fetchExperience]);
 
-  const hasSellingPlan = Boolean(line?.merchandise?.sellingPlan ?? line?.sellingPlanAllocation?.sellingPlan?.id);
+  const hasSellingPlan = Boolean(line?.sellingPlanAllocation?.sellingPlan?.id);
 
   useEffect(() => {
     if (!experience.subscription_upgrade?.enabled || !line?.merchandise?.id || hasSellingPlan) {
@@ -122,6 +146,7 @@ function CartLineItem() {
       return;
     }
     if (!apiUrl || !secret || !shop) return;
+
     fetch(`${apiUrl}/api/checkout/selling-plans-for-variant`, {
       method: 'POST',
       headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -132,25 +157,30 @@ function CartLineItem() {
       .catch(() => setSellingPlans([]));
   }, [experience.subscription_upgrade?.enabled, line?.merchandise?.id, hasSellingPlan, apiUrl, secret, shop]);
 
-  const canChangeCart = true;
-
   if (!line || !line.id || !applyCartLinesChange) return null;
 
   const quantity = Number(line.quantity) || 1;
-  const showQuantity = experience.quantity_in_cart_enabled && canChangeCart;
-  const showUpgrade = experience.subscription_upgrade?.enabled && !hasSellingPlan && sellingPlans.length > 0 && canChangeCart;
+  const showQuantity = Boolean(experience.quantity_in_cart_enabled);
+  const showUpgrade = Boolean(experience.subscription_upgrade?.enabled) && !hasSellingPlan && sellingPlans.length > 0;
   const firstPlan = sellingPlans[0];
 
   const handleQuantityChange = async (newQty) => {
     const n = Math.max(1, parseInt(newQty, 10));
-    if (n === quantity || qtyLoading) return;
-    if (typeof console !== 'undefined' && console.log) console.log('qty_change', { lineId: line.id, from: quantity, to: n });
+    if (!Number.isFinite(n) || n === quantity || qtyLoading) return;
+
+    sendLog(apiUrl, secret, {
+      phase: 'cart_line_qty_click',
+      line_id: line.id,
+      from_qty: quantity,
+      to_qty: n,
+    });
+
     setQtyLoading(true);
     try {
       const res = await applyCartLinesChange({ type: 'updateCartLine', id: line.id, quantity: n });
-      if (typeof console !== 'undefined' && console.log) console.log('qty_change_result', res);
+      sendLog(apiUrl, secret, { phase: 'cart_line_qty_result', line_id: line.id, result: res ? 'ok' : 'ok' });
     } catch (e) {
-      if (typeof console !== 'undefined' && console.log) console.log('qty_change_error', String(e?.message ?? e));
+      sendLog(apiUrl, secret, { phase: 'cart_line_qty_error', line_id: line.id, error: String(e?.message ?? e) });
     } finally {
       setQtyLoading(false);
     }
@@ -158,45 +188,52 @@ function CartLineItem() {
 
   const handleUpgradeToSubscription = async () => {
     if (!firstPlan || upgrading) return;
-    if (typeof console !== 'undefined' && console.log) console.log('upgrade_start', { lineId: line.id, sellingPlanId: firstPlan.id });
+
     setUpgrading(true);
     try {
-      await applyCartLinesChange({
-        type: 'addCartLine',
-        merchandiseId: line.merchandise.id,
-        quantity,
-        sellingPlanId: firstPlan.id,
-      });
-      if (typeof console !== 'undefined' && console.log) console.log('upgrade_add_ok');
-      await applyCartLinesChange({ type: 'removeCartLine', id: line.id, quantity });
-      if (typeof console !== 'undefined' && console.log) console.log('upgrade_remove_ok');
+      await applyCartLinesChange([
+        {
+          type: 'addCartLine',
+          merchandiseId: line.merchandise.id,
+          quantity,
+          sellingPlanId: firstPlan.id,
+        },
+        { type: 'removeCartLine', id: line.id, quantity },
+      ]);
+
+      sendLog(apiUrl, secret, { phase: 'cart_line_upgrade_ok', line_id: line.id, selling_plan_id: firstPlan.id });
     } catch (e) {
-      if (typeof console !== 'undefined' && console.log) console.log('upgrade_error', String(e?.message ?? e));
+      sendLog(apiUrl, secret, { phase: 'cart_line_upgrade_error', line_id: line.id, error: String(e?.message ?? e) });
+    } finally {
+      setUpgrading(false);
     }
-    setUpgrading(false);
   };
 
   if (!showQuantity && !showUpgrade) return null;
 
-  const upgradeCta = experience.subscription_upgrade.cta || 'Upgrade to Subscribe and save';
+  const upgradeCta = experience.subscription_upgrade?.cta || 'Upgrade to Subscribe and save';
 
   return (
     <BlockStack spacing="tight">
       {showQuantity && (
         <Disclosure defaultOpen={false}>
-          <Button kind="plain" size="small" appearance="monochrome">
-            Modify
-          </Button>
-          <BlockStack spacing="tight" id="modify-qty-content">
-            <InlineLayout spacing="tight" blockAlignment="center">
-              <Text appearance="subdued" size="small">Qty</Text>
-              <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity - 1)} disabled={quantity <= 1 || qtyLoading}>−</Button>
-              <Text size="small">{String(quantity)}</Text>
-              <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity + 1)} disabled={qtyLoading}>+</Button>
-            </InlineLayout>
-          </BlockStack>
+          <Disclosure.Toggle>
+            <Button kind="plain" size="small" appearance="monochrome">Modify</Button>
+          </Disclosure.Toggle>
+
+          <Disclosure.Content>
+            <BlockStack spacing="tight">
+              <InlineLayout spacing="tight" blockAlignment="center">
+                <Text appearance="subdued" size="small">Qty</Text>
+                <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity - 1)} disabled={quantity <= 1 || qtyLoading}>−</Button>
+                <Text size="small">{String(quantity)}</Text>
+                <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity + 1)} disabled={qtyLoading}>+</Button>
+              </InlineLayout>
+            </BlockStack>
+          </Disclosure.Content>
         </Disclosure>
       )}
+
       {showUpgrade && (
         <Button kind="primary" size="small" onPress={handleUpgradeToSubscription} disabled={upgrading}>
           {upgradeCta}
