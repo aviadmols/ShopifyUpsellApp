@@ -8,7 +8,8 @@ import {
   Text,
   Button,
   InlineLayout,
-  Disclosure,
+  Popover,
+  Icon,
   useApplyCartLinesChange,
 } from '@shopify/ui-extensions-react/checkout';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -74,10 +75,12 @@ function CartLineItem() {
   const [experience, setExperience] = useState({
     quantity_in_cart_enabled: false,
     subscription_upgrade: { enabled: false, cta: 'Upgrade to subscription' },
+    cart_line_ui: { modify_alignment: 'left', show_chevron: true, quantity_size: 'medium' },
   });
   const [sellingPlans, setSellingPlans] = useState([]);
   const [upgrading, setUpgrading] = useState(false);
   const [qtyLoading, setQtyLoading] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   const retryRef = useRef(null);
 
@@ -115,12 +118,18 @@ function CartLineItem() {
       const parsed = await safeJson(res);
       const data = parsed.data || {};
 
+      const ui = data?.cart_line_ui && typeof data.cart_line_ui === 'object' ? data.cart_line_ui : {};
       const next = {
         quantity_in_cart_enabled: Boolean(data?.quantity_in_cart_enabled),
         subscription_upgrade:
           data?.subscription_upgrade && typeof data.subscription_upgrade === 'object'
             ? data.subscription_upgrade
             : { enabled: false, headline: '', cta: 'Upgrade to subscription' },
+        cart_line_ui: {
+          modify_alignment: ['left', 'center', 'right'].includes(ui.modify_alignment) ? ui.modify_alignment : 'left',
+          show_chevron: Boolean(ui.show_chevron !== false),
+          quantity_size: ['small', 'medium', 'large'].includes(ui.quantity_size) ? ui.quantity_size : 'medium',
+        },
       };
 
       setExperience(next);
@@ -233,26 +242,46 @@ function CartLineItem() {
   if (!showQuantity && !showUpgrade) return null;
 
   const upgradeCta = experience.subscription_upgrade?.cta || 'Upgrade to Subscribe and save';
+  const ui = experience.cart_line_ui || {};
+  const modifyAlignment = ui.modify_alignment === 'center' ? 'center' : ui.modify_alignment === 'right' ? 'end' : 'start';
+  const showChevron = ui.show_chevron !== false;
+  const quantitySize = ['small', 'medium', 'large'].includes(ui.quantity_size) ? ui.quantity_size : 'medium';
+  const quantitySpacing = quantitySize === 'large' ? 'loose' : quantitySize === 'medium' ? 'base' : 'tight';
 
   return (
     <BlockStack spacing="tight">
       {showQuantity && (
-        <Disclosure defaultOpen={false}>
-          <Disclosure.Toggle>
-            <Button kind="plain" size="small" appearance="monochrome">Modify</Button>
-          </Disclosure.Toggle>
-          <Disclosure.Content>
-            <BlockStack spacing="tight">
-              <InlineLayout spacing="tight" blockAlignment="center">
-                <Text appearance="subdued" size="small">Quantity</Text>
-                <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity - 1)} disabled={quantity <= 1 || qtyLoading}>−</Button>
-                <Text size="small">{String(quantity)}</Text>
-                <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity + 1)} disabled={qtyLoading}>+</Button>
-              </InlineLayout>
-              <Button kind="plain" size="small" appearance="monochrome" onPress={handleRemove}>Remove</Button>
-            </BlockStack>
-          </Disclosure.Content>
-        </Disclosure>
+        <InlineLayout spacing="tight" blockAlignment={modifyAlignment} inlineAlignment={modifyAlignment}>
+          <Button
+            kind="plain"
+            size="small"
+            appearance="monochrome"
+            overlay={
+              <Popover
+                position="blockEnd"
+                onOpen={() => setPopoverOpen(true)}
+                onClose={() => setPopoverOpen(false)}
+              >
+                <BlockStack spacing={quantitySpacing}>
+                  <Text appearance="subdued" size={quantitySize}>Quantity</Text>
+                  <InlineLayout spacing={quantitySpacing} blockAlignment="center">
+                    <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity - 1)} disabled={quantity <= 1 || qtyLoading}>−</Button>
+                    <Text size={quantitySize}>{String(quantity)}</Text>
+                    <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity + 1)} disabled={qtyLoading}>+</Button>
+                  </InlineLayout>
+                  <Button kind="plain" size="small" appearance="monochrome" onPress={handleRemove}>Remove</Button>
+                </BlockStack>
+              </Popover>
+            }
+          >
+            <InlineLayout spacing="extraTight" blockAlignment="center" inlineAlignment="center">
+              <Text>Modify</Text>
+              {showChevron && (
+                <Icon source={popoverOpen ? 'chevronUp' : 'chevronDown'} size="small" accessibilityLabel={popoverOpen ? 'Close' : 'Open'} />
+              )}
+            </InlineLayout>
+          </Button>
+        </InlineLayout>
       )}
 
       {showUpgrade && (

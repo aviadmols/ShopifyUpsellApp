@@ -441,10 +441,16 @@ class CheckoutUpsellController extends Controller
     public function experience(Request $request): JsonResponse
     {
         $shop = $this->resolveShop($request);
+        $defaultCartLineUi = [
+            'modify_alignment' => 'left',
+            'show_chevron' => true,
+            'quantity_size' => 'medium',
+        ];
         if (! $shop) {
             return response()->json([
                 'quantity_in_cart_enabled' => false,
                 'subscription_upgrade' => ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'],
+                'cart_line_ui' => $defaultCartLineUi,
             ]);
         }
         $experience = null;
@@ -475,9 +481,12 @@ class CheckoutUpsellController extends Controller
             'quantity_in_cart_enabled' => $quantityInCartEnabled,
             'subscription_upgrade_enabled' => $subscriptionUpgrade['enabled'] ?? false,
         ]);
+        $cartLineUi = $experience ? $experience->cartLineUiPayload() : $defaultCartLineUi;
+
         return response()->json([
             'quantity_in_cart_enabled' => $quantityInCartEnabled,
             'subscription_upgrade' => $subscriptionUpgrade,
+            'cart_line_ui' => $cartLineUi,
         ]);
     }
 

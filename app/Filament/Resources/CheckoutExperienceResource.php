@@ -80,8 +80,32 @@ class CheckoutExperienceResource extends Resource
                     Forms\Components\Toggle::make('quantity_in_cart_enabled')
                         ->label('Enable quantity editor on cart lines')
                         ->default(false)
+                        ->live()
                         ->helperText('Uses cart-line-item extension. Not available with Apple Pay / Google Pay.'),
-                ]),
+                    Forms\Components\Select::make('cart_line_modify_alignment')
+                        ->label('Modify link alignment')
+                        ->options([
+                            'left' => 'Left',
+                            'center' => 'Center',
+                            'right' => 'Right',
+                        ])
+                        ->default('left')
+                        ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
+                    Forms\Components\Toggle::make('cart_line_show_chevron')
+                        ->label('Show chevron next to Modify (down when closed, up when open)')
+                        ->default(true)
+                        ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
+                    Forms\Components\Select::make('cart_line_quantity_size')
+                        ->label('Quantity display size in popup')
+                        ->options([
+                            'small' => 'Small',
+                            'medium' => 'Medium',
+                            'large' => 'Large',
+                        ])
+                        ->default('medium')
+                        ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
+                ])
+                ->columns(2),
 
             Forms\Components\Section::make('Subscription upgrade')
                 ->description('Show a message to upgrade one-time items to subscription (Recharge / Shopify Selling Plans).')

@@ -14,6 +14,9 @@ class CheckoutExperience extends Model
         'quantity_min',
         'quantity_max',
         'quantity_in_cart_enabled',
+        'cart_line_modify_alignment',
+        'cart_line_show_chevron',
+        'cart_line_quantity_size',
         'subscription_upgrade_enabled',
         'subscription_upgrade_headline',
         'subscription_upgrade_cta',
@@ -24,6 +27,7 @@ class CheckoutExperience extends Model
         return [
             'quantity_in_upsell_enabled' => 'bool',
             'quantity_in_cart_enabled' => 'bool',
+            'cart_line_show_chevron' => 'bool',
             'subscription_upgrade_enabled' => 'bool',
         ];
     }
@@ -59,6 +63,27 @@ class CheckoutExperience extends Model
             'enabled' => (bool) $this->subscription_upgrade_enabled,
             'headline' => (string) ($this->subscription_upgrade_headline ?? ''),
             'cta' => (string) ($this->subscription_upgrade_cta ?? 'Upgrade to subscription'),
+        ];
+    }
+
+    /**
+     * Get cart line UI config for API (Modify alignment, chevron, quantity size).
+     */
+    public function cartLineUiPayload(): array
+    {
+        $alignment = $this->cart_line_modify_alignment ?? 'left';
+        if (! in_array($alignment, ['left', 'center', 'right'], true)) {
+            $alignment = 'left';
+        }
+        $size = $this->cart_line_quantity_size ?? 'medium';
+        if (! in_array($size, ['small', 'medium', 'large'], true)) {
+            $size = 'medium';
+        }
+
+        return [
+            'modify_alignment' => $alignment,
+            'show_chevron' => (bool) ($this->cart_line_show_chevron ?? true),
+            'quantity_size' => $size,
         ];
     }
 }
