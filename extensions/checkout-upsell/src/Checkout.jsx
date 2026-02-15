@@ -6,6 +6,7 @@ import {
   reactExtension,
   useSettings,
   useApi,
+  useCheckoutToken,
   BlockStack,
   Button,
   Link,
@@ -18,7 +19,7 @@ import {
   useApplyCartLinesChange,
   useSubtotalAmount,
 } from '@shopify/ui-extensions-react/checkout';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const BUILD_ID = 'zyg-upsell-checkout-20260212-widgets';
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
@@ -162,6 +163,32 @@ function CheckoutUpsell() {
     : undefined;
   const showDebugWhenEmpty = getSetting(settings, 'show_debug_when_empty') === true;
 
+  const checkoutToken = useCheckoutToken();
+  const experienceSetSentRef = useRef(false);
+  const [experienceSetStatus, setExperienceSetStatus] = useState('idle'); // idle | no_token | sent | ok | error
+  const experienceOnly = !blockId && checkoutExperienceId > 0 && !!shop;
+
+  useEffect(() => {
+    if (!experienceOnly || !apiUrl || !secret || !shop || checkoutExperienceId < 1) return;
+    const sessionKey = (typeof checkoutToken === 'string' && checkoutToken) ? checkoutToken : '';
+    if (sessionKey === '') {
+      setExperienceSetStatus('no_token');
+      return;
+    }
+    if (experienceSetSentRef.current) return;
+    experienceSetSentRef.current = true;
+    setExperienceSetStatus('sent');
+    fetch(`${apiUrl}/api/checkout/experience/set`, {
+      method: 'POST',
+      headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ shop, session_key: sessionKey, checkout_experience_id: checkoutExperienceId }),
+    })
+      .then((r) => {
+        setExperienceSetStatus(r.ok ? 'ok' : 'error');
+      })
+      .catch(() => setExperienceSetStatus('error'));
+  }, [experienceOnly, apiUrl, secret, shop, checkoutExperienceId, checkoutToken]);
+
   const [displayMode, setDisplayMode] = useState('stacked');
   const [quantityConfig, setQuantityConfig] = useState({
     enabled: false,
@@ -190,6 +217,11 @@ function CheckoutUpsell() {
   const lineItems = Array.isArray(cartLines) ? cartLines : (cartLines?.value ? (Array.isArray(cartLines.value) ? cartLines.value : []) : []);
 
   useEffect(() => {
+    if (experienceOnly) {
+      setLoading(false);
+      setStatus({ type: 'connected', message: 'Checkout Experience active', detail: '' });
+      return;
+    }
     if (!apiUrl || !secret) {
       setLoading(false);
       setStatus({
@@ -299,7 +331,7 @@ function CheckoutUpsell() {
         setContentBlocks([]);
       })
       .finally(() => setLoading(false));
-  }, [apiUrl, secret, shopDomain, blockId, subtotalMoney?.amount, JSON.stringify(normalizeLineItemsForApi(lineItems))]);
+  }, [experienceOnly, apiUrl, secret, shopDomain, blockId, subtotalMoney?.amount, JSON.stringify(normalizeLineItemsForApi(lineItems))]);
 
   const getQuantityForOffer = (variantId) => {
     const q = offerQuantities[variantId];
@@ -393,6 +425,30 @@ function CheckoutUpsell() {
   const showEmptyOrError = loading || status.type === 'not_configured' || status.type === 'error' || (offers.length === 0 && !hasContent);
   const debugContent = showDebugWhenEmpty ? fullDebugBlock : minimalMessage;
   const hideWhenNoOffers = !loading && status.type === 'connected' && offers.length === 0 && !hasContent && !showDebugWhenEmpty;
+
+  if (experienceOnly) {
+    const debugLines = showDebugWhenEmpty ? [
+      { label: 'Checkout Experience', value: BUILD_ID },
+      { label: 'API', value: shortenUrl(apiUrl) },
+      { label: 'Shop', value: shortenShop(shop) },
+      { label: 'Experience ID', value: String(checkoutExperienceId) },
+      { label: 'Status', value: experienceSetStatus === 'ok' ? 'Experience set for session' : experienceSetStatus === 'sent' ? 'Sending…' : experienceSetStatus === 'no_token' ? 'No checkout token yet' : experienceSetStatus === 'error' ? 'Set request failed' : experienceSetStatus },
+    ] : [];
+    return (
+      <BlockStack spacing="tight">
+        <Text appearance="subdued" size="small">
+          Checkout Experience (quantity and subscription) active for this checkout.
+        </Text>
+        {showDebugWhenEmpty && debugLines.length > 0 && (
+          <BlockStack spacing="extraTight">
+            {debugLines.map(({ label, value }) => (
+              <Text key={label} appearance="subdued" size="small">{label}: {value}</Text>
+            ))}
+          </BlockStack>
+        )}
+      </BlockStack>
+    );
+  }
 
   if (hasContent && !loading && status.type !== 'error' && status.type !== 'not_configured') {
     return (

@@ -1,5 +1,5 @@
 /**
- * Cart line item extension: quantity +/- and "Upgrade to subscription" per line.
+ * Cart line item extension: "Modify" (Disclosure with quantity +/-) and "Upgrade to subscription" per line.
  * Target: purchase.checkout.cart-line-item.render-after
  */
 import {
@@ -7,10 +7,12 @@ import {
   useSettings,
   useApi,
   useCheckoutToken,
+  useCartLineTarget,
   BlockStack,
   Text,
   Button,
   InlineLayout,
+  Disclosure,
   useApplyCartLinesChange,
 } from '@shopify/ui-extensions-react/checkout';
 import { useEffect, useState } from 'react';
@@ -40,21 +42,11 @@ function CartLineItem() {
   const shop = shopDomain || runtimeShop || '';
   const sessionKey = (typeof checkoutToken === 'string' && checkoutToken) ? checkoutToken : '';
 
-  const [line, setLine] = useState(null);
   const [experience, setExperience] = useState({ quantity_in_cart_enabled: false, subscription_upgrade: { enabled: false, cta: 'Upgrade to subscription' } });
   const [sellingPlans, setSellingPlans] = useState([]);
   const [upgrading, setUpgrading] = useState(false);
 
-  const target = api?.target;
-  useEffect(() => {
-    if (!target) return;
-    const current = target.current ?? target.value ?? target;
-    setLine(current);
-    const unsub = typeof target.subscribe === 'function' ? target.subscribe((v) => setLine(v)) : () => {};
-    return () => {
-      if (typeof unsub === 'function') unsub();
-    };
-  }, [target]);
+  const line = useCartLineTarget();
 
   useEffect(() => {
     if (!apiUrl || !secret || !shop) return;
@@ -126,19 +118,28 @@ function CartLineItem() {
 
   if (!showQuantity && !showUpgrade) return null;
 
+  const upgradeCta = experience.subscription_upgrade.cta || 'Upgrade to Subscribe and save';
+
   return (
     <BlockStack spacing="tight">
       {showQuantity && (
-        <InlineLayout spacing="tight" blockAlignment="center">
-          <Text appearance="subdued" size="small">Qty</Text>
-          <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity - 1)} disabled={quantity <= 1}>−</Button>
-          <Text size="small">{String(quantity)}</Text>
-          <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity + 1)}>+</Button>
-        </InlineLayout>
+        <Disclosure defaultOpen={false}>
+          <Button kind="plain" size="small" appearance="monochrome">
+            Modify
+          </Button>
+          <BlockStack spacing="tight">
+            <InlineLayout spacing="tight" blockAlignment="center">
+              <Text appearance="subdued" size="small">Qty</Text>
+              <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity - 1)} disabled={quantity <= 1}>−</Button>
+              <Text size="small">{String(quantity)}</Text>
+              <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity + 1)}>+</Button>
+            </InlineLayout>
+          </BlockStack>
+        </Disclosure>
       )}
       {showUpgrade && (
-        <Button kind="plain" size="small" onPress={handleUpgradeToSubscription} disabled={upgrading}>
-          {experience.subscription_upgrade.cta || 'Upgrade to subscription'}
+        <Button kind="primary" size="small" onPress={handleUpgradeToSubscription} disabled={upgrading}>
+          {upgradeCta}
         </Button>
       )}
     </BlockStack>

@@ -15,12 +15,12 @@ class EditCheckoutExperience extends EditRecord
     {
         return [
             Actions\Action::make('test_in_checkout')
-                ->label('בדוק התנהגות ב-Checkout')
+                ->label('Test in Checkout')
                 ->icon('heroicon-o-beaker')
                 ->color('gray')
                 ->modalHeading('Test in Checkout')
                 ->modalSubmitAction(false)
-                ->modalCancelActionLabel('סגור')
+                ->modalCancelActionLabel('Close')
                 ->modalContent(fn (): View => view('filament.components.checkout-experience-test', [
                     'record' => $this->record,
                 ])),

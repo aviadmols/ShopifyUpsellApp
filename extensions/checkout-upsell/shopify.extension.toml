@@ -14,10 +14,6 @@ target = "purchase.checkout.block.render"
 module = "./src/Checkout.jsx"
 
 [[extensions.targeting]]
-target = "purchase.checkout.block.render"
-module = "./src/CheckoutExperienceBlock.jsx"
-
-[[extensions.targeting]]
 target = "purchase.checkout.cart-line-item.render-after"
 module = "./src/CartLineItem.jsx"
 
