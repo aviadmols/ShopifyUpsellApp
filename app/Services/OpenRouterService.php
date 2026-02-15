@@ -146,7 +146,7 @@ You are a widget (block) generator for a Shopify upsell app. Given the user's re
 - "rule_match_type": "and" or "or". How to combine conditions.
 - "name": string. Short widget name (e.g. "Subscription message").
 - "description": string. One sentence what this widget does and when it shows.
-- "php_snippet": string. Optional PHP pseudocode or comment describing the logic (for display only, not executed). Can be a short comment like "// Show message when: no subscription tag and cart has product with SKU X".
+- "php_snippet": string. Required detailed PHP-style snippet for human review (display only, not executed). Return a multi-line snippet that includes: context extraction, condition checks, and a final boolean/result decision. Do NOT return a one-line comment.
 
 Schema (endpoints, block_types with config_schema, rule_conditions):
 {$schemaJson}
