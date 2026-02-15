@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Shop;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -294,6 +295,83 @@ class ShopifyGraphQLService
             return 'gid://shopify/ProductVariant/' . $numeric;
         }
         return null;
+    }
+
+    /**
+     * Fetch product metadata for cart line rules (collections, tags, vendor, productType).
+     * Cached 10 minutes per shop + product to avoid excessive API calls.
+     *
+     * @return array{collection_ids: array<string>, tags: array<string>, vendor: string, product_type: string}
+     */
+    public function getProductMetadata(Shop $shop, string $productIdGid): array
+    {
+        $productIdGid = $this->normalizeProductIdToGid($productIdGid);
+        if ($productIdGid === '') {
+            return ['collection_ids' => [], 'tags' => [], 'vendor' => '', 'product_type' => ''];
+        }
+        $cacheKey = 'checkout_product_metadata:'.$shop->id.':'.md5($productIdGid);
+        $ttl = now()->addMinutes(10);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($shop, $productIdGid) {
+            $query = <<<'GRAPHQL'
+                query getProductMetadata($id: ID!) {
+                    product(id: $id) {
+                        id
+                        tags
+                        vendor
+                        productType
+                        collections(first: 250) {
+                            nodes { id }
+                        }
+                    }
+                }
+            GRAPHQL;
+            try {
+                $data = $this->request($shop, $query, ['id' => $productIdGid]);
+                $product = $data['product'] ?? null;
+                if (! $product) {
+                    return ['collection_ids' => [], 'tags' => [], 'vendor' => '', 'product_type' => ''];
+                }
+                $collectionIds = [];
+                foreach ($product['collections']['nodes'] ?? [] as $node) {
+                    $id = (string) ($node['id'] ?? '');
+                    if ($id !== '') {
+                        $collectionIds[] = $id;
+                    }
+                }
+                $tags = array_values(array_filter(array_map('strval', $product['tags'] ?? [])));
+                return [
+                    'collection_ids' => $collectionIds,
+                    'tags' => $tags,
+                    'vendor' => trim((string) ($product['vendor'] ?? '')),
+                    'product_type' => trim((string) ($product['productType'] ?? '')),
+                ];
+            } catch (\Throwable $e) {
+                Log::channel('shopify_api')->warning('getProductMetadata failed', [
+                    'shop_id' => $shop->id,
+                    'product_id' => $productIdGid,
+                    'message' => $e->getMessage(),
+                ]);
+                return ['collection_ids' => [], 'tags' => [], 'vendor' => '', 'product_type' => ''];
+            }
+        });
+    }
+
+    /**
+     * Normalize product ID to Shopify GID.
+     */
+    public function normalizeProductIdToGid(?string $id): string
+    {
+        $id = trim((string) $id);
+        if ($id === '') {
+            return '';
+        }
+        if (str_starts_with($id, 'gid://shopify/Product/')) {
+            return $id;
+        }
+        $numeric = preg_replace('/\D/', '', $id);
+
+        return $numeric !== '' ? 'gid://shopify/Product/'.$numeric : $id;
     }
 
     /**

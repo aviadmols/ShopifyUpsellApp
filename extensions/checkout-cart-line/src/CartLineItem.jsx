@@ -4,6 +4,7 @@ import {
   useApi,
   useCheckoutToken,
   useCartLineTarget,
+  useSubtotalAmount,
   BlockStack,
   Text,
   Button,
@@ -72,10 +73,22 @@ function CartLineItem() {
   const shop = shopDomain || runtimeShop || '';
   const sessionKey = typeof checkoutToken === 'string' && checkoutToken ? checkoutToken : '';
 
+  const subtotalAmount = useSubtotalAmount();
+  const cartLines = (typeof api?.lines?.current === 'function' ? api?.lines?.current() : api?.lines?.current) ?? api?.lines ?? [];
+  const cartLinesArray = Array.isArray(cartLines) ? cartLines : (cartLines?.value ? (Array.isArray(cartLines.value) ? cartLines.value : []) : []);
+
+  const lineProductId = line?.merchandise?.product?.id ?? line?.merchandise?.product?.gid ?? null;
+  const lineVariantId = line?.merchandise?.id ?? null;
+  const lineHasSellingPlan = Boolean(line?.sellingPlanAllocation?.sellingPlan?.id);
+  const cartSubtotal = subtotalAmount?.amount != null ? Number(subtotalAmount.amount) : null;
+  const cartItemsCount = Array.isArray(cartLinesArray) ? cartLinesArray.length : 0;
+
   const [experience, setExperience] = useState({
     quantity_in_cart_enabled: false,
+    show_quantity: false,
+    show_subscription: false,
     subscription_upgrade: { enabled: false, cta: 'Upgrade to subscription' },
-    cart_line_ui: { modify_alignment: 'left', show_chevron: true, quantity_size: 'medium' },
+    cart_line_ui: { modify_alignment: 'left', show_chevron: true, quantity_size: 'medium', popover_width: { mode: 'preset', preset: 'md', px: null }, plus_minus: { kind: 'plain', appearance: 'monochrome', size: 'small', corner_radius: 'base' } },
   });
   const [sellingPlans, setSellingPlans] = useState([]);
   const [upgrading, setUpgrading] = useState(false);
@@ -107,6 +120,11 @@ function CartLineItem() {
     const body = { shop };
     if (sessionKey) body.session_key = sessionKey;
     if (checkoutExperienceId >= 1) body.checkout_experience_id = checkoutExperienceId;
+    if (lineProductId != null && lineProductId !== '') body.line_product_id = lineProductId;
+    if (lineVariantId != null && lineVariantId !== '') body.line_variant_id = lineVariantId;
+    body.line_has_selling_plan = lineHasSellingPlan;
+    if (cartSubtotal != null) body.cart_subtotal = cartSubtotal;
+    if (cartItemsCount != null) body.cart_items_count = cartItemsCount;
 
     try {
       const res = await fetch(`${apiUrl}/api/checkout/experience`, {
@@ -119,8 +137,12 @@ function CartLineItem() {
       const data = parsed.data || {};
 
       const ui = data?.cart_line_ui && typeof data.cart_line_ui === 'object' ? data.cart_line_ui : {};
+      const popoverWidth = ui.popover_width && typeof ui.popover_width === 'object' ? ui.popover_width : { mode: 'preset', preset: 'md', px: null };
+      const plusMinus = ui.plus_minus && typeof ui.plus_minus === 'object' ? ui.plus_minus : { kind: 'plain', appearance: 'monochrome', size: 'small', corner_radius: 'base' };
       const next = {
         quantity_in_cart_enabled: Boolean(data?.quantity_in_cart_enabled),
+        show_quantity: typeof data?.show_quantity === 'boolean' ? data.show_quantity : Boolean(data?.quantity_in_cart_enabled),
+        show_subscription: typeof data?.show_subscription === 'boolean' ? data.show_subscription : Boolean(data?.subscription_upgrade?.enabled),
         subscription_upgrade:
           data?.subscription_upgrade && typeof data.subscription_upgrade === 'object'
             ? data.subscription_upgrade
@@ -129,6 +151,8 @@ function CartLineItem() {
           modify_alignment: ['left', 'center', 'right'].includes(ui.modify_alignment) ? ui.modify_alignment : 'left',
           show_chevron: Boolean(ui.show_chevron !== false),
           quantity_size: ['small', 'medium', 'large'].includes(ui.quantity_size) ? ui.quantity_size : 'medium',
+          popover_width: popoverWidth,
+          plus_minus: plusMinus,
         },
       };
 
@@ -138,12 +162,12 @@ function CartLineItem() {
         phase: 'cart_line_experience_response',
         ok: parsed.ok,
         status: parsed.status,
-        quantity_in_cart_enabled: next.quantity_in_cart_enabled,
-        subscription_upgrade_enabled: Boolean(next.subscription_upgrade?.enabled),
+        show_quantity: next.show_quantity,
+        show_subscription: next.show_subscription,
         non_json_response: parsed.data ? false : true,
       });
 
-      if (sessionKey && !next.quantity_in_cart_enabled && !next.subscription_upgrade?.enabled) {
+      if (sessionKey && !next.show_quantity && !next.show_subscription) {
         retryRef.current = setTimeout(() => fetchExperience(), 2000);
       }
     } catch (e) {
@@ -152,7 +176,7 @@ function CartLineItem() {
         error: String(e?.message ?? e),
       });
     }
-  }, [apiUrl, secret, shop, sessionKey, checkoutExperienceId]);
+  }, [apiUrl, secret, shop, sessionKey, checkoutExperienceId, lineProductId, lineVariantId, lineHasSellingPlan, cartSubtotal, cartItemsCount]);
 
   useEffect(() => {
     fetchExperience();
@@ -164,7 +188,7 @@ function CartLineItem() {
   const hasSellingPlan = Boolean(line?.sellingPlanAllocation?.sellingPlan?.id);
 
   useEffect(() => {
-    if (!experience.subscription_upgrade?.enabled || !line?.merchandise?.id || hasSellingPlan) {
+    if (!experience.show_subscription || !line?.merchandise?.id || hasSellingPlan) {
       setSellingPlans([]);
       return;
     }
@@ -178,13 +202,13 @@ function CartLineItem() {
       .then((r) => (r.ok ? r.json() : {}))
       .then((data) => setSellingPlans(Array.isArray(data.selling_plans) ? data.selling_plans : []))
       .catch(() => setSellingPlans([]));
-  }, [experience.subscription_upgrade?.enabled, line?.merchandise?.id, hasSellingPlan, apiUrl, secret, shop]);
+  }, [experience.show_subscription, line?.merchandise?.id, hasSellingPlan, apiUrl, secret, shop]);
 
   if (!line || !line.id || !applyCartLinesChange) return null;
 
   const quantity = Number(line.quantity) || 1;
-  const showQuantity = Boolean(experience.quantity_in_cart_enabled);
-  const showUpgrade = Boolean(experience.subscription_upgrade?.enabled) && !hasSellingPlan && sellingPlans.length > 0;
+  const showQuantity = Boolean(experience.show_quantity);
+  const showUpgrade = Boolean(experience.show_subscription) && !hasSellingPlan && sellingPlans.length > 0;
   const firstPlan = sellingPlans[0];
 
   const handleQuantityChange = async (newQty) => {
@@ -248,26 +272,37 @@ function CartLineItem() {
   const quantitySize = ['small', 'medium', 'large'].includes(ui.quantity_size) ? ui.quantity_size : 'medium';
   const quantitySpacing = quantitySize === 'large' ? 'loose' : quantitySize === 'medium' ? 'base' : 'tight';
 
+  const pw = ui.popover_width || {};
+  const presetToPx = { sm: 240, md: 320, lg: 400, xl: 480 };
+  const popoverPx = pw.mode === 'custom' && typeof pw.px === 'number' ? pw.px : (presetToPx[pw.preset] ?? 320);
+  const popoverWidthPx = `${popoverPx}px`;
+  const pm = ui.plus_minus || {};
+  const plusMinusKind = ['plain', 'secondary', 'primary'].includes(pm.kind) ? pm.kind : 'plain';
+  const plusMinusAppearance = ['default', 'monochrome', 'critical'].includes(pm.appearance) ? pm.appearance : 'monochrome';
+  const plusMinusSize = ['small', 'medium', 'large'].includes(pm.size) ? pm.size : 'small';
+
   return (
     <BlockStack spacing="tight">
       {showQuantity && (
         <InlineLayout spacing="tight" blockAlignment={modifyAlignment} inlineAlignment={modifyAlignment}>
           <Button
-            kind="plain"
-            size="small"
-            appearance="monochrome"
+            kind={plusMinusKind}
+            size={plusMinusSize}
+            appearance={plusMinusAppearance}
             overlay={
               <Popover
                 position="blockEnd"
                 onOpen={() => setPopoverOpen(true)}
                 onClose={() => setPopoverOpen(false)}
+                minInlineSize={popoverWidthPx}
+                maxInlineSize={popoverWidthPx}
               >
                 <BlockStack spacing={quantitySpacing}>
                   <Text appearance="subdued" size={quantitySize}>Quantity</Text>
                   <InlineLayout spacing={quantitySpacing} blockAlignment="center">
-                    <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity - 1)} disabled={quantity <= 1 || qtyLoading}>−</Button>
+                    <Button kind={plusMinusKind} size={plusMinusSize} appearance={plusMinusAppearance} onPress={() => handleQuantityChange(quantity - 1)} disabled={quantity <= 1 || qtyLoading}>−</Button>
                     <Text size={quantitySize}>{String(quantity)}</Text>
-                    <Button kind="plain" size="small" onPress={() => handleQuantityChange(quantity + 1)} disabled={qtyLoading}>+</Button>
+                    <Button kind={plusMinusKind} size={plusMinusSize} appearance={plusMinusAppearance} onPress={() => handleQuantityChange(quantity + 1)} disabled={qtyLoading}>+</Button>
                   </InlineLayout>
                   <Button kind="plain" size="small" appearance="monochrome" onPress={handleRemove}>Remove</Button>
                 </BlockStack>

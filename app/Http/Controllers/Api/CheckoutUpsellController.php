@@ -8,6 +8,7 @@ use App\Models\CheckoutExperience;
 use App\Models\Offer;
 use App\Models\Placement;
 use App\Models\Shop;
+use App\Services\CartLineRulesEvaluator;
 use App\Services\RuleEngine;
 use App\Services\ShopifyGraphQLService;
 use Illuminate\Contracts\Encryption\DecryptException;
@@ -435,59 +436,132 @@ class CheckoutUpsellController extends Controller
     /**
      * Return checkout experience config for cart-line-item extension (quantity on lines, subscription upgrade).
      * checkout_experience_id = ID from Admin → Checkout experience (/admin/checkout-experiences), not Block/Widget ID.
-     * The experience record holds the settings that control line items: quantity_in_cart_enabled, subscription_upgrade_*.
-     * If session_key is sent and we have a stored experience for that session, use it; otherwise shop default.
+     * When the extension sends line_product_id, line_variant_id, line_has_selling_plan, cart_subtotal, cart_items_count,
+     * we evaluate rules and return show_quantity / show_subscription for that line; otherwise global flags.
      */
     public function experience(Request $request): JsonResponse
     {
         $shop = $this->resolveShop($request);
-        $defaultCartLineUi = [
-            'modify_alignment' => 'left',
-            'show_chevron' => true,
-            'quantity_size' => 'medium',
-        ];
+        $defaultCartLineUi = $this->defaultCartLineUiPayload();
         if (! $shop) {
             return response()->json([
                 'quantity_in_cart_enabled' => false,
+                'show_quantity' => false,
+                'show_subscription' => false,
                 'subscription_upgrade' => ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'],
                 'cart_line_ui' => $defaultCartLineUi,
             ]);
         }
-        $experience = null;
-        $experienceId = (int) ($request->input('checkout_experience_id') ?? $request->query('checkout_experience_id') ?? 0);
-        if ($experienceId > 0) {
-            // Load from checkout_experiences table (Admin → Checkout experience); this record defines line-item behaviour.
-            $experience = CheckoutExperience::where('shop_id', $shop->id)->find($experienceId);
-        }
-        if (! $experience) {
-            $sessionKey = $request->input('session_key') ?? $request->query('session_key') ?? '';
-            if ($sessionKey !== '') {
-                $cacheKey = 'checkout_experience:'.preg_replace('/[^a-zA-Z0-9._-]/', '_', $shop->shop_domain ?? (string) $shop->id).':'.$sessionKey;
-                $storedId = Cache::get($cacheKey);
-                if ($storedId !== null) {
-                    $experience = CheckoutExperience::where('shop_id', $shop->id)->find((int) $storedId);
-                }
-            }
-        }
-        if (! $experience) {
-            $experience = $shop->checkoutExperience;
-        }
-        // These flags come from the Checkout Experience form: "Quantity on cart lines" and "Subscription upgrade".
+        $experience = $this->resolveExperience($request, $shop);
         $quantityInCartEnabled = $experience ? (bool) $experience->quantity_in_cart_enabled : false;
         $subscriptionUpgrade = $experience ? $experience->subscriptionUpgradePayload() : ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'];
+        $cartLineUi = $experience ? $experience->cartLineUiPayload() : $defaultCartLineUi;
+
+        $lineProductId = $request->input('line_product_id') ?? $request->query('line_product_id');
+        $lineVariantId = $request->input('line_variant_id') ?? $request->query('line_variant_id');
+        $lineHasSellingPlan = (bool) ($request->input('line_has_selling_plan') ?? $request->query('line_has_selling_plan') ?? false);
+        $cartSubtotal = $request->input('cart_subtotal') ?? $request->query('cart_subtotal');
+        $cartSubtotal = $cartSubtotal !== null && $cartSubtotal !== '' ? (float) $cartSubtotal : null;
+        $cartItemsCount = $request->input('cart_items_count') ?? $request->query('cart_items_count');
+        $cartItemsCount = $cartItemsCount !== null && $cartItemsCount !== '' ? (int) $cartItemsCount : null;
+
+        $showQuantity = $quantityInCartEnabled;
+        $showSubscription = (bool) ($subscriptionUpgrade['enabled'] ?? false);
+
+        if ($experience && $lineProductId !== null && $lineProductId !== '') {
+            $productIdGid = app(ShopifyGraphQLService::class)->normalizeProductIdToGid(trim((string) $lineProductId));
+            if ($productIdGid === '' && $lineVariantId !== null && $lineVariantId !== '') {
+                $variantGid = $this->normalizeVariantIdToGid(trim((string) $lineVariantId));
+                if ($variantGid !== '') {
+                    try {
+                        $variant = app(ShopifyGraphQLService::class)->getProductVariant($shop, $variantGid);
+                        if (isset($variant['product']['id'])) {
+                            $productIdGid = (string) $variant['product']['id'];
+                        }
+                    } catch (\Throwable) {
+                        // Keep productIdGid empty
+                    }
+                }
+            }
+            if ($productIdGid !== '') {
+                $productMetadata = app(ShopifyGraphQLService::class)->getProductMetadata($shop, $productIdGid);
+                $showQuantity = CartLineRulesEvaluator::showQuantity(
+                    $experience,
+                    $productIdGid,
+                    $productMetadata,
+                    $cartSubtotal,
+                    $cartItemsCount,
+                    $lineHasSellingPlan
+                );
+                $showSubscription = CartLineRulesEvaluator::showSubscription(
+                    $experience,
+                    $productIdGid,
+                    $productMetadata,
+                    $cartSubtotal,
+                    $cartItemsCount,
+                    $lineHasSellingPlan
+                );
+            }
+        }
+
         $this->logExt('checkout_experience_response', [
             'shop_id' => $shop->id,
             'experience_id' => $experience?->id,
             'quantity_in_cart_enabled' => $quantityInCartEnabled,
-            'subscription_upgrade_enabled' => $subscriptionUpgrade['enabled'] ?? false,
+            'show_quantity' => $showQuantity,
+            'show_subscription' => $showSubscription,
         ]);
-        $cartLineUi = $experience ? $experience->cartLineUiPayload() : $defaultCartLineUi;
 
         return response()->json([
             'quantity_in_cart_enabled' => $quantityInCartEnabled,
+            'show_quantity' => $showQuantity,
+            'show_subscription' => $showSubscription,
             'subscription_upgrade' => $subscriptionUpgrade,
             'cart_line_ui' => $cartLineUi,
         ]);
+    }
+
+    /**
+     * Default cart_line_ui when no experience (fallback).
+     *
+     * @return array<string, mixed>
+     */
+    protected function defaultCartLineUiPayload(): array
+    {
+        return [
+            'modify_alignment' => 'left',
+            'show_chevron' => true,
+            'quantity_size' => 'medium',
+            'popover_width' => ['mode' => 'preset', 'preset' => 'md', 'px' => null],
+            'plus_minus' => ['kind' => 'plain', 'appearance' => 'monochrome', 'size' => 'small', 'corner_radius' => 'base'],
+        ];
+    }
+
+    /**
+     * Resolve CheckoutExperience from request (explicit ID, session cache, or shop default).
+     */
+    protected function resolveExperience(Request $request, Shop $shop): ?CheckoutExperience
+    {
+        $experienceId = (int) ($request->input('checkout_experience_id') ?? $request->query('checkout_experience_id') ?? 0);
+        if ($experienceId > 0) {
+            $experience = CheckoutExperience::where('shop_id', $shop->id)->find($experienceId);
+            if ($experience) {
+                return $experience;
+            }
+        }
+        $sessionKey = $request->input('session_key') ?? $request->query('session_key') ?? '';
+        if ($sessionKey !== '') {
+            $cacheKey = 'checkout_experience:'.preg_replace('/[^a-zA-Z0-9._-]/', '_', $shop->shop_domain ?? (string) $shop->id).':'.$sessionKey;
+            $storedId = Cache::get($cacheKey);
+            if ($storedId !== null) {
+                $experience = CheckoutExperience::where('shop_id', $shop->id)->find((int) $storedId);
+                if ($experience) {
+                    return $experience;
+                }
+            }
+        }
+
+        return $shop->checkoutExperience;
     }
 
     /**
