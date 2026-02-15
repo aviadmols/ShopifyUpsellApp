@@ -7,12 +7,40 @@ use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Contracts\View\View;
 use Throwable;
 
 class EditCheckoutExperience extends EditRecord
 {
     protected static string $resource = CheckoutExperienceResource::class;
+
+    /**
+     * Show save errors as notification instead of a blank screen.
+     */
+    protected function handleRecordUpdate(Model $record, array $data): Model
+    {
+        try {
+            return parent::handleRecordUpdate($record, $data);
+        } catch (Throwable $e) {
+            Log::error('checkout_experience_save_failed', [
+                'record_id' => $record->getKey(),
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            Notification::make()
+                ->title('Save failed')
+                ->body($e->getMessage())
+                ->danger()
+                ->persistent()
+                ->send();
+
+            $this->halt();
+
+            return $record;
+        }
+    }
 
     protected function getHeaderActions(): array
     {
@@ -29,23 +57,5 @@ class EditCheckoutExperience extends EditRecord
                 ])),
             Actions\DeleteAction::make(),
         ];
-    }
-
-    protected function handleRecordUpdate(Model $record, array $data): Model
-    {
-        try {
-            return parent::handleRecordUpdate($record, $data);
-        } catch (Throwable $e) {
-            report($e);
-
-            Notification::make()
-                ->danger()
-                ->title('Save failed')
-                ->body('Error: '.$e->getMessage())
-                ->persistent()
-                ->send();
-
-            return $record;
-        }
     }
 }

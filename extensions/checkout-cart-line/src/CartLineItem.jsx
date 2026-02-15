@@ -88,7 +88,14 @@ function CartLineItem() {
     show_quantity: false,
     show_subscription: false,
     subscription_upgrade: { enabled: false, cta: 'Upgrade to subscription' },
-    cart_line_ui: { modify_alignment: 'left', show_chevron: true, quantity_size: 'medium', popover_width: { mode: 'preset', preset: 'md', px: null }, plus_minus: { kind: 'plain', appearance: 'monochrome', size: 'small', corner_radius: 'base' } },
+    cart_line_ui: {
+      modify_alignment: 'left',
+      show_chevron: true,
+      quantity_size: 'medium',
+      popover_width: { mode: 'preset', preset: 'md', px: null, padding_x: 'base' },
+      quantity_label: { text: 'Quantity', size: 'medium', alignment: 'left' },
+      plus_minus: { kind: 'plain', appearance: 'monochrome', size: 'small', corner_radius: 'base' },
+    },
   });
   const [sellingPlans, setSellingPlans] = useState([]);
   const [upgrading, setUpgrading] = useState(false);
@@ -137,7 +144,8 @@ function CartLineItem() {
       const data = parsed.data || {};
 
       const ui = data?.cart_line_ui && typeof data.cart_line_ui === 'object' ? data.cart_line_ui : {};
-      const popoverWidth = ui.popover_width && typeof ui.popover_width === 'object' ? ui.popover_width : { mode: 'preset', preset: 'md', px: null };
+      const popoverWidth = ui.popover_width && typeof ui.popover_width === 'object' ? ui.popover_width : { mode: 'preset', preset: 'md', px: null, padding_x: 'base' };
+      const quantityLabel = ui.quantity_label && typeof ui.quantity_label === 'object' ? ui.quantity_label : { text: 'Quantity', size: 'medium', alignment: 'left' };
       const plusMinus = ui.plus_minus && typeof ui.plus_minus === 'object' ? ui.plus_minus : { kind: 'plain', appearance: 'monochrome', size: 'small', corner_radius: 'base' };
       const next = {
         quantity_in_cart_enabled: Boolean(data?.quantity_in_cart_enabled),
@@ -152,6 +160,7 @@ function CartLineItem() {
           show_chevron: Boolean(ui.show_chevron !== false),
           quantity_size: ['small', 'medium', 'large'].includes(ui.quantity_size) ? ui.quantity_size : 'medium',
           popover_width: popoverWidth,
+          quantity_label: quantityLabel,
           plus_minus: plusMinus,
         },
       };
@@ -276,6 +285,11 @@ function CartLineItem() {
   const presetToPx = { sm: 240, md: 320, lg: 400, xl: 480 };
   const popoverPx = pw.mode === 'custom' && typeof pw.px === 'number' ? pw.px : (presetToPx[pw.preset] ?? 320);
   const popoverWidthPx = `${popoverPx}px`;
+  const popoverPaddingX = ['none', 'tight', 'base', 'loose'].includes(pw.padding_x) ? pw.padding_x : 'base';
+  const labelCfg = ui.quantity_label || {};
+  const quantityLabelText = String(labelCfg.text || 'Quantity');
+  const quantityLabelSize = ['small', 'medium', 'large'].includes(labelCfg.size) ? labelCfg.size : quantitySize;
+  const quantityLabelAlignment = labelCfg.alignment === 'center' ? 'center' : labelCfg.alignment === 'right' ? 'end' : 'start';
   const pm = ui.plus_minus || {};
   const plusMinusKind = ['plain', 'secondary', 'primary'].includes(pm.kind) ? pm.kind : 'plain';
   const plusMinusAppearance = ['default', 'monochrome', 'critical'].includes(pm.appearance) ? pm.appearance : 'monochrome';
@@ -296,9 +310,12 @@ function CartLineItem() {
                 onClose={() => setPopoverOpen(false)}
                 minInlineSize={popoverWidthPx}
                 maxInlineSize={popoverWidthPx}
+                padding={['base', popoverPaddingX]}
               >
                 <BlockStack spacing={quantitySpacing}>
-                  <Text appearance="subdued" size={quantitySize}>Quantity</Text>
+                  <InlineLayout inlineAlignment={quantityLabelAlignment}>
+                    <Text appearance="subdued" size={quantityLabelSize}>{quantityLabelText}</Text>
+                  </InlineLayout>
                   <InlineLayout spacing={quantitySpacing} blockAlignment="center">
                     <Button kind={plusMinusKind} size={plusMinusSize} appearance={plusMinusAppearance} onPress={() => handleQuantityChange(quantity - 1)} disabled={quantity <= 1 || qtyLoading}>−</Button>
                     <Text size={quantitySize}>{String(quantity)}</Text>

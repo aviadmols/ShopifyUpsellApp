@@ -20,6 +20,10 @@ class CheckoutExperience extends Model
         'cart_line_popover_width_mode',
         'cart_line_popover_width_preset',
         'cart_line_popover_width_px',
+        'cart_line_popover_padding_x',
+        'cart_line_quantity_label_text',
+        'cart_line_quantity_label_size',
+        'cart_line_quantity_label_alignment',
         'cart_line_plus_minus_kind',
         'cart_line_plus_minus_appearance',
         'cart_line_plus_minus_size',
@@ -148,6 +152,10 @@ class CheckoutExperience extends Model
             $widthPreset = 'md';
         }
         $widthPx = $widthMode === 'custom' ? max(200, min(600, (int) ($this->cart_line_popover_width_px ?? 320))) : null;
+        $paddingX = $this->cart_line_popover_padding_x ?? 'base';
+        if (! in_array($paddingX, ['none', 'tight', 'base', 'loose'], true)) {
+            $paddingX = 'base';
+        }
 
         $plusMinusKind = $this->cart_line_plus_minus_kind ?? 'plain';
         if (! in_array($plusMinusKind, ['plain', 'secondary', 'primary'], true)) {
@@ -166,6 +174,19 @@ class CheckoutExperience extends Model
             $plusMinusCornerRadius = 'base';
         }
 
+        $labelText = trim((string) ($this->cart_line_quantity_label_text ?? ''));
+        if ($labelText === '') {
+            $labelText = 'Quantity';
+        }
+        $labelSize = $this->cart_line_quantity_label_size ?? 'medium';
+        if (! in_array($labelSize, ['small', 'medium', 'large'], true)) {
+            $labelSize = 'medium';
+        }
+        $labelAlignment = $this->cart_line_quantity_label_alignment ?? 'left';
+        if (! in_array($labelAlignment, ['left', 'center', 'right'], true)) {
+            $labelAlignment = 'left';
+        }
+
         return [
             'modify_alignment' => $alignment,
             'show_chevron' => (bool) ($this->cart_line_show_chevron ?? true),
@@ -174,6 +195,12 @@ class CheckoutExperience extends Model
                 'mode' => $widthMode,
                 'preset' => $widthPreset,
                 'px' => $widthPx,
+                'padding_x' => $paddingX,
+            ],
+            'quantity_label' => [
+                'text' => $labelText,
+                'size' => $labelSize,
+                'alignment' => $labelAlignment,
             ],
             'plus_minus' => [
                 'kind' => $plusMinusKind,

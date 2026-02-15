@@ -10,12 +10,10 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Schema;
 
 class CheckoutExperienceResource extends Resource
 {
     protected static ?string $model = CheckoutExperience::class;
-    protected static ?bool $supportsAdvancedCartLineConfig = null;
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
 
@@ -130,6 +128,27 @@ class CheckoutExperienceResource extends Resource
                         ->maxValue(600)
                         ->default(320)
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled') && ($get('cart_line_popover_width_mode') === 'custom')),
+                    Forms\Components\Select::make('cart_line_popover_padding_x')
+                        ->label('Popover horizontal padding')
+                        ->options(['none' => 'None', 'tight' => 'Tight', 'base' => 'Base', 'loose' => 'Loose'])
+                        ->default('base')
+                        ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
+                    Forms\Components\TextInput::make('cart_line_quantity_label_text')
+                        ->label('Quantity label text')
+                        ->maxLength(120)
+                        ->default('Quantity')
+                        ->helperText('Example: Quantity / Qty / Amount')
+                        ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
+                    Forms\Components\Select::make('cart_line_quantity_label_size')
+                        ->label('Quantity label size')
+                        ->options(['small' => 'Small', 'medium' => 'Medium', 'large' => 'Large'])
+                        ->default('medium')
+                        ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
+                    Forms\Components\Select::make('cart_line_quantity_label_alignment')
+                        ->label('Quantity label alignment')
+                        ->options(['left' => 'Left', 'center' => 'Center', 'right' => 'Right'])
+                        ->default('left')
+                        ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                     Forms\Components\Select::make('cart_line_plus_minus_kind')
                         ->label('+/- button kind')
                         ->options(['plain' => 'Plain', 'secondary' => 'Secondary', 'primary' => 'Primary'])
@@ -152,8 +171,7 @@ class CheckoutExperienceResource extends Resource
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                 ])
                 ->columns(2)
-                ->collapsible()
-                ->visible(fn (): bool => static::supportsAdvancedCartLineConfig()),
+                ->collapsible(),
 
             Forms\Components\Section::make('Cart line rules')
                 ->description('Limit quantity editor and subscription upgrade by products, collections, tags, cart conditions. Leave "Rule mode" at All to show for every line.')
@@ -218,13 +236,11 @@ class CheckoutExperienceResource extends Resource
                     Forms\Components\TextInput::make('quantity_min_cart_items')
                         ->label('Quantity: min cart items count')
                         ->numeric()
-                        ->integer()
                         ->minValue(0)
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                     Forms\Components\TextInput::make('quantity_max_cart_items')
                         ->label('Quantity: max cart items count')
                         ->numeric()
-                        ->integer()
                         ->minValue(0)
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
 
@@ -287,19 +303,16 @@ class CheckoutExperienceResource extends Resource
                     Forms\Components\TextInput::make('subscription_min_cart_items')
                         ->label('Subscription: min cart items count')
                         ->numeric()
-                        ->integer()
                         ->minValue(0)
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('subscription_upgrade_enabled')),
                     Forms\Components\TextInput::make('subscription_max_cart_items')
                         ->label('Subscription: max cart items count')
                         ->numeric()
-                        ->integer()
                         ->minValue(0)
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('subscription_upgrade_enabled')),
                 ])
                 ->columns(2)
-                ->collapsible()
-                ->visible(fn (): bool => static::supportsAdvancedCartLineConfig()),
+                ->collapsible(),
 
             Forms\Components\Section::make('Subscription upgrade')
                 ->description('Show a message to upgrade one-time items to subscription (Recharge / Shopify Selling Plans).')
@@ -373,24 +386,5 @@ class CheckoutExperienceResource extends Resource
             'create' => Pages\CreateCheckoutExperience::route('/create'),
             'edit' => Pages\EditCheckoutExperience::route('/{record}/edit'),
         ];
-    }
-
-    protected static function supportsAdvancedCartLineConfig(): bool
-    {
-        if (static::$supportsAdvancedCartLineConfig !== null) {
-            return static::$supportsAdvancedCartLineConfig;
-        }
-
-        try {
-            static::$supportsAdvancedCartLineConfig = Schema::hasColumns('checkout_experiences', [
-                'cart_line_popover_width_mode',
-                'quantity_rule_mode',
-                'subscription_rule_mode',
-            ]);
-        } catch (\Throwable) {
-            static::$supportsAdvancedCartLineConfig = false;
-        }
-
-        return static::$supportsAdvancedCartLineConfig;
     }
 }

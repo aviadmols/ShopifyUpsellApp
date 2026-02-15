@@ -532,7 +532,8 @@ class CheckoutUpsellController extends Controller
             'modify_alignment' => 'left',
             'show_chevron' => true,
             'quantity_size' => 'medium',
-            'popover_width' => ['mode' => 'preset', 'preset' => 'md', 'px' => null],
+            'popover_width' => ['mode' => 'preset', 'preset' => 'md', 'px' => null, 'padding_x' => 'base'],
+            'quantity_label' => ['text' => 'Quantity', 'size' => 'medium', 'alignment' => 'left'],
             'plus_minus' => ['kind' => 'plain', 'appearance' => 'monochrome', 'size' => 'small', 'corner_radius' => 'base'],
         ];
     }
