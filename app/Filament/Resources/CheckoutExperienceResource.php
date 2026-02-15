@@ -9,6 +9,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\HtmlString;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 
@@ -91,10 +92,12 @@ class CheckoutExperienceResource extends Resource
                             'center' => 'Center',
                             'right' => 'Right',
                         ])
+                        ->live()
                         ->default('left')
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                     Forms\Components\Toggle::make('cart_line_show_chevron')
                         ->label('Show chevron next to Modify (down when closed, up when open)')
+                        ->live()
                         ->default(true)
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                     Forms\Components\Select::make('cart_line_quantity_size')
@@ -104,6 +107,7 @@ class CheckoutExperienceResource extends Resource
                             'medium' => 'Medium',
                             'large' => 'Large',
                         ])
+                        ->live()
                         ->default('medium')
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                 ])
@@ -121,11 +125,13 @@ class CheckoutExperienceResource extends Resource
                     Forms\Components\Select::make('cart_line_popover_width_preset')
                         ->label('Width preset')
                         ->options(['sm' => 'Small', 'md' => 'Medium', 'lg' => 'Large', 'xl' => 'Extra large'])
+                        ->live()
                         ->default('md')
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled') && ($get('cart_line_popover_width_mode') === 'preset')),
                     Forms\Components\TextInput::make('cart_line_popover_width_px')
                         ->label('Width (px)')
                         ->numeric()
+                        ->live(onBlur: true)
                         ->minValue(200)
                         ->maxValue(600)
                         ->default(320)
@@ -133,42 +139,50 @@ class CheckoutExperienceResource extends Resource
                     Forms\Components\Select::make('cart_line_popover_padding_x')
                         ->label('Popover horizontal padding')
                         ->options(['none' => 'None', 'tight' => 'Tight', 'base' => 'Base', 'loose' => 'Loose'])
+                        ->live()
                         ->default('base')
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                     Forms\Components\TextInput::make('cart_line_quantity_label_text')
                         ->label('Quantity label text')
                         ->maxLength(120)
+                        ->live(onBlur: true)
                         ->default('Quantity')
                         ->helperText('Example: Quantity / Qty / Amount')
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                     Forms\Components\Select::make('cart_line_quantity_label_size')
                         ->label('Quantity label size')
                         ->options(['small' => 'Small', 'medium' => 'Medium', 'large' => 'Large'])
+                        ->live()
                         ->default('medium')
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                     Forms\Components\Select::make('cart_line_quantity_label_alignment')
                         ->label('Quantity label alignment')
                         ->options(['left' => 'Left', 'center' => 'Center', 'right' => 'Right'])
+                        ->live()
                         ->default('left')
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                     Forms\Components\Select::make('cart_line_plus_minus_kind')
                         ->label('+/- button kind')
                         ->options(['plain' => 'Plain', 'secondary' => 'Secondary', 'primary' => 'Primary'])
+                        ->live()
                         ->default('plain')
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                     Forms\Components\Select::make('cart_line_plus_minus_appearance')
                         ->label('+/- button appearance')
                         ->options(['default' => 'Default', 'monochrome' => 'Monochrome', 'critical' => 'Critical'])
+                        ->live()
                         ->default('monochrome')
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                     Forms\Components\Select::make('cart_line_plus_minus_size')
                         ->label('+/- button size')
                         ->options(['small' => 'Small', 'medium' => 'Medium', 'large' => 'Large'])
+                        ->live()
                         ->default('small')
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                     Forms\Components\Select::make('cart_line_plus_minus_corner_radius')
                         ->label('+/- button corner radius')
                         ->options(['none' => 'None', 'small' => 'Small', 'base' => 'Base', 'large' => 'Large', 'fullyRounded' => 'Fully rounded'])
+                        ->live()
                         ->default('base')
                         ->visible(fn (Forms\Get $get): bool => (bool) $get('quantity_in_cart_enabled')),
                 ])
@@ -318,6 +332,22 @@ class CheckoutExperienceResource extends Resource
                 ->collapsible()
                 ->visible(fn (): bool => static::supportsAdvancedCartLineConfig()),
 
+            Forms\Components\Section::make('Cart line live preview')
+                ->description('Preview of a sample product row and quantity popover. Updates as you change settings above.')
+                ->schema([
+                    Forms\Components\Placeholder::make('cart_line_live_preview')
+                        ->label('')
+                        ->content(function (Forms\Get $get): HtmlString {
+                            $html = view('filament.components.checkout-experience-cart-line-preview', [
+                                'state' => static::buildCartLinePreviewState($get),
+                            ])->render();
+
+                            return new HtmlString($html);
+                        }),
+                ])
+                ->collapsible()
+                ->visible(fn (): bool => static::supportsAdvancedCartLineConfig()),
+
             Forms\Components\Section::make('Subscription upgrade')
                 ->description('Show a message to upgrade one-time items to subscription (Recharge / Shopify Selling Plans).')
                 ->schema([
@@ -409,5 +439,92 @@ class CheckoutExperienceResource extends Resource
         }
 
         return static::$supportsAdvancedCartLineConfig;
+    }
+
+    /**
+     * Build safe preview state for cart-line UI controls.
+     *
+     * @return array<string, mixed>
+     */
+    protected static function buildCartLinePreviewState(Forms\Get $get): array
+    {
+        $modifyAlignment = (string) ($get('cart_line_modify_alignment') ?? 'left');
+        if (! in_array($modifyAlignment, ['left', 'center', 'right'], true)) {
+            $modifyAlignment = 'left';
+        }
+
+        $quantitySize = (string) ($get('cart_line_quantity_size') ?? 'medium');
+        if (! in_array($quantitySize, ['small', 'medium', 'large'], true)) {
+            $quantitySize = 'medium';
+        }
+
+        $popoverWidthMode = (string) ($get('cart_line_popover_width_mode') ?? 'preset');
+        if (! in_array($popoverWidthMode, ['preset', 'custom'], true)) {
+            $popoverWidthMode = 'preset';
+        }
+        $popoverWidthPreset = (string) ($get('cart_line_popover_width_preset') ?? 'md');
+        if (! in_array($popoverWidthPreset, ['sm', 'md', 'lg', 'xl'], true)) {
+            $popoverWidthPreset = 'md';
+        }
+        $popoverWidthPx = max(200, min(600, (int) ($get('cart_line_popover_width_px') ?? 320)));
+
+        $popoverPaddingX = (string) ($get('cart_line_popover_padding_x') ?? 'base');
+        if (! in_array($popoverPaddingX, ['none', 'tight', 'base', 'loose'], true)) {
+            $popoverPaddingX = 'base';
+        }
+
+        $labelText = trim((string) ($get('cart_line_quantity_label_text') ?? 'Quantity'));
+        if ($labelText === '') {
+            $labelText = 'Quantity';
+        }
+        $labelSize = (string) ($get('cart_line_quantity_label_size') ?? 'medium');
+        if (! in_array($labelSize, ['small', 'medium', 'large'], true)) {
+            $labelSize = 'medium';
+        }
+        $labelAlignment = (string) ($get('cart_line_quantity_label_alignment') ?? 'left');
+        if (! in_array($labelAlignment, ['left', 'center', 'right'], true)) {
+            $labelAlignment = 'left';
+        }
+
+        $plusMinusKind = (string) ($get('cart_line_plus_minus_kind') ?? 'plain');
+        if (! in_array($plusMinusKind, ['plain', 'secondary', 'primary'], true)) {
+            $plusMinusKind = 'plain';
+        }
+        $plusMinusAppearance = (string) ($get('cart_line_plus_minus_appearance') ?? 'monochrome');
+        if (! in_array($plusMinusAppearance, ['default', 'monochrome', 'critical'], true)) {
+            $plusMinusAppearance = 'monochrome';
+        }
+        $plusMinusSize = (string) ($get('cart_line_plus_minus_size') ?? 'small');
+        if (! in_array($plusMinusSize, ['small', 'medium', 'large'], true)) {
+            $plusMinusSize = 'small';
+        }
+        $plusMinusCornerRadius = (string) ($get('cart_line_plus_minus_corner_radius') ?? 'base');
+        if (! in_array($plusMinusCornerRadius, ['none', 'small', 'base', 'large', 'fullyRounded'], true)) {
+            $plusMinusCornerRadius = 'base';
+        }
+
+        return [
+            'enabled' => (bool) ($get('quantity_in_cart_enabled') ?? false),
+            'show_chevron' => (bool) ($get('cart_line_show_chevron') ?? true),
+            'modify_alignment' => $modifyAlignment,
+            'quantity_size' => $quantitySize,
+            'popover' => [
+                'mode' => $popoverWidthMode,
+                'preset' => $popoverWidthPreset,
+                'px' => $popoverWidthPx,
+                'padding_x' => $popoverPaddingX,
+            ],
+            'quantity_label' => [
+                'text' => $labelText,
+                'size' => $labelSize,
+                'alignment' => $labelAlignment,
+            ],
+            'plus_minus' => [
+                'kind' => $plusMinusKind,
+                'appearance' => $plusMinusAppearance,
+                'size' => $plusMinusSize,
+                'corner_radius' => $plusMinusCornerRadius,
+            ],
+        ];
     }
 }
