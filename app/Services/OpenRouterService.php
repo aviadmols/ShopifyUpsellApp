@@ -143,6 +143,12 @@ You are a widget (block) generator for a Shopify upsell app. Given the user's re
 
 - "config": object. Widget display config for block type "{$blockType}" on surface "{$surface}". Use only keys and value types from the schema below. For upsell, offer_ids can be empty [] if the user did not specify offers; the app will add offers later.
 - "rule_conditions": array. Each item is {"field": "<condition_key>", "value": "<value>"}. Use only condition fields from the schema (e.g. line_items_has_product_id, customer_has_tag, line_item_property_equals for subscription, etc.). For "only when cart has product with SKU X" use line_item_property_equals with a key that represents SKU if the app sends it, or line_items_has_product_id with product id if user gives product; if user only says SKU, use line_item_property_equals with something like "sku","X" or a property key the app might use.
+- Dynamic message placeholders are supported server-side from line item properties. You can place placeholders in config text fields (title/body/section_heading/messages), for example:
+  - {dog_name} (normalized token)
+  - {Dog Name} (same as above; normalized)
+  - {property:Dog Name} (explicit property lookup; recommended)
+  - {prop:Dog Name} (alias)
+  Use placeholders when user asks to inject a product property value into the message.
 - "rule_match_type": "and" or "or". How to combine conditions.
 - "name": string. Short widget name (e.g. "Subscription message").
 - "description": string. One sentence what this widget does and when it shows.

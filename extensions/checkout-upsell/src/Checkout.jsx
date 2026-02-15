@@ -120,17 +120,46 @@ function ContentBlockRender({ block }) {
 
 function normalizeLineItemsForApi(lines) {
   if (!Array.isArray(lines)) return [];
+  const toPropertiesObject = (props) => {
+    if (!props) return {};
+    if (Array.isArray(props)) {
+      return props.reduce((acc, item) => {
+        if (item && typeof item === 'object') {
+          const key = item.key ?? item.name;
+          const value = item.value;
+          if (key != null && value != null && String(key).trim() !== '') {
+            acc[String(key)] = String(value);
+          }
+        }
+        return acc;
+      }, {});
+    }
+    if (typeof props === 'object') {
+      return Object.entries(props).reduce((acc, [key, value]) => {
+        if (value != null && String(key).trim() !== '') {
+          acc[String(key)] = String(value);
+        }
+        return acc;
+      }, {});
+    }
+    return {};
+  };
+
   return lines.map((line) => {
     const merch = line?.merchandise ?? line;
     const id = merch?.id ?? line?.id;
     const productId = merch?.product?.id ?? line?.product_id;
     const variantId = merch?.id ?? line?.variant_id ?? id;
+    const properties = toPropertiesObject(
+      line?.properties ?? line?.attributes ?? line?.customAttributes ?? merch?.customAttributes ?? merch?.attributes
+    );
     return {
       id: line?.id,
       quantity: line?.quantity ?? 1,
       merchandiseId: variantId,
       product_id: productId,
       variant_id: variantId,
+      properties,
     };
   });
 }

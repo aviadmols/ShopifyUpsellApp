@@ -169,6 +169,7 @@ class CheckoutUpsellController extends Controller
 
         if ($type === 'progress_bar') {
             $ui = $this->buildUiFromBlockConfig($config, true);
+            $ui = $this->interpolateTemplateData($ui, $context);
 
             $this->logExt('checkout_offers_block_progress_bar_response', [
                 'block_id' => $block->id,
@@ -190,7 +191,7 @@ class CheckoutUpsellController extends Controller
                 [
                     'id' => $block->id,
                     'type' => $typeLower,
-                    'config' => $config,
+                    'config' => $this->interpolateTemplateData($config, $context),
                 ],
             ];
 
@@ -236,6 +237,8 @@ class CheckoutUpsellController extends Controller
         $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
         $data = $this->enrichOffersFromShopify($shop, $eligible);
         $ui = $this->buildUiFromBlockConfig($config, false);
+        $data = $this->interpolateTemplateData($data, $context);
+        $ui = $this->interpolateTemplateData($ui, $context);
 
         $displayMode = (string) ($config['display_mode'] ?? 'stacked');
         $payload = [
@@ -625,6 +628,166 @@ class CheckoutUpsellController extends Controller
         return trim((string) ($block->ai_generated_php ?? '')) !== ''
             || trim((string) ($block->ai_generated_description ?? '')) !== ''
             || trim((string) ($block->ai_prompt ?? '')) !== '';
+    }
+
+    /**
+     * Interpolate placeholders like {dog_name} using line item properties.
+     *
+     * @param  mixed  $value
+     * @return mixed
+     */
+    protected function interpolateTemplateData(mixed $value, array $context): mixed
+    {
+        $vars = $this->lineItemPropertyTemplateVars($context);
+        if ($vars === []) {
+            return $value;
+        }
+
+        return $this->interpolateValueRecursive($value, $vars);
+    }
+
+    /**
+     * @param  array<string, string>  $vars
+     * @return mixed
+     */
+    protected function interpolateValueRecursive(mixed $value, array $vars): mixed
+    {
+        if (is_string($value)) {
+            return preg_replace_callback('/\{([^}]+)\}/', function (array $matches) use ($vars): string {
+                $rawToken = trim((string) ($matches[1] ?? ''));
+                if ($rawToken === '') {
+                    return (string) $matches[0];
+                }
+
+                $rawLower = mb_strtolower($rawToken);
+                if (str_starts_with($rawLower, 'property:') || str_starts_with($rawLower, 'prop:')) {
+                    $parts = explode(':', $rawToken, 2);
+                    $propertyName = trim((string) ($parts[1] ?? ''));
+                    $lookup = 'prop:' . mb_strtolower($propertyName);
+
+                    return array_key_exists($lookup, $vars)
+                        ? (string) $vars[$lookup]
+                        : (string) $matches[0];
+                }
+
+                $token = $this->normalizeTemplateKey($rawToken);
+                if ($token === '') {
+                    return (string) $matches[0];
+                }
+
+                return array_key_exists($token, $vars)
+                    ? (string) $vars[$token]
+                    : (string) $matches[0];
+            }, $value) ?? $value;
+        }
+
+        if (is_array($value)) {
+            $out = [];
+            foreach ($value as $k => $v) {
+                $out[$k] = $this->interpolateValueRecursive($v, $vars);
+            }
+            return $out;
+        }
+
+        return $value;
+    }
+
+    /**
+     * Build template variable map from line_items[].properties/attributes/customAttributes.
+     *
+     * @return array<string, string>
+     */
+    protected function lineItemPropertyTemplateVars(array $context): array
+    {
+        $vars = [];
+        $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
+        if (! is_array($lines)) {
+            return $vars;
+        }
+
+        foreach ($lines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+
+            $properties = $this->extractLineItemProperties($line);
+            foreach ($properties as $key => $val) {
+                $normalized = $this->normalizeTemplateKey($key);
+                if ($normalized === '' || $val === '') {
+                    continue;
+                }
+                if (! array_key_exists($normalized, $vars)) {
+                    $vars[$normalized] = $val;
+                }
+                $exactKeyLookup = 'prop:' . mb_strtolower(trim((string) $key));
+                if ($exactKeyLookup !== 'prop:' && ! array_key_exists($exactKeyLookup, $vars)) {
+                    $vars[$exactKeyLookup] = $val;
+                }
+            }
+        }
+
+        return $vars;
+    }
+
+    /**
+     * @param  array<string, mixed>  $line
+     * @return array<string, string>
+     */
+    protected function extractLineItemProperties(array $line): array
+    {
+        $candidates = [
+            $line['properties'] ?? null,
+            $line['attributes'] ?? null,
+            $line['customAttributes'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (! is_array($candidate)) {
+                continue;
+            }
+
+            $isAssoc = array_keys($candidate) !== range(0, count($candidate) - 1);
+            if ($isAssoc) {
+                $out = [];
+                foreach ($candidate as $k => $v) {
+                    $key = trim((string) $k);
+                    $value = trim((string) $v);
+                    if ($key !== '' && $value !== '') {
+                        $out[$key] = $value;
+                    }
+                }
+                if ($out !== []) {
+                    return $out;
+                }
+                continue;
+            }
+
+            $out = [];
+            foreach ($candidate as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $key = trim((string) ($row['key'] ?? $row['name'] ?? ''));
+                $value = trim((string) ($row['value'] ?? ''));
+                if ($key !== '' && $value !== '') {
+                    $out[$key] = $value;
+                }
+            }
+            if ($out !== []) {
+                return $out;
+            }
+        }
+
+        return [];
+    }
+
+    protected function normalizeTemplateKey(string $key): string
+    {
+        $normalized = strtolower(trim($key));
+        $normalized = str_replace(['-', ' '], '_', $normalized);
+        $normalized = preg_replace('/[^a-z0-9_]/', '', $normalized) ?? '';
+        $normalized = preg_replace('/_+/', '_', $normalized) ?? '';
+        return trim($normalized, '_');
     }
 
     /**
