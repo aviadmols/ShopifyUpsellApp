@@ -324,18 +324,55 @@ class BlockResource extends Resource
             ->description('Single card after cart line list. Match cart lines by product/variant/SKU/properties and offer subscription or bundle swap. To show in Checkout: (1) Note this block\'s ID (from the Blocks table or the URL when editing). (2) In Shopify Partners → your app → Extensions → "Zyg Upgrade Card" → Settings, set Widget ID to that ID, and set Extension secret / API URL. (3) In the store: Settings → Checkout → Customize → add the "Zyg Upgrade Card" app block to the Order summary (cart) area → Save.')
             ->schema([
                 Forms\Components\Section::make('When to show this block (Checkout Order Summary)')
-                    ->description('The block is shown only when the rule conditions are met and at least one upgrade mapping below matches a cart line. Select the rule in "Widget identity" above.')
+                    ->description('The block is shown only when the rule below matches (e.g. cart subtotal, product in cart) and at least one upgrade mapping matches a cart line. No rule = block can show whenever a mapping matches.')
                     ->schema([
+                        Forms\Components\Select::make('rule_id')
+                            ->label('Block visibility rule')
+                            ->options(function (Get $get): array {
+                                $shopId = $get('shop_id');
+                                if (! $shopId) {
+                                    return [];
+                                }
+                                return Rule::where('shop_id', $shopId)->pluck('name', 'id')->all();
+                            })
+                            ->searchable()
+                            ->placeholder('No rule — show whenever a mapping matches')
+                            ->helperText('Create rules in the Rules menu. Example: "Subtotal ≥ 50" or "Cart has product X".'),
                         Forms\Components\Placeholder::make('upgrade_card_rule_summary')
-                            ->label('Selected rule')
+                            ->label('')
                             ->content(function (Get $get): string {
                                 $ruleId = $get('rule_id');
                                 if (! $ruleId) {
-                                    return 'No rule selected — block can show whenever a mapping matches.';
+                                    return '';
                                 }
                                 $rule = Rule::find($ruleId);
-                                return $rule ? $rule->name : 'Rule #'.(int) $ruleId;
-                            }),
+                                if (! $rule) {
+                                    return '';
+                                }
+                                $conditions = $rule->conditions ?? [];
+                                if (! is_array($conditions) || $conditions === []) {
+                                    return 'Rule: '.$rule->name.' (no conditions).';
+                                }
+                                $parts = [];
+                                $group = isset($conditions['or']) ? 'or' : 'and';
+                                $rows = $conditions[$group] ?? [];
+                                foreach (is_array($rows) ? $rows : [] as $c) {
+                                    if (! is_array($c)) {
+                                        continue;
+                                    }
+                                    foreach ($c as $field => $value) {
+                                        if ($value === null) {
+                                            continue;
+                                        }
+                                        $valueStr = is_array($value) ? implode(', ', $value) : (string) $value;
+                                        if ($valueStr !== '') {
+                                            $parts[] = $field.': '.$valueStr;
+                                        }
+                                    }
+                                }
+                                return $parts === [] ? 'Rule: '.$rule->name : 'Rule: '.$rule->name.' — '.implode(' '.$group.' ', $parts);
+                            })
+                            ->visible(fn (Get $get): bool => (bool) $get('rule_id')),
                     ])
                     ->collapsible()
                     ->collapsed(),
@@ -363,7 +400,8 @@ class BlockResource extends Resource
                     ->minValue(0)
                     ->integer()
                     ->placeholder('0'),
-                Forms\Components\Section::make('Design')
+                Forms\Components\Section::make('Default design')
+                    ->description('Used when an offer does not define its own design. Each offer can override these in "Design for this offer" inside the mapping.')
                     ->schema([
                         Forms\Components\Select::make('upgrade_card_display_mode')
                             ->label('Card content')
@@ -455,7 +493,8 @@ class BlockResource extends Resource
                                     return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500">Add mappings below to see the flow.</p>');
                                 }
                                 $steps = [];
-                                foreach ($items as $i => $m) {
+                                $itemsArr = array_values($items);
+                                foreach ($itemsArr as $idx => $m) {
                                     if (! is_array($m)) {
                                         continue;
                                     }
@@ -488,8 +527,9 @@ class BlockResource extends Resource
                                     if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
                                         $offerStr .= ' · '.e((string) $plans[0]['label']);
                                     }
-                                    $next = isset($items[$i + 1]) ? 'Step '.($i + 2) : 'End';
-                                    $steps[] = '<div class="border border-gray-200 rounded p-2 mb-2 text-sm"><strong>Step '.($i + 1).':</strong> When cart: '.e($whenStr).' → Offer: '.e($offerStr).'<br><span class="text-gray-500">Next: '.e($next).'</span></div>';
+                                    $stepNum = $idx + 1;
+                                    $next = isset($itemsArr[$idx + 1]) ? 'Step '.($idx + 2) : 'End';
+                                    $steps[] = '<div class="border border-gray-200 rounded p-2 mb-2 text-sm"><strong>Step '.$stepNum.':</strong> When cart: '.e($whenStr).' → Offer: '.e($offerStr).'<br><span class="text-gray-500">Next: '.e($next).'</span></div>';
                                 }
                                 return new \Illuminate\Support\HtmlString('<div class="space-y-1">'.implode('', $steps).'</div>');
                             }),
@@ -498,6 +538,40 @@ class BlockResource extends Resource
                     ->collapsed(),
                 Forms\Components\Repeater::make('upgrade_mappings_items')
                     ->label('Upgrade mappings')
+                    ->collapsible()
+                    ->collapsed()
+                    ->itemLabel(function (array $state): string {
+                                $when = [];
+                                if (! empty($state['match_product_id'])) {
+                                    $when[] = 'Product '.preg_replace('/\D/', '', (string) $state['match_product_id']) ?: $state['match_product_id'];
+                                }
+                                if (! empty($state['match_variant_id'])) {
+                                    $when[] = 'Variant '.preg_replace('/\D/', '', (string) $state['match_variant_id']) ?: $state['match_variant_id'];
+                                }
+                                if (! empty($state['match_sku_segment'])) {
+                                    $when[] = 'SKU «'.e((string) $state['match_sku_segment']).'»';
+                                }
+                                if (! empty($state['match_quantity_min'])) {
+                                    $when[] = 'Qty ≥ '.$state['match_quantity_min'];
+                                }
+                                if (! empty($state['match_quantity_max'])) {
+                                    $when[] = 'Qty ≤ '.$state['match_quantity_max'];
+                                }
+                                $sub = (string) ($state['match_subscription'] ?? 'any');
+                                if ($sub === 'must_be_subscription') {
+                                    $when[] = 'Subscription';
+                                } elseif ($sub === 'must_be_one_time') {
+                                    $when[] = 'One-time';
+                                }
+                                $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
+                                $offer = (string) ($state['target_variant_id'] ?? '');
+                                $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
+                                $plans = $state['plans'] ?? [];
+                                if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
+                                    $offerStr .= ' · '.e((string) $plans[0]['label']);
+                                }
+                                return 'When: '.$whenStr.' → Offer: '.$offerStr;
+                            })
                     ->schema([
                         Forms\Components\Placeholder::make('mapping_summary')
                             ->label('')
@@ -546,67 +620,74 @@ class BlockResource extends Resource
                             }),
                         Forms\Components\Section::make('Match (when to show this upgrade)')
                             ->schema([
-                                Forms\Components\TextInput::make('match_product_id')
-                                    ->label('Product ID (optional)')
-                                    ->placeholder('GID or numeric'),
                                 Forms\Components\TextInput::make('match_variant_id')
                                     ->label('Variant ID (optional)')
                                     ->placeholder('GID or numeric'),
-                                Forms\Components\TextInput::make('match_sku_regex')
-                                    ->label('SKU regex (optional)')
-                                    ->placeholder('/^ABC-\\d+$/'),
-                                Forms\Components\TextInput::make('match_sku_segment')
-                                    ->label('SKU contains (optional)')
-                                    ->placeholder('SUB'),
-                                Forms\Components\TextInput::make('match_line_item_property_exists')
-                                    ->label('Line has property (optional)')
-                                    ->placeholder('Dog Name'),
-                                Forms\Components\KeyValue::make('match_line_item_property_equals')
-                                    ->label('Property equals (optional)')
-                                    ->keyPlaceholder('key')
-                                    ->valuePlaceholder('value')
-                                    ->default([])
-                                    ->dehydrateStateUsing(static function ($state): array {
-                                        $state = is_array($state) ? $state : [];
-                                        $out = [];
-                                        foreach ($state as $k => $v) {
-                                            $key = trim((string) $k);
-                                            if ($key === '') {
-                                                continue;
-                                            }
-                                            if (is_array($v) || is_object($v)) {
-                                                $val = json_encode($v, JSON_UNESCAPED_UNICODE);
-                                            } else {
-                                                $val = $v === null ? null : trim((string) $v);
-                                            }
-                                            $out[$key] = ($val !== null && $val !== '') ? $val : null;
-                                        }
-                                        return $out;
-                                    }),
-                                Forms\Components\TextInput::make('match_quantity_min')
-                                    ->label('Line quantity min (optional)')
-                                    ->numeric()
-                                    ->integer()
-                                    ->minValue(1)
-                                    ->placeholder('e.g. 2'),
-                                Forms\Components\TextInput::make('match_quantity_max')
-                                    ->label('Line quantity max (optional)')
-                                    ->numeric()
-                                    ->integer()
-                                    ->minValue(1)
-                                    ->placeholder('e.g. 10'),
-                                Forms\Components\Select::make('match_subscription')
-                                    ->label('Line subscription status')
-                                    ->options([
-                                        'any' => 'Any (subscription or one-time)',
-                                        'must_be_subscription' => 'Must be subscription (has selling plan)',
-                                        'must_be_one_time' => 'Must be one-time (no selling plan)',
+                                Forms\Components\TextInput::make('match_product_id')
+                                    ->label('Product ID (optional)')
+                                    ->placeholder('GID or numeric'),
+                                Forms\Components\Section::make('Advanced')
+                                    ->description('SKU, quantity, subscription, line properties — click to expand.')
+                                    ->schema([
+                                        Forms\Components\TextInput::make('match_sku_regex')
+                                            ->label('SKU regex (optional)')
+                                            ->placeholder('/^ABC-\\d+$/'),
+                                        Forms\Components\TextInput::make('match_sku_segment')
+                                            ->label('SKU contains (optional)')
+                                            ->placeholder('SUB'),
+                                        Forms\Components\TextInput::make('match_line_item_property_exists')
+                                            ->label('Line has property (optional)')
+                                            ->placeholder('Dog Name'),
+                                        Forms\Components\KeyValue::make('match_line_item_property_equals')
+                                            ->label('Property equals (optional)')
+                                            ->keyPlaceholder('key')
+                                            ->valuePlaceholder('value')
+                                            ->default([])
+                                            ->dehydrateStateUsing(static function ($state): array {
+                                                $state = is_array($state) ? $state : [];
+                                                $out = [];
+                                                foreach ($state as $k => $v) {
+                                                    $key = trim((string) $k);
+                                                    if ($key === '') {
+                                                        continue;
+                                                    }
+                                                    if (is_array($v) || is_object($v)) {
+                                                        $val = json_encode($v, JSON_UNESCAPED_UNICODE);
+                                                    } else {
+                                                        $val = $v === null ? null : trim((string) $v);
+                                                    }
+                                                    $out[$key] = ($val !== null && $val !== '') ? $val : null;
+                                                }
+                                                return $out;
+                                            }),
+                                        Forms\Components\TextInput::make('match_quantity_min')
+                                            ->label('Line quantity min (optional)')
+                                            ->numeric()
+                                            ->integer()
+                                            ->minValue(1)
+                                            ->placeholder('e.g. 2'),
+                                        Forms\Components\TextInput::make('match_quantity_max')
+                                            ->label('Line quantity max (optional)')
+                                            ->numeric()
+                                            ->integer()
+                                            ->minValue(1)
+                                            ->placeholder('e.g. 10'),
+                                        Forms\Components\Select::make('match_subscription')
+                                            ->label('Line subscription status')
+                                            ->options([
+                                                'any' => 'Any (subscription or one-time)',
+                                                'must_be_subscription' => 'Must be subscription (has selling plan)',
+                                                'must_be_one_time' => 'Must be one-time (no selling plan)',
+                                            ])
+                                            ->default('any'),
+                                        Forms\Components\TextInput::make('match_selling_plan_id')
+                                            ->label('Selling plan ID (optional, exact plan)')
+                                            ->placeholder('GID or numeric')
+                                            ->maxLength(255),
                                     ])
-                                    ->default('any'),
-                                Forms\Components\TextInput::make('match_selling_plan_id')
-                                    ->label('Selling plan ID (optional, exact plan)')
-                                    ->placeholder('GID or numeric')
-                                    ->maxLength(255),
+                                    ->columns(2)
+                                    ->collapsible()
+                                    ->collapsed(),
                             ])
                             ->columns(2)
                             ->collapsible(),
@@ -625,22 +706,101 @@ class BlockResource extends Resource
                             ->placeholder('Selling plan GID or numeric ID')
                             ->maxLength(255)
                             ->helperText('Optional. Use Tools → Products, variants & selling plans to find selling plan IDs for products that have subscriptions.'),
-                        Forms\Components\Section::make('Offer design (text for this mapping)')
-                            ->description('Override the card headline, description and CTA when this mapping is the first match. Placeholders: {cart_subtotal}, {first_product_title}, {matched_quantity}, {matched_variant_id}, {matched_is_subscription}.')
+                        Forms\Components\Section::make('Offer design (text or image for this mapping)')
+                            ->description('When this mapping is the first match, show either headline + description + CTA, or an image + CTA. Placeholders in text: {cart_subtotal}, {first_product_title}, {matched_quantity}, {matched_variant_id}, {matched_is_subscription}.')
                             ->schema([
+                                Forms\Components\Select::make('mapping_display_mode')
+                                    ->label('Show')
+                                    ->options([
+                                        'text' => 'Headline + description + button',
+                                        'image' => 'Image + button only',
+                                    ])
+                                    ->default('text')
+                                    ->live(),
+                                Forms\Components\TextInput::make('mapping_image_url')
+                                    ->label('Image URL')
+                                    ->url()
+                                    ->placeholder('https://…')
+                                    ->maxLength(2048)
+                                    ->visible(fn (Get $get): bool => (string) ($get('mapping_display_mode') ?? '') === 'image')
+                                    ->helperText('Shown instead of headline/description when this mapping matches.'),
                                 Forms\Components\TextInput::make('mapping_headline')
                                     ->label('Headline override')
                                     ->maxLength(120)
-                                    ->placeholder('Upgrade to subscribe & save'),
+                                    ->placeholder('Upgrade to subscribe & save')
+                                    ->visible(fn (Get $get): bool => (string) ($get('mapping_display_mode') ?? 'text') !== 'image'),
                                 Forms\Components\Textarea::make('mapping_description')
                                     ->label('Description override')
                                     ->rows(2)
                                     ->maxLength(300)
-                                    ->placeholder('Get {discount_percent}% off when you subscribe'),
+                                    ->placeholder('Get {discount_percent}% off when you subscribe')
+                                    ->visible(fn (Get $get): bool => (string) ($get('mapping_display_mode') ?? 'text') !== 'image'),
                                 Forms\Components\TextInput::make('mapping_cta_label')
                                     ->label('CTA label override')
                                     ->maxLength(60)
                                     ->placeholder('Upgrade'),
+                            ])
+                            ->columns(2)
+                            ->collapsible()
+                            ->collapsed(),
+                        Forms\Components\Section::make('Design for this offer')
+                            ->description('Optional. Override card appearance when this mapping is the first match. Leave empty to use the default design above.')
+                            ->schema([
+                                Forms\Components\Select::make('mapping_title_size')
+                                    ->label('Headline size')
+                                    ->options([
+                                        'small' => 'Small',
+                                        'medium' => 'Medium',
+                                        'large' => 'Large',
+                                    ])
+                                    ->placeholder('Use default'),
+                                Forms\Components\Select::make('mapping_button_kind')
+                                    ->label('CTA button style')
+                                    ->options([
+                                        'primary' => 'Primary',
+                                        'secondary' => 'Secondary',
+                                        'plain' => 'Plain',
+                                    ])
+                                    ->placeholder('Use default'),
+                                Forms\Components\Select::make('mapping_spacing')
+                                    ->label('Card spacing')
+                                    ->options([
+                                        'tight' => 'Tight',
+                                        'loose' => 'Loose',
+                                    ])
+                                    ->placeholder('Use default'),
+                                Forms\Components\Toggle::make('mapping_show_border')
+                                    ->label('Show card border'),
+                                Forms\Components\Select::make('mapping_border_radius')
+                                    ->label('Card corner radius')
+                                    ->options([
+                                        'none' => 'None',
+                                        'base' => 'Base',
+                                        'large' => 'Large',
+                                    ])
+                                    ->placeholder('Use default'),
+                                Forms\Components\Select::make('mapping_padding')
+                                    ->label('Card padding')
+                                    ->options([
+                                        'none' => 'None',
+                                        'tight' => 'Tight',
+                                        'base' => 'Base',
+                                        'loose' => 'Loose',
+                                    ])
+                                    ->placeholder('Use default'),
+                                Forms\Components\Toggle::make('mapping_show_items')
+                                    ->label('Show matched items list'),
+                                Forms\Components\TextInput::make('mapping_plan_label')
+                                    ->label('Plan dropdown label')
+                                    ->maxLength(40)
+                                    ->placeholder('Use default'),
+                                Forms\Components\TextInput::make('mapping_items_max_visible')
+                                    ->label('Max items visible')
+                                    ->numeric()
+                                    ->integer()
+                                    ->minValue(1)
+                                    ->maxValue(10)
+                                    ->placeholder('Use default'),
                             ])
                             ->columns(2)
                             ->collapsible()
@@ -674,7 +834,8 @@ class BlockResource extends Resource
                     ])
                     ->columns(1)
                     ->defaultItems(0)
-                    ->addActionLabel('Add mapping'),
+                    ->addActionLabel('Add mapping')
+                    ->columnSpanFull(),
                 Forms\Components\Repeater::make('upgrade_card_plans')
                     ->label('Card plans dropdown (fallback only)')
                     ->helperText('Used only when the matching mapping has no plan options. Prefer defining plans inside each mapping above.')
@@ -690,9 +851,10 @@ class BlockResource extends Resource
                     ])
                     ->columns(2)
                     ->defaultItems(0)
-                    ->addActionLabel('Add plan option'),
+                    ->addActionLabel('Add plan option')
+                    ->columnSpanFull(),
             ])
-            ->columns(2)
+            ->columns(1)
             ->visible(fn (Get $get): bool => $get('surface') === 'checkout' && $get('type') === 'checkout_upgrade_card');
     }
 

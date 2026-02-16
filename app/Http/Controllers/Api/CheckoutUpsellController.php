@@ -173,6 +173,10 @@ class CheckoutUpsellController extends Controller
         if (is_array($config) && isset($config['ui']) && is_array($config['ui'])) {
             $payload['ui'] = $this->interpolateTemplateData($config['ui'], $context, (array) $config);
         }
+        if (isset($payload['first_mapping_ui']) && is_array($payload['first_mapping_ui'])) {
+            $payload['ui'] = array_merge(is_array($payload['ui'] ?? null) ? $payload['ui'] : [], $payload['first_mapping_ui']);
+            unset($payload['first_mapping_ui']);
+        }
 
         $vars = $this->buildTemplateVars($context, $config);
         if (isset($payload['matched']) && is_array($payload['matched'])) {
@@ -309,6 +313,10 @@ class CheckoutUpsellController extends Controller
             // Pass UI design settings through to the extension renderer.
             if (is_array($upgradeConfig) && isset($upgradeConfig['ui']) && is_array($upgradeConfig['ui'])) {
                 $payload['ui'] = $this->interpolateTemplateData($upgradeConfig['ui'], $context, (array) $upgradeConfig);
+            }
+            if (isset($payload['first_mapping_ui']) && is_array($payload['first_mapping_ui'])) {
+                $payload['ui'] = array_merge(is_array($payload['ui'] ?? null) ? $payload['ui'] : [], $payload['first_mapping_ui']);
+                unset($payload['first_mapping_ui']);
             }
 
             $vars = $this->buildTemplateVars($context, is_array($upgradeConfig) ? $upgradeConfig : []);

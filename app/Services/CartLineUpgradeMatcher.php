@@ -254,13 +254,20 @@ class CartLineUpgradeMatcher
                 }
                 $actions[] = $addAction;
 
-                // Capture first-match text overrides and mapping for plans dropdown.
+                // Capture first-match text/image overrides and mapping for plans dropdown.
                 if ($firstOverrides === null) {
                     $firstOverrides = [
                         'headline' => (string) ($mapping['headline'] ?? ''),
                         'description' => (string) ($mapping['description'] ?? ''),
                         'cta_label' => (string) ($mapping['cta_label'] ?? ''),
                     ];
+                    if (trim((string) ($mapping['display_mode'] ?? '')) === 'image') {
+                        $firstOverrides['display_mode'] = 'image';
+                        $imgUrl = trim((string) ($mapping['image_url'] ?? ''));
+                        if ($imgUrl !== '') {
+                            $firstOverrides['image_url'] = $imgUrl;
+                        }
+                    }
                     $firstMatchedMapping = $mapping;
                 }
 
@@ -319,6 +326,17 @@ class CartLineUpgradeMatcher
         $out['headline'] = $headline;
         $out['description'] = $description;
         $out['cta_label'] = $cta !== '' ? $cta : 'Upgrade';
+        $firstMappingUi = [];
+        if (is_array($firstOverrides) && isset($firstOverrides['display_mode']) && (string) $firstOverrides['display_mode'] === 'image') {
+            $firstMappingUi['display_mode'] = 'image';
+            $firstMappingUi['image_url'] = (string) ($firstOverrides['image_url'] ?? '');
+        }
+        if ($firstMatchedMapping !== null && isset($firstMatchedMapping['ui']) && is_array($firstMatchedMapping['ui'])) {
+            $firstMappingUi = array_merge($firstMappingUi, $firstMatchedMapping['ui']);
+        }
+        if ($firstMappingUi !== []) {
+            $out['first_mapping_ui'] = $firstMappingUi;
+        }
 
         return $out;
     }

@@ -312,6 +312,45 @@ class CreateBlock extends CreateRecord
             if ($ctaOverride !== '') {
                 $entry['cta_label'] = $ctaOverride;
             }
+            $displayMode = trim((string) ($m['mapping_display_mode'] ?? 'text'));
+            if ($displayMode === 'image') {
+                $entry['display_mode'] = 'image';
+                $imageUrl = trim((string) ($m['mapping_image_url'] ?? ''));
+                if ($imageUrl !== '') {
+                    $entry['image_url'] = $imageUrl;
+                }
+            }
+            $mappingUi = [];
+            if (trim((string) ($m['mapping_title_size'] ?? '')) !== '') {
+                $mappingUi['title_size'] = (string) $m['mapping_title_size'];
+            }
+            if (trim((string) ($m['mapping_button_kind'] ?? '')) !== '') {
+                $mappingUi['button_kind'] = (string) $m['mapping_button_kind'];
+            }
+            if (trim((string) ($m['mapping_spacing'] ?? '')) !== '') {
+                $mappingUi['spacing'] = (string) $m['mapping_spacing'];
+            }
+            if (array_key_exists('mapping_show_border', $m)) {
+                $mappingUi['show_border'] = (bool) $m['mapping_show_border'];
+            }
+            if (trim((string) ($m['mapping_border_radius'] ?? '')) !== '') {
+                $mappingUi['border_radius'] = (string) $m['mapping_border_radius'];
+            }
+            if (trim((string) ($m['mapping_padding'] ?? '')) !== '') {
+                $mappingUi['padding'] = (string) $m['mapping_padding'];
+            }
+            if (array_key_exists('mapping_show_items', $m)) {
+                $mappingUi['show_items'] = (bool) $m['mapping_show_items'];
+            }
+            if (trim((string) ($m['mapping_plan_label'] ?? '')) !== '') {
+                $mappingUi['plan_label'] = (string) $m['mapping_plan_label'];
+            }
+            if (isset($m['mapping_items_max_visible']) && $m['mapping_items_max_visible'] !== '' && $m['mapping_items_max_visible'] !== null) {
+                $mappingUi['items_max_visible'] = max(1, min(10, (int) $m['mapping_items_max_visible']));
+            }
+            if ($mappingUi !== []) {
+                $entry['ui'] = $mappingUi;
+            }
             $out[] = $entry;
         }
         return $out;
