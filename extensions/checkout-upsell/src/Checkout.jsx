@@ -82,6 +82,12 @@ function UpgradeCardBlock({ config }) {
   const buttonKind = ['primary', 'secondary', 'plain'].includes(String(ui.button_kind)) ? String(ui.button_kind) : 'secondary';
   const spacing = String(ui.spacing) === 'loose' ? 'loose' : 'tight';
   const showBorder = ui.show_border !== false;
+  const borderRadius = ['none', 'base', 'large'].includes(String(ui.border_radius)) ? String(ui.border_radius) : 'base';
+  const padding = ['none', 'tight', 'base', 'loose'].includes(String(ui.padding)) ? String(ui.padding) : 'base';
+  const showItems = ui.show_items !== false;
+  const planLabel = String(ui.plan_label || 'Plan');
+  const itemsMaxVisibleRaw = Number(ui.items_max_visible ?? 3);
+  const itemsMaxVisible = Number.isFinite(itemsMaxVisibleRaw) ? Math.max(1, Math.min(10, Math.floor(itemsMaxVisibleRaw))) : 3;
 
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [applying, setApplying] = useState(false);
@@ -135,27 +141,29 @@ function UpgradeCardBlock({ config }) {
     .filter((o) => o.value);
 
   return (
-    <View padding="base" border={showBorder ? 'base' : undefined} borderRadius="base">
+    <View padding={padding} border={showBorder ? 'base' : undefined} borderRadius={borderRadius}>
       <BlockStack spacing={spacing}>
         {headline ? <Text size={headlineSize} emphasis="bold">{headline}</Text> : null}
         {description ? <Text appearance="subdued" size="small">{description}</Text> : null}
 
-        <BlockStack spacing="extraTight">
-          {items.slice(0, 3).map((it, idx) => (
-            <Text key={it.line_id ?? idx} size="small" appearance="subdued">
-              {it.product_title ?? it.title ?? 'Item'}
-              {it.variant_title ? ` — ${it.variant_title}` : ''}
-            </Text>
-          ))}
-          {items.length > 3 ? (
-            <Text size="small" appearance="subdued">
-              See {items.length - 3} more item{items.length - 3 !== 1 ? 's' : ''}
-            </Text>
-          ) : null}
-        </BlockStack>
+        {showItems ? (
+          <BlockStack spacing="extraTight">
+            {items.slice(0, itemsMaxVisible).map((it, idx) => (
+              <Text key={it.line_id ?? idx} size="small" appearance="subdued">
+                {it.product_title ?? it.title ?? 'Item'}
+                {it.variant_title ? ` — ${it.variant_title}` : ''}
+              </Text>
+            ))}
+            {items.length > itemsMaxVisible ? (
+              <Text size="small" appearance="subdued">
+                See {items.length - itemsMaxVisible} more item{items.length - itemsMaxVisible !== 1 ? 's' : ''}
+              </Text>
+            ) : null}
+          </BlockStack>
+        ) : null}
 
         {planOptions.length > 0 ? (
-          <Select label="Plan" options={planOptions} value={selectedPlanId} onChange={setSelectedPlanId} />
+          <Select label={planLabel} options={planOptions} value={selectedPlanId} onChange={setSelectedPlanId} />
         ) : null}
 
         {!cartEditable ? (
@@ -269,6 +277,8 @@ function normalizeLineItemsForApi(lines) {
     const productTitle = merch?.product?.title ?? line?.product_title ?? line?.productTitle ?? '';
     const variantTitle = merch?.title ?? line?.variant_title ?? line?.variantTitle ?? '';
     const sku = merch?.sku ?? line?.sku ?? '';
+    const sellingPlanAllocation = line?.sellingPlanAllocation ?? merch?.sellingPlanAllocation;
+    const sellingPlanId = sellingPlanAllocation?.sellingPlan?.id ?? merch?.sellingPlan?.id ?? line?.selling_plan_id ?? line?.sellingPlanId ?? '';
     const properties = toPropertiesObject(
       line?.properties ?? line?.attributes ?? line?.customAttributes ?? merch?.customAttributes ?? merch?.attributes
     );
@@ -281,6 +291,7 @@ function normalizeLineItemsForApi(lines) {
       product_title: productTitle,
       variant_title: variantTitle,
       sku,
+      selling_plan_id: sellingPlanId || undefined,
       properties,
     };
   });

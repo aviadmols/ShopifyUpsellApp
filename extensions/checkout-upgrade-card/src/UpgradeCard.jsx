@@ -16,12 +16,14 @@ import {
   Select,
   View,
 } from '@shopify/ui-extensions-react/checkout';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
 const BUILD_ID = 'zyg-upgrade-card-20260215';
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
 const DEFAULT_EXTENSION_SECRET = '89987874564648484';
 const MAX_ITEMS_VISIBLE = 3;
+/** Debounce ms before fetching upgrade payload after cart/context change so we don't get conflicting responses. */
+const FETCH_DEBOUNCE_MS = 280;
 
 function getSetting(settings, key) {
   if (!settings || typeof settings !== 'object') return undefined;
@@ -66,6 +68,8 @@ function normalizeLineItemsForApi(lines) {
     const productTitle = merch?.product?.title ?? line?.product_title ?? line?.productTitle ?? '';
     const variantTitle = merch?.title ?? line?.variant_title ?? line?.variantTitle ?? '';
     const sku = merch?.sku ?? line?.sku ?? '';
+    const sellingPlanAllocation = line?.sellingPlanAllocation ?? merch?.sellingPlanAllocation;
+    const sellingPlanId = sellingPlanAllocation?.sellingPlan?.id ?? merch?.sellingPlan?.id ?? line?.selling_plan_id ?? line?.sellingPlanId ?? '';
     const properties = toPropertiesObject(
       line?.properties ?? line?.attributes ?? line?.customAttributes ?? merch?.customAttributes ?? merch?.attributes
     );
@@ -78,6 +82,7 @@ function normalizeLineItemsForApi(lines) {
       product_title: productTitle,
       variant_title: variantTitle,
       sku,
+      selling_plan_id: sellingPlanId || undefined,
       properties,
     };
   });
@@ -118,6 +123,8 @@ function UpgradeCard() {
   const [applying, setApplying] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const fetchPayloadRef = useRef(() => {});
+  const fetchTimeoutRef = useRef(null);
 
   const instructions = api?.instructions ?? {};
   const linesInstructions = instructions?.lines ?? {};
@@ -184,8 +191,19 @@ function UpgradeCard() {
       .finally(() => setLoading(false));
   }, [apiUrl, secret, shop, blockId, sessionKey, subtotalMoney?.amount, JSON.stringify(normalizeLineItemsForApi(lineItems))]);
 
+  fetchPayloadRef.current = fetchPayload;
   useEffect(() => {
-    fetchPayload();
+    if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
+    fetchTimeoutRef.current = setTimeout(() => {
+      fetchPayloadRef.current?.();
+      fetchTimeoutRef.current = null;
+    }, FETCH_DEBOUNCE_MS);
+    return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+        fetchTimeoutRef.current = null;
+      }
+    };
   }, [fetchPayload]);
 
   const runActions = useCallback(async () => {
@@ -243,6 +261,12 @@ function UpgradeCard() {
   const buttonKind = ['primary', 'secondary', 'plain'].includes(String(ui.button_kind)) ? String(ui.button_kind) : 'secondary';
   const spacing = String(ui.spacing) === 'loose' ? 'loose' : 'tight';
   const showBorder = ui.show_border !== false;
+  const borderRadius = ['none', 'base', 'large'].includes(String(ui.border_radius)) ? String(ui.border_radius) : 'base';
+  const padding = ['none', 'tight', 'base', 'loose'].includes(String(ui.padding)) ? String(ui.padding) : 'base';
+  const showItems = ui.show_items !== false;
+  const planLabel = String(ui.plan_label || 'Plan');
+  const itemsMaxVisibleRaw = Number(ui.items_max_visible ?? MAX_ITEMS_VISIBLE);
+  const itemsMaxVisible = Number.isFinite(itemsMaxVisibleRaw) ? Math.max(1, Math.min(10, Math.floor(itemsMaxVisibleRaw))) : MAX_ITEMS_VISIBLE;
 
   if (!enabled || items.length === 0) {
     return null;
@@ -253,12 +277,12 @@ function UpgradeCard() {
     value: String(p.id ?? p.value ?? ''),
     label: p.label ?? p.name ?? String(p.id ?? p.value ?? ''),
   }));
-  const visibleItems = items.slice(0, MAX_ITEMS_VISIBLE);
-  const extraCount = items.length - MAX_ITEMS_VISIBLE;
+  const visibleItems = items.slice(0, itemsMaxVisible);
+  const extraCount = items.length - itemsMaxVisible;
   const ctaDisabled = !cartEditable || applying;
 
   return (
-    <View padding="base" border={showBorder ? 'base' : undefined} borderRadius="base">
+    <View padding={padding} border={showBorder ? 'base' : undefined} borderRadius={borderRadius}>
       <BlockStack spacing={spacing}>
         {headline ? (
           <Text size={headlineSize} emphasis="bold">
@@ -270,22 +294,24 @@ function UpgradeCard() {
             {description}
           </Text>
         ) : null}
-        <BlockStack spacing="extraTight">
-          {visibleItems.map((item, idx) => (
-            <Text key={item.line_id ?? idx} size="small" appearance="subdued">
-              {item.product_title ?? item.title ?? 'Item'}
-              {item.variant_title ? ` — ${item.variant_title}` : ''}
-            </Text>
-          ))}
-          {extraCount > 0 ? (
-            <Text size="small" appearance="subdued">
-              See {extraCount} more item{extraCount !== 1 ? 's' : ''}
-            </Text>
-          ) : null}
-        </BlockStack>
+        {showItems ? (
+          <BlockStack spacing="extraTight">
+            {visibleItems.map((item, idx) => (
+              <Text key={item.line_id ?? idx} size="small" appearance="subdued">
+                {item.product_title ?? item.title ?? 'Item'}
+                {item.variant_title ? ` — ${item.variant_title}` : ''}
+              </Text>
+            ))}
+            {extraCount > 0 ? (
+              <Text size="small" appearance="subdued">
+                See {extraCount} more item{extraCount !== 1 ? 's' : ''}
+              </Text>
+            ) : null}
+          </BlockStack>
+        ) : null}
         {showPlans && planOptions.length > 0 ? (
           <Select
-            label="Plan"
+            label={planLabel}
             options={planOptions}
             value={selectedPlanId}
             onChange={setSelectedPlanId}

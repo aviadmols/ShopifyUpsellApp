@@ -375,6 +375,37 @@ class BlockResource extends Resource
                         Forms\Components\Toggle::make('upgrade_card_show_border')
                             ->label('Show card border')
                             ->default(true),
+                        Forms\Components\Select::make('upgrade_card_border_radius')
+                            ->label('Card corner radius')
+                            ->options([
+                                'none' => 'None',
+                                'base' => 'Base',
+                                'large' => 'Large',
+                            ])
+                            ->default('base'),
+                        Forms\Components\Select::make('upgrade_card_padding')
+                            ->label('Card padding')
+                            ->options([
+                                'none' => 'None',
+                                'tight' => 'Tight',
+                                'base' => 'Base',
+                                'loose' => 'Loose',
+                            ])
+                            ->default('base'),
+                        Forms\Components\Toggle::make('upgrade_card_show_items')
+                            ->label('Show matched items list')
+                            ->default(true),
+                        Forms\Components\TextInput::make('upgrade_card_plan_label')
+                            ->label('Plan dropdown label')
+                            ->default('Plan')
+                            ->maxLength(40),
+                        Forms\Components\TextInput::make('upgrade_card_items_max_visible')
+                            ->label('Max items visible')
+                            ->numeric()
+                            ->integer()
+                            ->minValue(1)
+                            ->maxValue(10)
+                            ->default(3),
                     ])
                     ->columns(2)
                     ->collapsible()
@@ -421,6 +452,30 @@ class BlockResource extends Resource
                                         }
                                         return $out;
                                     }),
+                                Forms\Components\TextInput::make('match_quantity_min')
+                                    ->label('Line quantity min (optional)')
+                                    ->numeric()
+                                    ->integer()
+                                    ->minValue(1)
+                                    ->placeholder('e.g. 2'),
+                                Forms\Components\TextInput::make('match_quantity_max')
+                                    ->label('Line quantity max (optional)')
+                                    ->numeric()
+                                    ->integer()
+                                    ->minValue(1)
+                                    ->placeholder('e.g. 10'),
+                                Forms\Components\Select::make('match_subscription')
+                                    ->label('Line subscription status')
+                                    ->options([
+                                        'any' => 'Any (subscription or one-time)',
+                                        'must_be_subscription' => 'Must be subscription (has selling plan)',
+                                        'must_be_one_time' => 'Must be one-time (no selling plan)',
+                                    ])
+                                    ->default('any'),
+                                Forms\Components\TextInput::make('match_selling_plan_id')
+                                    ->label('Selling plan ID (optional, exact plan)')
+                                    ->placeholder('GID or numeric')
+                                    ->maxLength(255),
                             ])
                             ->columns(2)
                             ->collapsible(),

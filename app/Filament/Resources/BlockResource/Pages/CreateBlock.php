@@ -247,6 +247,19 @@ class CreateBlock extends CreateRecord
             if (! empty($m['match_line_item_property_equals']) && is_array($m['match_line_item_property_equals'])) {
                 $match['line_item_property_equals'] = $m['match_line_item_property_equals'];
             }
+            if (isset($m['match_quantity_min']) && $m['match_quantity_min'] !== '' && $m['match_quantity_min'] !== null) {
+                $match['quantity_min'] = (int) $m['match_quantity_min'];
+            }
+            if (isset($m['match_quantity_max']) && $m['match_quantity_max'] !== '' && $m['match_quantity_max'] !== null) {
+                $match['quantity_max'] = (int) $m['match_quantity_max'];
+            }
+            $subStatus = trim((string) ($m['match_subscription'] ?? 'any'));
+            if ($subStatus !== '' && $subStatus !== 'any') {
+                $match['subscription'] = $subStatus;
+            }
+            if (! empty($m['match_selling_plan_id'])) {
+                $match['selling_plan_id'] = (string) $m['match_selling_plan_id'];
+            }
             $plans = [];
             $plansRaw = $m['plans'] ?? null;
             $plansRaw = is_array($plansRaw) ? $plansRaw : [];
@@ -346,6 +359,11 @@ class CreateBlock extends CreateRecord
                     'button_kind' => (string) ($data['upgrade_card_button_kind'] ?? 'secondary'),
                     'spacing' => (string) ($data['upgrade_card_spacing'] ?? 'tight'),
                     'show_border' => (bool) ($data['upgrade_card_show_border'] ?? true),
+                    'border_radius' => (string) ($data['upgrade_card_border_radius'] ?? 'base'),
+                    'padding' => (string) ($data['upgrade_card_padding'] ?? 'base'),
+                    'show_items' => (bool) ($data['upgrade_card_show_items'] ?? true),
+                    'plan_label' => (string) ($data['upgrade_card_plan_label'] ?? 'Plan'),
+                    'items_max_visible' => max(1, min(10, (int) ($data['upgrade_card_items_max_visible'] ?? 3))),
                 ],
                 'cart_subtotal_min' => isset($data['upgrade_card_cart_subtotal_min']) && $data['upgrade_card_cart_subtotal_min'] !== '' ? (float) $data['upgrade_card_cart_subtotal_min'] : null,
                 'cart_items_count_min' => isset($data['upgrade_card_cart_items_count_min']) && $data['upgrade_card_cart_items_count_min'] !== '' ? (int) $data['upgrade_card_cart_items_count_min'] : null,

@@ -473,6 +473,11 @@ class EditBlock extends EditRecord
             $data['upgrade_card_button_kind'] = (string) ($ui['button_kind'] ?? 'secondary');
             $data['upgrade_card_spacing'] = (string) ($ui['spacing'] ?? 'tight');
             $data['upgrade_card_show_border'] = (bool) ($ui['show_border'] ?? true);
+            $data['upgrade_card_border_radius'] = (string) ($ui['border_radius'] ?? 'base');
+            $data['upgrade_card_padding'] = (string) ($ui['padding'] ?? 'base');
+            $data['upgrade_card_show_items'] = (bool) ($ui['show_items'] ?? true);
+            $data['upgrade_card_plan_label'] = (string) ($ui['plan_label'] ?? 'Plan');
+            $data['upgrade_card_items_max_visible'] = (string) ($ui['items_max_visible'] ?? 3);
             $data['upgrade_card_plans'] = $config['plans'] ?? [];
             $data['upgrade_mappings_items'] = self::upgradeMappingsToFormItems($config['upgrade_mappings'] ?? []);
 
@@ -680,6 +685,10 @@ class EditBlock extends EditRecord
                 'match_sku_segment' => (string) ($match['sku_segment'] ?? ''),
                 'match_line_item_property_exists' => (string) ($match['line_item_property_exists'] ?? ''),
                 'match_line_item_property_equals' => is_array($match['line_item_property_equals'] ?? null) ? $match['line_item_property_equals'] : [],
+                'match_quantity_min' => isset($match['quantity_min']) ? (string) $match['quantity_min'] : '',
+                'match_quantity_max' => isset($match['quantity_max']) ? (string) $match['quantity_max'] : '',
+                'match_subscription' => (string) ($match['subscription'] ?? 'any'),
+                'match_selling_plan_id' => (string) ($match['selling_plan_id'] ?? ''),
                 'action_type' => (string) ($m['action_type'] ?? 'subscription'),
                 'target_variant_id' => (string) ($m['target_variant_id'] ?? ''),
                 'selling_plan_id' => $effectiveSellingPlanId,

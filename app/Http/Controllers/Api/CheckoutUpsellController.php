@@ -169,7 +169,17 @@ class CheckoutUpsellController extends Controller
         $matcher = app(CartLineUpgradeMatcher::class);
         $payload = $matcher->run($config, $context);
 
+        // Pass UI design settings through to the extension renderer (upgrade-card extension).
+        if (is_array($config) && isset($config['ui']) && is_array($config['ui'])) {
+            $payload['ui'] = $this->interpolateTemplateData($config['ui'], $context, (array) $config);
+        }
+
         $vars = $this->buildTemplateVars($context, $config);
+        if (isset($payload['matched']) && is_array($payload['matched'])) {
+            foreach ($payload['matched'] as $k => $v) {
+                $vars[$k] = (string) $v;
+            }
+        }
         if ($vars !== []) {
             foreach (['headline', 'description', 'cta_label'] as $key) {
                 if (isset($payload[$key]) && is_string($payload[$key])) {
@@ -177,6 +187,8 @@ class CheckoutUpsellController extends Controller
                 }
             }
         }
+
+        unset($payload['matched']);
 
         $this->logExt('checkout_upgrade_card_response', [
             'block_id' => $block->id,
@@ -296,10 +308,15 @@ class CheckoutUpsellController extends Controller
 
             // Pass UI design settings through to the extension renderer.
             if (is_array($upgradeConfig) && isset($upgradeConfig['ui']) && is_array($upgradeConfig['ui'])) {
-                $payload['ui'] = $upgradeConfig['ui'];
+                $payload['ui'] = $this->interpolateTemplateData($upgradeConfig['ui'], $context, (array) $upgradeConfig);
             }
 
             $vars = $this->buildTemplateVars($context, is_array($upgradeConfig) ? $upgradeConfig : []);
+            if (isset($payload['matched']) && is_array($payload['matched'])) {
+                foreach ($payload['matched'] as $k => $v) {
+                    $vars[$k] = (string) $v;
+                }
+            }
             if ($vars !== []) {
                 foreach (['headline', 'description', 'cta_label'] as $key) {
                     if (isset($payload[$key]) && is_string($payload[$key])) {
@@ -307,6 +324,8 @@ class CheckoutUpsellController extends Controller
                     }
                 }
             }
+
+            unset($payload['matched']);
 
             $this->logExt('checkout_offers_block_upgrade_card_response', [
                 'block_id' => $block->id,

@@ -107,6 +107,33 @@ class CartLineUpgradeMatcher
             }
         }
 
+        $lineQty = (int) ($line['quantity'] ?? 1);
+        if (isset($match['quantity_min']) && $lineQty < (int) $match['quantity_min']) {
+            return false;
+        }
+        if (isset($match['quantity_max']) && $lineQty > (int) $match['quantity_max']) {
+            return false;
+        }
+
+        $lineSellingPlanId = trim((string) ($line['selling_plan_id'] ?? $line['sellingPlanId'] ?? ''));
+        $lineHasSubscription = $lineSellingPlanId !== '';
+
+        $subscriptionRule = (string) ($match['subscription'] ?? 'any');
+        if ($subscriptionRule === 'must_be_subscription' && ! $lineHasSubscription) {
+            return false;
+        }
+        if ($subscriptionRule === 'must_be_one_time' && $lineHasSubscription) {
+            return false;
+        }
+
+        if (isset($match['selling_plan_id']) && (string) $match['selling_plan_id'] !== '') {
+            $matchPlanNorm = $this->normalizeId((string) $match['selling_plan_id']);
+            $linePlanNorm = $this->normalizeId($lineSellingPlanId);
+            if ($matchPlanNorm === '' || $linePlanNorm !== $matchPlanNorm) {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -176,11 +203,29 @@ class CartLineUpgradeMatcher
                 $quantity = (int) ($mapping['quantity'] ?? $line['quantity'] ?? 1);
                 $quantity = $quantity < 1 ? 1 : $quantity;
 
+                $lineQty = (int) ($line['quantity'] ?? 1);
+                $lineSellingPlanId = trim((string) ($line['selling_plan_id'] ?? $line['sellingPlanId'] ?? ''));
+                $lineVariantId = (string) ($line['variant_id'] ?? $line['merchandiseId'] ?? '');
+                $lineProductId = (string) ($line['product_id'] ?? $line['productId'] ?? '');
+
                 $items[] = [
                     'line_id' => $lineId,
                     'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
                     'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
                 ];
+
+                // Capture first-match context for template placeholders (matched_quantity, matched_variant_id, etc.).
+                if (! isset($out['matched'])) {
+                    $out['matched'] = [
+                        'matched_quantity' => (string) $lineQty,
+                        'matched_variant_id' => $lineVariantId,
+                        'matched_product_id' => $lineProductId,
+                        'matched_is_subscription' => $lineSellingPlanId !== '' ? '1' : '0',
+                        'matched_selling_plan_id' => $lineSellingPlanId,
+                        'matched_product_title' => (string) ($line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? ''),
+                        'matched_variant_title' => (string) ($line['variant_title'] ?? $line['variantTitle'] ?? ''),
+                    ];
+                }
 
                 // Allow selling plan on mapping root, or via first mapping plan entry.
                 $sellingPlanId = '';
