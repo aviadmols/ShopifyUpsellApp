@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CheckoutExperience extends Model
 {
@@ -98,6 +99,11 @@ class CheckoutExperience extends Model
     public function shop(): BelongsTo
     {
         return $this->belongsTo(Shop::class);
+    }
+
+    public function cartLineActions(): HasMany
+    {
+        return $this->hasMany(CartLineAction::class)->orderBy('sort_order');
     }
 
     /**

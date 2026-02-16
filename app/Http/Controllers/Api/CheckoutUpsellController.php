@@ -471,6 +471,7 @@ class CheckoutUpsellController extends Controller
                 'show_subscription' => false,
                 'subscription_upgrade' => ['enabled' => false, 'headline' => '', 'cta' => 'Upgrade to subscription'],
                 'cart_line_ui' => $defaultCartLineUi,
+                'cart_line_actions' => [],
             ]);
         }
         $experience = $this->resolveExperience($request, $shop);
@@ -488,6 +489,7 @@ class CheckoutUpsellController extends Controller
 
         $showQuantity = $quantityInCartEnabled;
         $showSubscription = (bool) ($subscriptionUpgrade['enabled'] ?? false);
+        $cartLineActionsPayload = [];
 
         if ($experience && $lineProductId !== null && $lineProductId !== '') {
             $productIdGid = app(ShopifyGraphQLService::class)->normalizeProductIdToGid(trim((string) $lineProductId));
@@ -522,6 +524,26 @@ class CheckoutUpsellController extends Controller
                     $cartItemsCount,
                     $lineHasSellingPlan
                 );
+                foreach ($experience->cartLineActions as $action) {
+                    if (CartLineRulesEvaluator::actionMatchesLine(
+                        $action,
+                        $productIdGid,
+                        $productMetadata,
+                        $cartSubtotal,
+                        $cartItemsCount,
+                        $lineHasSellingPlan
+                    )) {
+                        $cartLineActionsPayload[] = [
+                            'id' => $action->id,
+                            'label' => $action->label,
+                            'message' => $action->message ?: null,
+                            'action_type' => $action->action_type,
+                            'target_variant_gid' => $action->target_variant_gid ?: null,
+                            'target_quantity' => (int) $action->target_quantity,
+                            'target_selling_plan_id' => $action->target_selling_plan_id ?: null,
+                        ];
+                    }
+                }
             }
         }
 
@@ -539,6 +561,7 @@ class CheckoutUpsellController extends Controller
             'show_subscription' => $showSubscription,
             'subscription_upgrade' => $subscriptionUpgrade,
             'cart_line_ui' => $cartLineUi,
+            'cart_line_actions' => $cartLineActionsPayload,
         ]);
     }
 

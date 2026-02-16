@@ -88,6 +88,7 @@ function CartLineItem() {
     show_quantity: false,
     show_subscription: false,
     subscription_upgrade: { enabled: false, cta: 'Upgrade to subscription' },
+    cart_line_actions: [],
     cart_line_ui: {
       modify_alignment: 'left',
       show_chevron: true,
@@ -101,6 +102,7 @@ function CartLineItem() {
   const [upgrading, setUpgrading] = useState(false);
   const [qtyLoading, setQtyLoading] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
 
   const retryRef = useRef(null);
 
@@ -147,6 +149,7 @@ function CartLineItem() {
       const popoverWidth = ui.popover_width && typeof ui.popover_width === 'object' ? ui.popover_width : { mode: 'preset', preset: 'md', px: null, padding_x: 'base' };
       const quantityLabel = ui.quantity_label && typeof ui.quantity_label === 'object' ? ui.quantity_label : { text: 'Quantity', size: 'medium', alignment: 'left' };
       const plusMinus = ui.plus_minus && typeof ui.plus_minus === 'object' ? ui.plus_minus : { kind: 'plain', appearance: 'monochrome', size: 'small', corner_radius: 'base' };
+      const cartLineActions = Array.isArray(data?.cart_line_actions) ? data.cart_line_actions : [];
       const next = {
         quantity_in_cart_enabled: Boolean(data?.quantity_in_cart_enabled),
         show_quantity: typeof data?.show_quantity === 'boolean' ? data.show_quantity : Boolean(data?.quantity_in_cart_enabled),
@@ -155,6 +158,7 @@ function CartLineItem() {
           data?.subscription_upgrade && typeof data.subscription_upgrade === 'object'
             ? data.subscription_upgrade
             : { enabled: false, headline: '', cta: 'Upgrade to subscription' },
+        cart_line_actions: cartLineActions,
         cart_line_ui: {
           modify_alignment: ['left', 'center', 'right'].includes(ui.modify_alignment) ? ui.modify_alignment : 'left',
           show_chevron: Boolean(ui.show_chevron !== false),
@@ -219,6 +223,8 @@ function CartLineItem() {
   const showQuantity = Boolean(experience.show_quantity);
   const showUpgrade = Boolean(experience.show_subscription) && !hasSellingPlan && sellingPlans.length > 0;
   const firstPlan = sellingPlans[0];
+  const cartLineActions = Array.isArray(experience.cart_line_actions) ? experience.cart_line_actions : [];
+  const hasCartLineActions = cartLineActions.length > 0;
 
   const handleQuantityChange = async (newQty) => {
     const n = Math.max(1, parseInt(newQty, 10));
@@ -272,7 +278,51 @@ function CartLineItem() {
     }
   };
 
-  if (!showQuantity && !showUpgrade) return null;
+  function toVariantGid(id) {
+    if (id == null || id === '') return '';
+    const s = String(id).trim();
+    if (/^gid:\/\//i.test(s)) return s;
+    const num = s.replace(/\D/g, '');
+    return num ? `gid://shopify/ProductVariant/${num}` : s;
+  }
+
+  const handleCartLineAction = async (action) => {
+    const id = action.id;
+    if (actionLoadingId !== null) return;
+    setActionLoadingId(id);
+    try {
+      const type = action.action_type;
+      if (type === 'replace_with_variant') {
+        const variantGid = toVariantGid(action.target_variant_gid);
+        if (variantGid) {
+          const removeRes = await applyCartLinesChange({ type: 'removeCartLine', id: line.id, quantity });
+          if (removeRes?.type === 'error') throw new Error(removeRes?.message ?? 'Remove failed');
+          await applyCartLinesChange({ type: 'addCartLine', merchandiseId: variantGid, quantity: action.target_quantity ?? 1 });
+        }
+      } else if (type === 'add_variant') {
+        const variantGid = toVariantGid(action.target_variant_gid);
+        if (variantGid) {
+          await applyCartLinesChange({ type: 'addCartLine', merchandiseId: variantGid, quantity: action.target_quantity ?? 1 });
+        }
+      } else if (type === 'remove_line') {
+        await applyCartLinesChange({ type: 'removeCartLine', id: line.id, quantity });
+      } else if (type === 'update_quantity') {
+        const q = Math.max(1, parseInt(action.target_quantity, 10) || 1);
+        await applyCartLinesChange({ type: 'updateCartLine', id: line.id, quantity: q });
+      } else if (type === 'switch_to_subscription' && action.target_selling_plan_id) {
+        await applyCartLinesChange({ type: 'updateCartLine', id: line.id, sellingPlanId: action.target_selling_plan_id });
+      } else if (type === 'switch_to_one_time') {
+        await applyCartLinesChange({ type: 'updateCartLine', id: line.id, sellingPlanId: null });
+      }
+      sendLog(apiUrl, secret, { phase: 'cart_line_action_ok', action_id: id, action_type: type });
+    } catch (e) {
+      sendLog(apiUrl, secret, { phase: 'cart_line_action_error', action_id: id, error: String(e?.message ?? e) });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  if (!showQuantity && !showUpgrade && !hasCartLineActions) return null;
 
   const upgradeCta = experience.subscription_upgrade?.cta || 'Upgrade to Subscribe and save';
   const ui = experience.cart_line_ui || {};
@@ -340,6 +390,26 @@ function CartLineItem() {
         <Button kind="primary" size="small" onPress={handleUpgradeToSubscription} disabled={upgrading}>
           {upgradeCta}
         </Button>
+      )}
+
+      {hasCartLineActions && (
+        <BlockStack spacing="extraTight">
+          {cartLineActions.map((action) => (
+            <BlockStack key={action.id} spacing="extraTight">
+              {action.message ? (
+                <Text appearance="subdued" size="small">{action.message}</Text>
+              ) : null}
+              <Button
+                kind="secondary"
+                size="small"
+                onPress={() => handleCartLineAction(action)}
+                disabled={actionLoadingId !== null}
+              >
+                {action.label}
+              </Button>
+            </BlockStack>
+          ))}
+        </BlockStack>
       )}
     </BlockStack>
   );

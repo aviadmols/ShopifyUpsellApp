@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\CheckoutExperienceResource\Pages;
+use App\Filament\Resources\CheckoutExperienceResource\RelationManagers\CartLineActionsRelationManager;
 use App\Models\CheckoutExperience;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -419,6 +420,13 @@ class CheckoutExperienceResource extends Resource
             'index' => Pages\ListCheckoutExperiences::route('/'),
             'create' => Pages\CreateCheckoutExperience::route('/create'),
             'edit' => Pages\EditCheckoutExperience::route('/{record}/edit'),
+        ];
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            CartLineActionsRelationManager::class,
         ];
     }
 

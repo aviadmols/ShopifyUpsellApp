@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CartLineAction;
 use App\Models\CheckoutExperience;
 
 /**
@@ -317,6 +318,147 @@ class CartLineRulesEvaluator
         }
         if ($mode === 'include_exclude') {
             return $matchesInclude && ! $matchesExclude;
+        }
+        return true;
+    }
+
+    /**
+     * Evaluate if a cart line action should be shown for this line.
+     */
+    public static function actionMatchesLine(
+        CartLineAction $action,
+        string $productIdGid,
+        array $productMetadata,
+        ?float $cartSubtotal,
+        ?int $cartItemsCount,
+        bool $lineHasSellingPlan
+    ): bool {
+        $mode = $action->rule_mode ?? 'all';
+        if ($mode === 'all') {
+            return self::actionCartConditionsPass($action, $cartSubtotal, $cartItemsCount)
+                && self::actionSubscriptionStatePass($action, $lineHasSellingPlan);
+        }
+        if (! self::actionCartConditionsPass($action, $cartSubtotal, $cartItemsCount)) {
+            return false;
+        }
+        if (! self::actionSubscriptionStatePass($action, $lineHasSellingPlan)) {
+            return false;
+        }
+        $matchesInclude = self::actionLineMatchesInclude($action, $productIdGid, $productMetadata);
+        $matchesExclude = self::actionLineMatchesExclude($action, $productIdGid, $productMetadata);
+        if ($mode === 'include_only') {
+            return $matchesInclude;
+        }
+        if ($mode === 'exclude_only') {
+            return ! $matchesExclude;
+        }
+        if ($mode === 'include_exclude') {
+            return $matchesInclude && ! $matchesExclude;
+        }
+        return true;
+    }
+
+    private static function actionLineMatchesInclude(CartLineAction $action, string $productIdGid, array $productMetadata): bool
+    {
+        $includeProductIds = self::normalizeProductIdList($action->include_product_ids);
+        $includeCollectionIds = self::normalizeCollectionIdList($action->include_collection_ids);
+        $includeTags = array_filter(array_map('strval', (array) ($action->include_tags ?? [])));
+        $includeVendors = array_filter(array_map('strval', (array) ($action->include_vendors ?? [])));
+        $includeTypes = array_filter(array_map('strval', (array) ($action->include_product_types ?? [])));
+        $hasIncludeRule = $includeProductIds !== [] || $includeCollectionIds !== [] || $includeTags !== []
+            || $includeVendors !== [] || $includeTypes !== [];
+        if (! $hasIncludeRule) {
+            return true;
+        }
+        $productIdNorm = self::normalizeProductId($productIdGid);
+        $collections = array_map([self::class, 'normalizeCollectionId'], $productMetadata['collection_ids'] ?? []);
+        $tags = array_map('strval', $productMetadata['tags'] ?? []);
+        $vendor = trim((string) ($productMetadata['vendor'] ?? ''));
+        $productType = trim((string) ($productMetadata['product_type'] ?? ''));
+        if ($includeProductIds !== [] && in_array($productIdNorm, $includeProductIds, true)) {
+            return true;
+        }
+        foreach ($collections as $c) {
+            if ($includeCollectionIds !== [] && in_array($c, $includeCollectionIds, true)) {
+                return true;
+            }
+        }
+        foreach ($tags as $tag) {
+            if ($includeTags !== [] && in_array($tag, $includeTags, true)) {
+                return true;
+            }
+        }
+        if ($includeVendors !== [] && $vendor !== '' && in_array($vendor, $includeVendors, true)) {
+            return true;
+        }
+        if ($includeTypes !== [] && $productType !== '' && in_array($productType, $includeTypes, true)) {
+            return true;
+        }
+        return false;
+    }
+
+    private static function actionLineMatchesExclude(CartLineAction $action, string $productIdGid, array $productMetadata): bool
+    {
+        $excludeProductIds = self::normalizeProductIdList($action->exclude_product_ids);
+        $excludeCollectionIds = self::normalizeCollectionIdList($action->exclude_collection_ids);
+        $excludeTags = array_filter(array_map('strval', (array) ($action->exclude_tags ?? [])));
+        $excludeVendors = array_filter(array_map('strval', (array) ($action->exclude_vendors ?? [])));
+        $excludeTypes = array_filter(array_map('strval', (array) ($action->exclude_product_types ?? [])));
+        $productIdNorm = self::normalizeProductId($productIdGid);
+        $collections = array_map([self::class, 'normalizeCollectionId'], $productMetadata['collection_ids'] ?? []);
+        $tags = array_map('strval', $productMetadata['tags'] ?? []);
+        $vendor = trim((string) ($productMetadata['vendor'] ?? ''));
+        $productType = trim((string) ($productMetadata['product_type'] ?? ''));
+        if ($excludeProductIds !== [] && in_array($productIdNorm, $excludeProductIds, true)) {
+            return true;
+        }
+        foreach ($collections as $c) {
+            if ($excludeCollectionIds !== [] && in_array($c, $excludeCollectionIds, true)) {
+                return true;
+            }
+        }
+        foreach ($tags as $tag) {
+            if ($excludeTags !== [] && in_array($tag, $excludeTags, true)) {
+                return true;
+            }
+        }
+        if ($excludeVendors !== [] && $vendor !== '' && in_array($vendor, $excludeVendors, true)) {
+            return true;
+        }
+        if ($excludeTypes !== [] && $productType !== '' && in_array($productType, $excludeTypes, true)) {
+            return true;
+        }
+        return false;
+    }
+
+    private static function actionCartConditionsPass(CartLineAction $action, ?float $cartSubtotal, ?int $cartItemsCount): bool
+    {
+        if ($action->min_subtotal !== null && $cartSubtotal !== null && $cartSubtotal < (float) $action->min_subtotal) {
+            return false;
+        }
+        if ($action->max_subtotal !== null && $cartSubtotal !== null && $cartSubtotal > (float) $action->max_subtotal) {
+            return false;
+        }
+        if ($action->min_cart_items !== null && $cartItemsCount !== null && $cartItemsCount < (int) $action->min_cart_items) {
+            return false;
+        }
+        if ($action->max_cart_items !== null && $cartItemsCount !== null && $cartItemsCount > (int) $action->max_cart_items) {
+            return false;
+        }
+        return true;
+    }
+
+    private static function actionSubscriptionStatePass(CartLineAction $action, bool $lineHasSellingPlan): bool
+    {
+        $require = $action->require_subscription_state;
+        if ($require === null || $require === '' || $require === 'any') {
+            return true;
+        }
+        if ($require === 'subscription') {
+            return $lineHasSellingPlan;
+        }
+        if ($require === 'one_time') {
+            return ! $lineHasSellingPlan;
         }
         return true;
     }
