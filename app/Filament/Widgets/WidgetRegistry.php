@@ -16,6 +16,12 @@ final class WidgetRegistry
             'singleton' => false,
             'has_offers' => true,
         ],
+        'checkout_upgrade_card' => [
+            'label' => 'Upgrade card (subscription / bundle)',
+            'surfaces' => ['checkout'],
+            'singleton' => false,
+            'has_offers' => false,
+        ],
         'progress_bar' => [
             'label' => 'Progress bar',
             'surfaces' => ['checkout'],

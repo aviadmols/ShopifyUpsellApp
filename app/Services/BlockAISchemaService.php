@@ -32,6 +32,12 @@ class BlockAISchemaService
                 'returns' => 'offers, blocks, ui. Block is shown in Shopify Checkout when Widget ID = this block id.',
             ],
             [
+                'name' => 'Checkout upgrade card',
+                'url' => 'POST /api/checkout/upgrade-card',
+                'expects' => 'shop, block_id (widget ID), subtotal, line_items (array with id, product_id, variant_id, quantity, properties, optional sku). Optional: session_key.',
+                'returns' => 'enabled, headline, description, items (line_id, product_title, variant_title), plans, cta_label, actions (removeCartLine/addCartLine for applyCartLinesChange).',
+            ],
+            [
                 'name' => 'Thank you blocks',
                 'url' => 'GET /api/thankyou/blocks',
                 'expects' => 'shop, order_id.',
@@ -89,6 +95,18 @@ class BlockAISchemaService
                 'card_spacing' => 'tight|loose|extraLoose',
                 'show_quantity' => 'bool',
                 'runtime_variables' => 'object (optional). Defines computed template vars usable in text fields as {var_name}. Example: dog_names_message via plural_message_from_property on line item property "Dog Name".',
+            ];
+        }
+        if ($type === 'checkout_upgrade_card') {
+            return [
+                'headline' => 'string. Card headline.',
+                'description' => 'string. Short description in the card.',
+                'cta_label' => 'string. Button label (e.g. Upgrade to subscription).',
+                'upgrade_mappings' => 'array of objects. Each object: match (product_id?, variant_id?, sku_regex?, sku_segment?, line_item_property_exists?, line_item_property_equals?), action_type (subscription|bundle_swap), target_variant_id (Shopify variant GID or numeric), quantity (default 1), plans (optional array of { id, label, target_variant_id?, selling_plan_id? } for subscription).',
+                'plans' => 'optional array of { id, label } for dropdown (e.g. Deliver every 1 month).',
+                'cart_subtotal_min' => 'optional number. Show card only when cart subtotal >= this.',
+                'cart_items_count_min' => 'optional int. Show card only when cart has at least this many items.',
+                'runtime_variables' => 'object (optional). Computed template vars usable in headline/description/cta_label as {var_name}.',
             ];
         }
         if ($type === 'progress_bar') {

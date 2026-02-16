@@ -34,6 +34,7 @@ Route::options('surveys/respond', $corsPreflight);
 Route::options('checkout/experience', $corsPreflight);
 Route::options('checkout/experience/set', $corsPreflight);
 Route::options('checkout/selling-plans-for-variant', $corsPreflight);
+Route::options('checkout/upgrade-card', $corsPreflight);
 
 /*
 |--------------------------------------------------------------------------
@@ -51,6 +52,7 @@ Route::middleware(['cors.extensions', 'checkout.extension.signature'])->group(fu
     Route::get('/checkout/selling-plans-for-variant', [CheckoutUpsellController::class, 'sellingPlansForVariant']);
     Route::post('/checkout/selling-plans-for-variant', [CheckoutUpsellController::class, 'sellingPlansForVariant']);
     Route::post('/checkout/logs', [CheckoutUpsellController::class, 'log']);
+    Route::post('/checkout/upgrade-card', [CheckoutUpsellController::class, 'upgradeCard']);
     Route::get('/thankyou/blocks', [ThankYouBlocksController::class, 'index']);
     Route::post('/surveys/active', [SurveyController::class, 'active']);
     Route::post('/surveys/respond', [SurveyController::class, 'respond']);

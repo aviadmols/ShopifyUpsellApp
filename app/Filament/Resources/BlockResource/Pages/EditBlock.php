@@ -430,6 +430,10 @@ class EditBlock extends EditRecord
         $surface = (string) ($data['surface'] ?? '');
         $type = (string) ($data['type'] ?? '');
 
+        if (isset($config['runtime_variables']) && is_array($config['runtime_variables'])) {
+            $data['runtime_variables_json'] = json_encode($config['runtime_variables'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        }
+
         if ($surface === 'checkout' && $type === 'upsell') {
             $data['widget_offers'] = self::widgetOffersFromBlock($this->record);
             $data['offer_ids_csv'] = implode(',', Placement::normalizeIntList($config['offer_ids'] ?? []));
@@ -449,6 +453,14 @@ class EditBlock extends EditRecord
             $data['card_spacing'] = (string) ($config['card_spacing'] ?? 'loose');
             $data['divider_between_cards'] = (bool) ($config['divider_between_cards'] ?? false);
             $data['show_quantity'] = (bool) ($config['show_quantity'] ?? true);
+        } elseif ($surface === 'checkout' && $type === 'checkout_upgrade_card') {
+            $data['upgrade_card_headline'] = (string) ($config['headline'] ?? '');
+            $data['upgrade_card_description'] = (string) ($config['description'] ?? '');
+            $data['upgrade_card_cta_label'] = (string) ($config['cta_label'] ?? 'Upgrade');
+            $data['upgrade_card_cart_subtotal_min'] = isset($config['cart_subtotal_min']) ? (string) $config['cart_subtotal_min'] : '';
+            $data['upgrade_card_cart_items_count_min'] = isset($config['cart_items_count_min']) ? (string) $config['cart_items_count_min'] : '';
+            $data['upgrade_card_plans'] = $config['plans'] ?? [];
+            $data['upgrade_mappings_items'] = self::upgradeMappingsToFormItems($config['upgrade_mappings'] ?? []);
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {
             $data['progress_bar_type'] = (string) ($config['progress_bar_type'] ?? 'free_shipping');
             $data['progress_bar_goal'] = (float) ($config['progress_bar_goal'] ?? 100);
@@ -506,6 +518,8 @@ class EditBlock extends EditRecord
             'section_heading', 'title_size', 'title_appearance', 'show_price', 'show_description',
             'image_aspect_ratio', 'image_fit', 'image_corner_radius', 'button_kind', 'button_appearance',
             'card_spacing', 'divider_between_cards',
+            'headline', 'description', 'cta_label', 'upgrade_mappings', 'plans', 'cart_subtotal_min', 'cart_items_count_min',
+            'runtime_variables', 'runtimeVariables',
             'progress_bar_enabled', 'progress_bar_type', 'progress_bar_goal', 'progress_bar_message_below',
             'progress_bar_message_achieved', 'progress_bar_discount_type', 'progress_bar_discount_value',
             'icon_features',
@@ -580,6 +594,37 @@ class EditBlock extends EditRecord
             $block->blockOffers()->delete();
             CreateBlock::syncWidgetOffers($block, $this->widgetOffersData);
         }
+    }
+
+    /**
+     * Convert stored upgrade_mappings config to form repeater items.
+     *
+     * @param  array<int, array<string, mixed>>  $mappings
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function upgradeMappingsToFormItems(array $mappings): array
+    {
+        $out = [];
+        foreach ($mappings as $m) {
+            if (! is_array($m)) {
+                continue;
+            }
+            $match = $m['match'] ?? [];
+            $item = [
+                'match_product_id' => (string) ($match['product_id'] ?? ''),
+                'match_variant_id' => (string) ($match['variant_id'] ?? ''),
+                'match_sku_regex' => (string) ($match['sku_regex'] ?? ''),
+                'match_sku_segment' => (string) ($match['sku_segment'] ?? ''),
+                'match_line_item_property_exists' => (string) ($match['line_item_property_exists'] ?? ''),
+                'match_line_item_property_equals' => is_array($match['line_item_property_equals'] ?? null) ? $match['line_item_property_equals'] : [],
+                'action_type' => (string) ($m['action_type'] ?? 'subscription'),
+                'target_variant_id' => (string) ($m['target_variant_id'] ?? ''),
+                'quantity' => (int) ($m['quantity'] ?? 1),
+                'plans' => is_array($m['plans'] ?? null) ? $m['plans'] : [],
+            ];
+            $out[] = $item;
+        }
+        return $out;
     }
 
     /**

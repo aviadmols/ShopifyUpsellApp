@@ -1,0 +1,38 @@
+# Upgrade card: single banner after cart line list (Order Summary) — suggest subscription/bundle upgrades.
+api_version = "2025-04"
+
+[[extensions]]
+uid = "a1b2c3d4-5678-90ab-cdef-1234567890ab"
+type = "ui_extension"
+name = "Zyg Upgrade Card"
+handle = "checkout-upgrade-card"
+
+[[extensions.targeting]]
+target = "purchase.checkout.cart-line-list.render-after"
+module = "./src/UpgradeCard.jsx"
+
+[extensions.capabilities]
+network_access = true
+api_access = true
+
+[extensions.settings]
+[[extensions.settings.fields]]
+key = "extension_secret"
+type = "single_line_text_field"
+name = "Extension secret (required)"
+description = "Same as Zyg Blocks. Required to connect to the app."
+[[extensions.settings.fields]]
+key = "api_url"
+type = "single_line_text_field"
+name = "API URL (optional)"
+description = "Full app URL. Leave empty for default."
+[[extensions.settings.fields]]
+key = "shop_domain"
+type = "single_line_text_field"
+name = "Shop domain (optional)"
+description = "Store myshopify.com domain. Leave empty for default."
+[[extensions.settings.fields]]
+key = "block_id"
+type = "single_line_text_field"
+name = "Widget ID (required)"
+description = "ID of the Upgrade Card widget from Admin → Widgets (Surface = Checkout, Type = Upgrade card)."

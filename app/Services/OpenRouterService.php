@@ -316,7 +316,7 @@ PROMPT;
         return <<<PROMPT
 You are a widget (block) generator for a Shopify upsell app. Given the user's request in natural language, output a single JSON object with these exact keys:
 
-- "config": object. Widget display config for block type "{$blockType}" on surface "{$surface}". Use only keys and value types from the schema below. For upsell, offer_ids can be empty [] if the user did not specify offers; the app will add offers later.
+- "config": object. Widget display config for block type "{$blockType}" on surface "{$surface}". Use only keys and value types from the schema below. For upsell, offer_ids can be empty [] if the user did not specify offers; the app will add offers later. For checkout_upgrade_card, config must include headline, description, cta_label, and upgrade_mappings (array of objects: each has "match" (product_id?, variant_id?, sku_regex?, sku_segment?, line_item_property_exists?, line_item_property_equals?), "action_type" (subscription|bundle_swap), "target_variant_id", "quantity", optional "plans" array with id, label, selling_plan_id, target_variant_id per plan).
 - "rule_conditions": array. Each item is {"field": "<condition_key>", "value": "<value>"}. Use only condition fields from the schema (e.g. line_items_has_product_id, customer_has_tag, line_item_property_equals for subscription, etc.). For "only when cart has product with SKU X" use line_item_property_equals with a key that represents SKU if the app sends it, or line_items_has_product_id with product id if user gives product; if user only says SKU, use line_item_property_equals with something like "sku","X" or a property key the app might use.
 - Dynamic message placeholders are supported server-side from line item properties. You can place placeholders in config text fields (title/body/section_heading/messages), for example:
   - {dog_name} (normalized token)
@@ -340,7 +340,7 @@ You are a widget (block) generator for a Shopify upsell app. Given the user's re
 - "rule_match_type": "and" or "or". How to combine conditions.
 - "name": string. Short widget name (e.g. "Subscription message").
 - "description": string. One sentence what this widget does and when it shows.
-- "php_snippet": string. Required detailed PHP-style snippet for human review (display only, not executed). Return a multi-line snippet that includes: context extraction, condition checks, and a final boolean/result decision. Do NOT return a one-line comment.
+- "php_snippet": string. Required detailed PHP-style snippet for human review (display only, not executed). Return a multi-line snippet that includes: context extraction, condition checks, and a final boolean/result decision. Do NOT return a one-line comment. For checkout_upgrade_card, the snippet describes matching cart lines to upgrade_mappings and building remove/add actions; it is descriptive only, not executed.
 
 Schema (endpoints, block_types with config_schema, rule_conditions):
 {$schemaJson}

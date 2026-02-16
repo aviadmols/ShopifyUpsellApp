@@ -107,6 +107,7 @@ class BlockResource extends Resource
                     ->collapsed(fn (Get $get): bool => empty($get('surface')) || empty($get('type'))),
 
                 self::schemaCheckoutUpsell($form),
+                self::schemaCheckoutUpgradeCard($form),
                 self::schemaCheckoutProgressBar($form),
                 self::schemaContentIconFeatures($form),
                 self::schemaContentBannerRichTextButton($form),
@@ -114,6 +115,8 @@ class BlockResource extends Resource
                 self::schemaPostPurchaseFunnel($form),
 
                 self::schemaWidgetOffers($form),
+
+                self::schemaRuntimeVariables($form),
 
                 Forms\Components\Section::make('AI-generated widget')
                     ->description('This widget was created with AI. You can review and edit the generated description and PHP logic below.')
@@ -214,6 +217,24 @@ class BlockResource extends Resource
             ->collapsed(false);
     }
 
+    protected static function schemaRuntimeVariables(Form $form): Forms\Components\Section
+    {
+        $typesWithPlaceholders = ['upsell', 'checkout_upgrade_card', 'progress_bar', 'content_icon_features', 'content_banner', 'content_rich_text', 'content_button', 'content_product_card', 'post_purchase_funnel'];
+        return Forms\Components\Section::make('Runtime variables (placeholders)')
+            ->description('To replace placeholders like {dog_names_message} in your headline / section heading / description, define them here. The PHP snippet in "AI-generated widget" is reference only and is NOT executed.')
+            ->schema([
+                Forms\Components\Textarea::make('runtime_variables_json')
+                    ->label('Runtime variables (JSON)')
+                    ->rows(14)
+                    ->extraAttributes(['class' => 'font-mono text-sm'])
+                    ->helperText('Example for "Dog Name" line item property: {"dog_names_message":{"type":"plural_message_from_property","property":"Dog Name","singular":"Your dog ({value}) deserves the best","plural":"Your dogs ({values}) deserve the best","empty":""}}')
+                    ->placeholder('{}'),
+            ])
+            ->visible(fn (Get $get): bool => in_array($get('type'), $typesWithPlaceholders, true))
+            ->collapsible()
+            ->collapsed(false);
+    }
+
     protected static function schemaCheckoutUpsell(Form $form): Forms\Components\Section
     {
         return Forms\Components\Section::make('Upsell block (Checkout)')
@@ -270,6 +291,120 @@ class BlockResource extends Resource
             ])
             ->columns(2)
             ->visible(fn (Get $get): bool => $get('surface') === 'checkout' && $get('type') === 'upsell');
+    }
+
+    protected static function schemaCheckoutUpgradeCard(Form $form): Forms\Components\Section
+    {
+        return Forms\Components\Section::make('Upgrade card (Checkout Order Summary)')
+            ->description('Single card after cart line list. Match cart lines by product/variant/SKU/properties and offer subscription or bundle swap. In Shopify Checkout add the "Zyg Upgrade Card" block and set Widget ID to this widget\'s ID.')
+            ->schema([
+                Forms\Components\TextInput::make('upgrade_card_headline')
+                    ->label('Headline')
+                    ->placeholder('Upgrade to subscribe & save')
+                    ->maxLength(120),
+                Forms\Components\Textarea::make('upgrade_card_description')
+                    ->label('Description')
+                    ->rows(2)
+                    ->placeholder('Get 15% off when you subscribe')
+                    ->maxLength(300),
+                Forms\Components\TextInput::make('upgrade_card_cta_label')
+                    ->label('CTA button label')
+                    ->default('Upgrade')
+                    ->maxLength(60),
+                Forms\Components\TextInput::make('upgrade_card_cart_subtotal_min')
+                    ->label('Min. cart subtotal (optional)')
+                    ->numeric()
+                    ->minValue(0)
+                    ->placeholder('0'),
+                Forms\Components\TextInput::make('upgrade_card_cart_items_count_min')
+                    ->label('Min. cart items (optional)')
+                    ->numeric()
+                    ->minValue(0)
+                    ->integer()
+                    ->placeholder('0'),
+                Forms\Components\Repeater::make('upgrade_mappings_items')
+                    ->label('Upgrade mappings')
+                    ->schema([
+                        Forms\Components\Section::make('Match (when to show this upgrade)')
+                            ->schema([
+                                Forms\Components\TextInput::make('match_product_id')
+                                    ->label('Product ID (optional)')
+                                    ->placeholder('GID or numeric'),
+                                Forms\Components\TextInput::make('match_variant_id')
+                                    ->label('Variant ID (optional)')
+                                    ->placeholder('GID or numeric'),
+                                Forms\Components\TextInput::make('match_sku_regex')
+                                    ->label('SKU regex (optional)')
+                                    ->placeholder('/^ABC-\\d+$/'),
+                                Forms\Components\TextInput::make('match_sku_segment')
+                                    ->label('SKU contains (optional)')
+                                    ->placeholder('SUB'),
+                                Forms\Components\TextInput::make('match_line_item_property_exists')
+                                    ->label('Line has property (optional)')
+                                    ->placeholder('Dog Name'),
+                                Forms\Components\KeyValue::make('match_line_item_property_equals')
+                                    ->label('Property equals (optional)')
+                                    ->keyPlaceholder('key')
+                                    ->valuePlaceholder('value'),
+                            ])
+                            ->columns(2)
+                            ->collapsible(),
+                        Forms\Components\Select::make('action_type')
+                            ->options(['subscription' => 'Subscription (Recharge)', 'bundle_swap' => 'Bundle swap'])
+                            ->default('subscription')
+                            ->required(),
+                        Forms\Components\TextInput::make('target_variant_id')
+                            ->label('Target variant ID')
+                            ->placeholder('GID or numeric')
+                            ->required(),
+                        Forms\Components\TextInput::make('quantity')
+                            ->numeric()
+                            ->default(1)
+                            ->minValue(1),
+                        Forms\Components\Repeater::make('plans')
+                            ->label('Plans (optional, for subscription)')
+                            ->schema([
+                                Forms\Components\TextInput::make('id')
+                                    ->label('Plan ID')
+                                    ->required()
+                                    ->placeholder('1_month'),
+                                Forms\Components\TextInput::make('label')
+                                    ->label('Plan label')
+                                    ->required()
+                                    ->placeholder('Deliver every 1 month'),
+                                Forms\Components\TextInput::make('target_variant_id')
+                                    ->label('Target variant (if different per plan)')
+                                    ->placeholder('GID or numeric'),
+                                Forms\Components\TextInput::make('selling_plan_id')
+                                    ->label('Selling plan ID (Shopify)')
+                                    ->placeholder('gid://shopify/SellingPlan/…'),
+                            ])
+                            ->columns(2)
+                            ->defaultItems(0)
+                            ->addActionLabel('Add plan'),
+                    ])
+                    ->columns(1)
+                    ->defaultItems(0)
+                    ->addActionLabel('Add mapping'),
+                Forms\Components\Repeater::make('upgrade_card_plans')
+                    ->label('Card plans dropdown (optional)')
+                    ->description('Options shown in the card dropdown (id + label).')
+                    ->schema([
+                        Forms\Components\TextInput::make('id')
+                            ->label('Plan ID')
+                            ->required()
+                            ->placeholder('1_month'),
+                        Forms\Components\TextInput::make('label')
+                            ->label('Label')
+                            ->required()
+                            ->placeholder('Every 1 month'),
+                    ])
+                    ->columns(2)
+                    ->defaultItems(0)
+                    ->addActionLabel('Add plan option'),
+            ])
+            ->columns(2)
+            ->visible(fn (Get $get): bool => $get('surface') === 'checkout' && $get('type') === 'checkout_upgrade_card');
     }
 
     protected static function schemaCheckoutProgressBar(Form $form): Forms\Components\Section

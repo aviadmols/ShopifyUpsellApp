@@ -9,6 +9,7 @@ use App\Models\Offer;
 use App\Models\Placement;
 use App\Models\Shop;
 use App\Services\CartLineRulesEvaluator;
+use App\Services\CartLineUpgradeMatcher;
 use App\Services\RuntimeTemplateVarsService;
 use App\Services\RuleEngine;
 use App\Services\ShopifyGraphQLService;
@@ -111,6 +112,80 @@ class CheckoutUpsellController extends Controller
 
         // Experience-only mode (no block_id): return empty offers without requiring Placement.
         return $emptyResponse();
+    }
+
+    /**
+     * Upgrade card: return payload (enabled, headline, description, items, plans, cta_label, actions)
+     * for the checkout-upgrade-card extension. Resolves block by block_id (surface=checkout, type=checkout_upgrade_card).
+     */
+    public function upgradeCard(Request $request): JsonResponse
+    {
+        $blockId = $request->input('block_id');
+        $this->logExt('checkout_upgrade_card_request', [
+            'block_id' => $blockId,
+            'shop' => $request->input('shop'),
+            'line_items_count' => is_array($request->input('line_items')) ? count((array) $request->input('line_items')) : 0,
+        ]);
+
+        $empty = fn () => response()->json([
+            'enabled' => false,
+            'items' => [],
+            'plans' => [],
+            'actions' => [],
+        ]);
+
+        if ($blockId === null || $blockId === '') {
+            $this->logExt('checkout_upgrade_card_missing_block_id', []);
+            return $empty();
+        }
+        $blockIdInt = (int) $blockId;
+        if ($blockIdInt < 1) {
+            $this->logExt('checkout_upgrade_card_invalid_block_id', ['block_id' => $blockId]);
+            return $empty();
+        }
+
+        $block = Block::where('surface', 'checkout')->where('type', 'checkout_upgrade_card')->find($blockIdInt);
+        if (! $block) {
+            $this->logExt('checkout_upgrade_card_block_not_found', ['block_id' => $blockIdInt]);
+            return $empty();
+        }
+
+        $shop = $block->shop;
+        if (! $shop || $shop->uninstalled_at !== null) {
+            $this->logExt('checkout_upgrade_card_shop_not_connected', ['block_id' => $block->id]);
+            return $empty();
+        }
+
+        $context = $this->buildContext($request);
+        if ($block->rule_id) {
+            $rule = $block->rule;
+            if (! $rule || ! $this->ruleEngine->evaluate($rule->conditions, $context)) {
+                $this->logExt('checkout_upgrade_card_rule_failed', ['block_id' => $block->id]);
+                return $empty();
+            }
+        }
+
+        $config = $block->config ?? [];
+        $matcher = app(CartLineUpgradeMatcher::class);
+        $payload = $matcher->run($config, $context);
+
+        $vars = $this->buildTemplateVars($context, $config);
+        if ($vars !== []) {
+            foreach (['headline', 'description', 'cta_label'] as $key) {
+                if (isset($payload[$key]) && is_string($payload[$key])) {
+                    $payload[$key] = $this->interpolateValueRecursive($payload[$key], $vars);
+                }
+            }
+        }
+
+        $this->logExt('checkout_upgrade_card_response', [
+            'block_id' => $block->id,
+            'enabled' => $payload['enabled'] ?? false,
+            'items_count' => count($payload['items'] ?? []),
+            'actions_count' => count($payload['actions'] ?? []),
+        ]);
+
+        return response()->json($payload);
     }
 
     /**

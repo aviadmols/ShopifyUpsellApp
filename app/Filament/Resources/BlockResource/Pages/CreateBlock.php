@@ -162,6 +162,93 @@ class CreateBlock extends CreateRecord
     }
 
     /**
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array{id: string, label: string}>
+     */
+    public static function normalizeUpgradeCardPlans(array $items): array
+    {
+        $out = [];
+        foreach (is_array($items) ? $items : [] as $p) {
+            if (! is_array($p)) {
+                continue;
+            }
+            $id = trim((string) ($p['id'] ?? ''));
+            $label = trim((string) ($p['label'] ?? ''));
+            if ($id !== '' && $label !== '') {
+                $out[] = ['id' => $id, 'label' => $label];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array<string, mixed>>
+     */
+    public static function normalizeUpgradeMappings(array $items): array
+    {
+        $out = [];
+        foreach (is_array($items) ? $items : [] as $m) {
+            if (! is_array($m)) {
+                continue;
+            }
+            $targetVariantId = trim((string) ($m['target_variant_id'] ?? ''));
+            if ($targetVariantId === '') {
+                continue;
+            }
+            $match = [];
+            if (! empty($m['match_product_id'])) {
+                $match['product_id'] = (string) $m['match_product_id'];
+            }
+            if (! empty($m['match_variant_id'])) {
+                $match['variant_id'] = (string) $m['match_variant_id'];
+            }
+            if (! empty($m['match_sku_regex'])) {
+                $match['sku_regex'] = (string) $m['match_sku_regex'];
+            }
+            if (! empty($m['match_sku_segment'])) {
+                $match['sku_segment'] = (string) $m['match_sku_segment'];
+            }
+            if (! empty($m['match_line_item_property_exists'])) {
+                $match['line_item_property_exists'] = (string) $m['match_line_item_property_exists'];
+            }
+            if (! empty($m['match_line_item_property_equals']) && is_array($m['match_line_item_property_equals'])) {
+                $match['line_item_property_equals'] = $m['match_line_item_property_equals'];
+            }
+            $plans = [];
+            foreach (is_array($m['plans'] ?? []) ?: [] as $plan) {
+                if (! is_array($plan)) {
+                    continue;
+                }
+                $entry = [];
+                if (trim((string) ($plan['id'] ?? '')) !== '') {
+                    $entry['id'] = trim((string) $plan['id']);
+                }
+                if (trim((string) ($plan['label'] ?? '')) !== '') {
+                    $entry['label'] = trim((string) $plan['label']);
+                }
+                if (trim((string) ($plan['target_variant_id'] ?? '')) !== '') {
+                    $entry['target_variant_id'] = trim((string) $plan['target_variant_id']);
+                }
+                if (trim((string) ($plan['selling_plan_id'] ?? '')) !== '') {
+                    $entry['selling_plan_id'] = trim((string) $plan['selling_plan_id']);
+                }
+                if ($entry !== []) {
+                    $plans[] = $entry;
+                }
+            }
+            $out[] = [
+                'match' => $match,
+                'action_type' => (string) ($m['action_type'] ?? 'subscription'),
+                'target_variant_id' => $targetVariantId,
+                'quantity' => max(1, (int) ($m['quantity'] ?? 1)),
+                'plans' => $plans,
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -192,6 +279,16 @@ class CreateBlock extends CreateRecord
                 'card_spacing' => (string) ($data['card_spacing'] ?? 'loose'),
                 'divider_between_cards' => (bool) ($data['divider_between_cards'] ?? false),
                 'show_quantity' => (bool) ($data['show_quantity'] ?? true),
+            ];
+        } elseif ($surface === 'checkout' && $type === 'checkout_upgrade_card') {
+            $config = [
+                'headline' => (string) ($data['upgrade_card_headline'] ?? ''),
+                'description' => (string) ($data['upgrade_card_description'] ?? ''),
+                'cta_label' => (string) ($data['upgrade_card_cta_label'] ?? 'Upgrade'),
+                'cart_subtotal_min' => isset($data['upgrade_card_cart_subtotal_min']) && $data['upgrade_card_cart_subtotal_min'] !== '' ? (float) $data['upgrade_card_cart_subtotal_min'] : null,
+                'cart_items_count_min' => isset($data['upgrade_card_cart_items_count_min']) && $data['upgrade_card_cart_items_count_min'] !== '' ? (int) $data['upgrade_card_cart_items_count_min'] : null,
+                'plans' => self::normalizeUpgradeCardPlans($data['upgrade_card_plans'] ?? []),
+                'upgrade_mappings' => self::normalizeUpgradeMappings($data['upgrade_mappings_items'] ?? []),
             ];
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {
             $config = [
@@ -255,6 +352,16 @@ class CreateBlock extends CreateRecord
                 'quantity_min' => max(1, (int) ($data['quantity_min'] ?? 1)),
                 'quantity_max' => max(1, (int) ($data['quantity_max'] ?? 10)),
             ];
+        }
+
+        if (isset($data['runtime_variables_json']) && is_string($data['runtime_variables_json'])) {
+            $trimmed = trim($data['runtime_variables_json']);
+            if ($trimmed !== '') {
+                $decoded = json_decode($trimmed, true);
+                if (is_array($decoded)) {
+                    $config['runtime_variables'] = $decoded;
+                }
+            }
         }
 
         foreach ($extra as $key => $value) {
@@ -356,6 +463,10 @@ class CreateBlock extends CreateRecord
             'max_offers', 'display_mode', 'require_expanded', 'section_heading', 'title_size', 'title_appearance',
             'show_price', 'show_description', 'image_aspect_ratio', 'image_fit', 'image_corner_radius',
             'button_kind', 'button_appearance', 'card_spacing', 'divider_between_cards',
+            'upgrade_card_headline', 'upgrade_card_description', 'upgrade_card_cta_label',
+            'upgrade_card_cart_subtotal_min', 'upgrade_card_cart_items_count_min',
+            'upgrade_mappings_items', 'upgrade_card_plans',
+            'runtime_variables_json',
             'progress_bar_type', 'progress_bar_goal', 'progress_bar_message_below', 'progress_bar_message_achieved',
             'progress_bar_discount_type', 'progress_bar_discount_value',
             'icon_features_items',
@@ -383,6 +494,10 @@ class CreateBlock extends CreateRecord
             'section_heading', 'title_size', 'title_appearance', 'show_price', 'show_description',
             'image_aspect_ratio', 'image_fit', 'image_corner_radius', 'button_kind', 'button_appearance',
             'card_spacing', 'divider_between_cards',
+            'upgrade_card_headline', 'upgrade_card_description', 'upgrade_card_cta_label',
+            'upgrade_card_cart_subtotal_min', 'upgrade_card_cart_items_count_min',
+            'upgrade_mappings_items', 'upgrade_card_plans',
+            'runtime_variables_json',
             'progress_bar_type', 'progress_bar_goal', 'progress_bar_message_below', 'progress_bar_message_achieved',
             'progress_bar_discount_type', 'progress_bar_discount_value',
             'icon_features_items',
