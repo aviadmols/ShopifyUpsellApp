@@ -82,9 +82,9 @@ class OpenRouterService
                 return null;
             }
 
-            $decoded = json_decode($content, true);
+            [$decoded, $decodeError] = $this->decodeAssistantJson($content);
             if (! is_array($decoded)) {
-                $this->logAiRequest('generate', $body, $responseBody, null, 'error', 'Invalid JSON in content', $durationMs);
+                $this->logAiRequest('generate', $body, $responseBody, null, 'error', $decodeError ?? 'Invalid JSON in content', $durationMs);
                 return null;
             }
 
@@ -104,6 +104,130 @@ class OpenRouterService
             Log::error('OpenRouter request failed', ['message' => $e->getMessage()]);
             return null;
         }
+    }
+
+    /**
+     * Decode strict JSON object from assistant content, with repair fallbacks.
+     *
+     * @return array{0: array<string, mixed>|null, 1: string|null} [decoded, error]
+     */
+    private function decodeAssistantJson(string $content): array
+    {
+        $original = $content;
+        $content = trim($content);
+
+        // Strip common markdown code fences.
+        if (str_starts_with($content, '```')) {
+            $content = preg_replace('/^```[a-zA-Z0-9_-]*\s*/', '', $content) ?? $content;
+            $content = preg_replace('/\s*```$/', '', $content) ?? $content;
+            $content = trim($content);
+        }
+
+        // Remove UTF-8 BOM if present.
+        $content = preg_replace('/^\xEF\xBB\xBF/', '', $content) ?? $content;
+
+        $candidates = [];
+        $candidates[] = $content;
+        $extracted = $this->extractOuterJsonObject($content);
+        if ($extracted !== null) {
+            $candidates[] = $extracted;
+        }
+        $candidates[] = $this->escapeControlCharsInsideJsonStrings($content);
+        if ($extracted !== null) {
+            $candidates[] = $this->escapeControlCharsInsideJsonStrings($extracted);
+        }
+
+        $lastError = null;
+        foreach (array_values(array_unique($candidates)) as $candidate) {
+            try {
+                /** @var mixed $decoded */
+                $decoded = json_decode($candidate, true, 512, JSON_THROW_ON_ERROR);
+                if (is_array($decoded)) {
+                    return [$decoded, null];
+                }
+                $lastError = 'Decoded JSON is not an object';
+            } catch (\Throwable $e) {
+                $lastError = $e->getMessage();
+            }
+        }
+
+        // Include a short preview to help debugging without dumping full content.
+        $preview = substr($original, 0, 180);
+        return [null, 'Invalid JSON in content: ' . ($lastError ?? 'unknown') . ' | preview=' . $preview];
+    }
+
+    private function extractOuterJsonObject(string $text): ?string
+    {
+        $start = strpos($text, '{');
+        $end = strrpos($text, '}');
+        if ($start === false || $end === false || $end <= $start) {
+            return null;
+        }
+        return substr($text, $start, $end - $start + 1);
+    }
+
+    /**
+     * Some providers occasionally return invalid JSON due to raw control characters inside string values.
+     * This function escapes \\r, \\n, \\t when they appear INSIDE JSON strings.
+     */
+    private function escapeControlCharsInsideJsonStrings(string $jsonLike): string
+    {
+        $out = '';
+        $inString = false;
+        $escape = false;
+        $len = strlen($jsonLike);
+
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $jsonLike[$i];
+
+            if ($inString) {
+                if ($escape) {
+                    $out .= $ch;
+                    $escape = false;
+                    continue;
+                }
+                if ($ch === '\\') {
+                    $out .= $ch;
+                    $escape = true;
+                    continue;
+                }
+                if ($ch === '"') {
+                    $out .= $ch;
+                    $inString = false;
+                    continue;
+                }
+                if ($ch === "\n") {
+                    $out .= '\\n';
+                    continue;
+                }
+                if ($ch === "\r") {
+                    $out .= '\\r';
+                    continue;
+                }
+                if ($ch === "\t") {
+                    $out .= '\\t';
+                    continue;
+                }
+                // Other ASCII control chars.
+                $ord = ord($ch);
+                if ($ord < 0x20) {
+                    // Replace with a space to keep JSON valid.
+                    $out .= ' ';
+                    continue;
+                }
+                $out .= $ch;
+                continue;
+            }
+
+            if ($ch === '"') {
+                $out .= $ch;
+                $inString = true;
+                continue;
+            }
+            $out .= $ch;
+        }
+
+        return $out;
     }
 
     /**
