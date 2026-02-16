@@ -1,8 +1,12 @@
 <x-filament-panels::page>
     <div class="space-y-6">
-        <x-filament::tabs wire:model="activeTab" class="fi-ta-tabs">
-            <x-filament::tabs.tab value="settings" label="Settings" />
-            <x-filament::tabs.tab value="logs" label="Logs" />
+        <x-filament::tabs label="OpenRouter tabs">
+            <x-filament::tabs.item :active="$activeTab === 'settings'" wire:click="$set('activeTab', 'settings')">
+                Settings
+            </x-filament::tabs.item>
+            <x-filament::tabs.item :active="$activeTab === 'logs'" wire:click="$set('activeTab', 'logs')">
+                Logs
+            </x-filament::tabs.item>
         </x-filament::tabs>
 
         @if($activeTab === 'settings')
