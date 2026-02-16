@@ -1,4 +1,4 @@
-# Upgrade card: single banner after cart line list (Order Summary) — suggest subscription/bundle upgrades.
+# Upgrade card: app block in Checkout — suggest subscription/bundle upgrades.
 api_version = "2025-04"
 
 [[extensions]]
@@ -8,7 +8,7 @@ name = "Zyg Upgrade Card"
 handle = "checkout-upgrade-card"
 
 [[extensions.targeting]]
-target = "purchase.checkout.cart-line-list.render-after"
+target = "purchase.checkout.block.render"
 module = "./src/UpgradeCard.jsx"
 
 [extensions.capabilities]

@@ -304,7 +304,7 @@ class BlockResource extends Resource
     protected static function schemaCheckoutUpgradeCard(Form $form): Forms\Components\Section
     {
         return Forms\Components\Section::make('Upgrade card (Checkout Order Summary)')
-            ->description('Single card after cart line list. Match cart lines by product/variant/SKU/properties and offer subscription or bundle swap. In Shopify Checkout add the "Zyg Upgrade Card" block and set Widget ID to this widget\'s ID.')
+            ->description('Single card after cart line list. Match cart lines by product/variant/SKU/properties and offer subscription or bundle swap. To show in Checkout: (1) Note this block\'s ID (from the Blocks table or the URL when editing). (2) In Shopify Partners → your app → Extensions → "Zyg Upgrade Card" → Settings, set Widget ID to that ID, and set Extension secret / API URL. (3) In the store: Settings → Checkout → Customize → add the "Zyg Upgrade Card" app block to the Order summary (cart) area → Save.')
             ->schema([
                 Forms\Components\TextInput::make('upgrade_card_headline')
                     ->label('Headline')

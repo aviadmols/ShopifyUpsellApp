@@ -1,5 +1,5 @@
 /**
- * Upgrade card: single card after cart line list (Order Summary).
+ * Upgrade card: app block in Checkout.
  * Fetches payload from API (headline, items, plans, CTA, actions) and runs applyCartLinesChange sequentially on CTA.
  */
 import {
@@ -77,7 +77,7 @@ function normalizeLineItemsForApi(lines) {
   });
 }
 
-export default reactExtension('purchase.checkout.cart-line-list.render-after', () => <UpgradeCard />);
+export default reactExtension('purchase.checkout.block.render', () => <UpgradeCard />);
 
 function UpgradeCard() {
   const settings = useSettings();

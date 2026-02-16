@@ -37,6 +37,15 @@ class EditBlock extends EditRecord
 
     public ?string $refineError = null;
 
+    public function getSubheading(): ?string
+    {
+        if ($this->record && $this->record->surface === 'checkout' && $this->record->type === 'checkout_upgrade_card') {
+            return 'Widget ID for Checkout: ' . $this->record->getKey() . ' — Set this as "Widget ID" in Shopify Partners (Extensions → Zyg Upgrade Card → Settings) and add the block in Checkout customization.';
+        }
+
+        return null;
+    }
+
     protected function getHeaderActions(): array
     {
         return [

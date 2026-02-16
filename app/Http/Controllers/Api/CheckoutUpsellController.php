@@ -288,6 +288,19 @@ class CheckoutUpsellController extends Controller
             ]);
         }
 
+        // Helpful error: merchant set Widget ID to an Upgrade Card block (wrong extension).
+        if ($typeLower === 'checkout_upgrade_card') {
+            $this->logExt('checkout_offers_block_type_mismatch', ['block_id' => $block->id, 'type' => $type]);
+            return response()->json([
+                'offers' => [],
+                'blocks' => [],
+                'ui' => [],
+                'resolved_block_id' => $block->id,
+                'is_ai_generated_widget' => $this->isAiGeneratedBlock($block),
+                'block_error' => 'Widget ID '.$block->id.' is an Upgrade Card (type=checkout_upgrade_card). The "Zyg Blocks" checkout offers extension expects a Checkout Upsell widget (type=upsell). Set Widget ID to an Upsell block ID, or add/configure the separate "Zyg Upgrade Card" checkout block.',
+            ]);
+        }
+
         $this->logExt('checkout_offers_block_unknown_type', ['block_id' => $block->id, 'type' => $type]);
         return response()->json([
             'offers' => [],

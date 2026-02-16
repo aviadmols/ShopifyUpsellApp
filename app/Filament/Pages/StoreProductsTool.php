@@ -11,15 +11,15 @@ class StoreProductsTool extends Page
 {
     protected static ?string $navigationIcon = 'heroicon-o-cube';
 
-    protected static ?string $navigationGroup = 'כלי עזר';
+    protected static ?string $navigationGroup = 'Tools';
 
-    protected static ?string $navigationLabel = 'מוצרים, וריאנטים ותוכניות מכירה';
+    protected static ?string $navigationLabel = 'Products, variants & selling plans';
 
     protected static ?int $navigationSort = 50;
 
     protected static string $view = 'filament.pages.store-products-tool';
 
-    protected static ?string $title = 'מוצרי החנות – וריאנטים ו-Selling Plans';
+    protected static ?string $title = 'Store products – Variants & selling plans';
 
     public ?int $shop_id = null;
 
@@ -45,14 +45,14 @@ class StoreProductsTool extends Page
         $this->products = [];
 
         if (! $this->shop_id) {
-            $this->loadError = 'נא לבחור חנות.';
+            $this->loadError = 'Please select a shop.';
 
             return;
         }
 
         $shop = Shop::whereNull('uninstalled_at')->find($this->shop_id);
         if (! $shop) {
-            $this->loadError = 'חנות לא נמצאה.';
+            $this->loadError = 'Shop not found.';
 
             return;
         }
@@ -65,7 +65,7 @@ class StoreProductsTool extends Page
                 'shop_id' => $this->shop_id,
                 'message' => $e->getMessage(),
             ]);
-            $this->loadError = 'טעינה נכשלה: ' . $e->getMessage();
+            $this->loadError = 'Load failed: ' . $e->getMessage();
         }
     }
 
@@ -73,7 +73,7 @@ class StoreProductsTool extends Page
     {
         return [
             \Filament\Actions\Action::make('load')
-                ->label('טען מוצרים')
+                ->label('Load products')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->action('loadProducts'),
         ];
