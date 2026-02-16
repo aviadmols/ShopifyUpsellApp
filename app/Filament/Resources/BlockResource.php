@@ -364,15 +364,15 @@ class BlockResource extends Resource
                             ->required(),
                         Forms\Components\TextInput::make('target_variant_id')
                             ->label('Target variant ID')
-                            ->placeholder('GID או מספר וריאנט (השתמש ב״כלי עזר״ בתפריט לצפייה ברשימת המוצרים והוריאנטים)')
+                            ->placeholder('Variant GID or numeric ID (use Tools → Products, variants & selling plans)')
                             ->required()
                             ->maxLength(255)
-                            ->helperText('שדה חופשי: הזן GID (למשל gid://shopify/ProductVariant/123) או מספר וריאנט. בדף ״כלי עזר״ תוכל לראות את כל המוצרים והוריאנטים בחנות.'),
+                            ->helperText('Free text field: enter a Variant GID (e.g. gid://shopify/ProductVariant/123) or a numeric variant ID. Use Tools → Products, variants & selling plans to browse and copy IDs from the store.'),
                         Forms\Components\TextInput::make('selling_plan_id')
                             ->label('Selling plan ID (optional)')
-                            ->placeholder('GID או מספר תוכנית מכירה')
+                            ->placeholder('Selling plan GID or numeric ID')
                             ->maxLength(255)
-                            ->helperText('אופציונלי. ברשימת ״כלי עזר״ תופיע תוכנית המכירה לכל מוצר במידה ויש.'),
+                            ->helperText('Optional. Use Tools → Products, variants & selling plans to find selling plan IDs for products that have subscriptions.'),
                         Forms\Components\TextInput::make('quantity')
                             ->numeric()
                             ->default(1)

@@ -95,6 +95,30 @@ class CreateBlock extends CreateRecord
                 ]);
             }
         }
+
+        // Upgrade card requires at least one match condition per mapping, otherwise it can never be enabled.
+        if ($surface === 'checkout' && $type === 'checkout_upgrade_card') {
+            $items = is_array($data['upgrade_mappings_items'] ?? null) ? $data['upgrade_mappings_items'] : [];
+            foreach ($items as $m) {
+                if (! is_array($m)) {
+                    continue;
+                }
+                $hasAnyMatch =
+                    trim((string) ($m['match_product_id'] ?? '')) !== '' ||
+                    trim((string) ($m['match_variant_id'] ?? '')) !== '' ||
+                    trim((string) ($m['match_sku_regex'] ?? '')) !== '' ||
+                    trim((string) ($m['match_sku_segment'] ?? '')) !== '' ||
+                    trim((string) ($m['match_line_item_property_exists'] ?? '')) !== '' ||
+                    (! empty($m['match_line_item_property_equals']) && is_array($m['match_line_item_property_equals']));
+
+                if (! $hasAnyMatch) {
+                    throw ValidationException::withMessages([
+                        'upgrade_mappings_items' => 'Each upgrade mapping must include at least one Match condition (product ID, variant ID, SKU, or property).',
+                    ]);
+                }
+            }
+        }
+
         $this->widgetOffersData = is_array($data['widget_offers'] ?? null) ? $data['widget_offers'] : [];
         $data['config'] = self::buildBlockConfig($data);
         self::unsetConfigKeys($data);
