@@ -9,11 +9,13 @@ use App\Models\Block;
 use App\Models\CheckoutExperience;
 use App\Models\Offer;
 use App\Models\Placement;
+use App\Models\Rule;
 use App\Services\OpenRouterService;
 use App\Services\RuleEngine;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\View\View;
+use Illuminate\Validation\ValidationException;
 
 class EditBlock extends EditRecord
 {
@@ -307,6 +309,9 @@ class EditBlock extends EditRecord
     protected function mutateFormDataBeforeFill(array $data): array
     {
         $this->record->load('blockOffers.offer.rule');
+        $data['runtime_rule_conditions_json'] = $this->record->rule?->conditions
+            ? (string) json_encode($this->record->rule->conditions, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+            : '';
         $config = is_array($data['config'] ?? null) ? $data['config'] : [];
         $surface = (string) ($data['surface'] ?? '');
         $type = (string) ($data['type'] ?? '');
@@ -412,10 +417,44 @@ class EditBlock extends EditRecord
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        $rawRuleJson = trim((string) ($data['runtime_rule_conditions_json'] ?? ''));
+        if ($rawRuleJson === '') {
+            $data['rule_id'] = null;
+        } else {
+            try {
+                /** @var mixed $decoded */
+                $decoded = json_decode($rawRuleJson, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\Throwable $e) {
+                throw ValidationException::withMessages([
+                    'runtime_rule_conditions_json' => 'Invalid JSON: ' . $e->getMessage(),
+                ]);
+            }
+
+            if (! is_array($decoded)) {
+                throw ValidationException::withMessages([
+                    'runtime_rule_conditions_json' => 'Rule conditions JSON must be an object/array.',
+                ]);
+            }
+
+            $existingRule = $this->record->rule;
+            if ($existingRule) {
+                $existingRule->update(['conditions' => $decoded]);
+                $data['rule_id'] = $existingRule->id;
+            } else {
+                $rule = Rule::create([
+                    'shop_id' => $this->record->shop_id,
+                    'name' => 'Widget rule ' . $this->record->id,
+                    'conditions' => $decoded,
+                ]);
+                $data['rule_id'] = $rule->id;
+            }
+        }
+
         $this->widgetOffersData = is_array($data['widget_offers'] ?? null) ? $data['widget_offers'] : [];
         $data['config'] = CreateBlock::buildBlockConfig($data);
         CreateBlock::unsetConfigKeys($data);
         unset($data['widget_offers']);
+        unset($data['runtime_rule_conditions_json']);
 
         return $data;
     }

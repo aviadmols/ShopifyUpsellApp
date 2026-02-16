@@ -118,19 +118,12 @@ class BlockResource extends Resource
                 Forms\Components\Section::make('AI-generated widget')
                     ->description('This widget was created with AI. You can review and edit the generated description and PHP logic below.')
                     ->schema([
-                        Forms\Components\Placeholder::make('runtime_rule_conditions')
-                            ->label('Runtime logic actually used (rule conditions JSON)')
-                            ->content(function ($record): \Illuminate\Support\HtmlString {
-                                $conditions = $record?->rule?->conditions ?? [];
-                                if (! is_array($conditions) || $conditions === []) {
-                                    return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500 dark:text-gray-400">No runtime rule is attached to this widget. It will render without rule filtering.</p>');
-                                }
-
-                                $json = json_encode($conditions, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                                return new \Illuminate\Support\HtmlString(
-                                    '<pre class="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 text-xs overflow-x-auto whitespace-pre font-mono">' . e((string) $json) . '</pre>'
-                                );
-                            })
+                        Forms\Components\Textarea::make('runtime_rule_conditions_json')
+                            ->label('Runtime logic (rule conditions JSON)')
+                            ->helperText('Editable: this JSON is what the server actually evaluates to decide if the widget should show.')
+                            ->rows(10)
+                            ->extraAttributes(['class' => 'font-mono'])
+                            ->visible(fn (?Block $record): bool => $record !== null)
                             ->columnSpanFull(),
                         Forms\Components\Textarea::make('ai_generated_description')
                             ->label('What it does')
