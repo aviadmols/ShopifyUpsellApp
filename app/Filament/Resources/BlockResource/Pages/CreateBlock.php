@@ -251,6 +251,9 @@ class CreateBlock extends CreateRecord
             $plansRaw = $m['plans'] ?? null;
             $plansRaw = is_array($plansRaw) ? $plansRaw : [];
             $mappingSellingPlanId = trim((string) ($m['selling_plan_id'] ?? ''));
+            $headlineOverride = trim((string) ($m['mapping_headline'] ?? ''));
+            $descriptionOverride = trim((string) ($m['mapping_description'] ?? ''));
+            $ctaOverride = trim((string) ($m['mapping_cta_label'] ?? ''));
             $planIndex = 0;
             foreach ($plansRaw as $plan) {
                 if (! is_array($plan)) {
@@ -277,13 +280,26 @@ class CreateBlock extends CreateRecord
                 }
                 $planIndex++;
             }
-            $out[] = [
+            $entry = [
                 'match' => $match,
                 'action_type' => (string) ($m['action_type'] ?? 'subscription'),
                 'target_variant_id' => $targetVariantId,
                 'quantity' => max(1, (int) ($m['quantity'] ?? 1)),
                 'plans' => $plans,
             ];
+            if ($mappingSellingPlanId !== '') {
+                $entry['selling_plan_id'] = $mappingSellingPlanId;
+            }
+            if ($headlineOverride !== '') {
+                $entry['headline'] = $headlineOverride;
+            }
+            if ($descriptionOverride !== '') {
+                $entry['description'] = $descriptionOverride;
+            }
+            if ($ctaOverride !== '') {
+                $entry['cta_label'] = $ctaOverride;
+            }
+            $out[] = $entry;
         }
         return $out;
     }

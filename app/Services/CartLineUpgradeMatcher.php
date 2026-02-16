@@ -30,6 +30,23 @@ class CartLineUpgradeMatcher
     }
 
     /**
+     * Normalize selling plan ID to Shopify GID for applyCartLinesChange.
+     */
+    public static function sellingPlanToGid(?string $id): string
+    {
+        $id = trim((string) $id);
+        if ($id === '') {
+            return '';
+        }
+        if (str_starts_with($id, 'gid://')) {
+            return $id;
+        }
+        $numeric = preg_replace('/\D/', '', $id);
+
+        return $numeric !== '' ? 'gid://shopify/SellingPlan/'.$numeric : $id;
+    }
+
+    /**
      * Match a single cart line against a mapping's "match" criteria.
      *
      * @param  array<string, mixed>  $line  line_item (id, product_id, variant_id, properties, sku?)
@@ -125,6 +142,8 @@ class CartLineUpgradeMatcher
         $items = [];
         $actions = [];
         $usedLineIds = [];
+        /** @var array{headline: string, description: string, cta_label: string}|null $firstOverrides */
+        $firstOverrides = null;
 
         foreach ($lineItems as $line) {
             if (! is_array($line)) {
@@ -159,13 +178,18 @@ class CartLineUpgradeMatcher
 
                 $items[] = [
                     'line_id' => $lineId,
-                    'product_title' => $line['product_title'] ?? $line['title'] ?? 'Item',
-                    'variant_title' => $line['variant_title'] ?? $line['variant_title'] ?? null,
+                    'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
+                    'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
                 ];
 
-                $sellingPlanId = null;
-                if ($actionType === 'subscription' && is_array($plans) && isset($plans[0]['selling_plan_id'])) {
-                    $sellingPlanId = (string) $plans[0]['selling_plan_id'];
+                // Allow selling plan on mapping root, or via first mapping plan entry.
+                $sellingPlanId = '';
+                if ($actionType === 'subscription') {
+                    $sellingPlanId = (string) ($mapping['selling_plan_id'] ?? '');
+                    if ($sellingPlanId === '' && is_array($plans) && isset($plans[0]['selling_plan_id'])) {
+                        $sellingPlanId = (string) $plans[0]['selling_plan_id'];
+                    }
+                    $sellingPlanId = self::sellingPlanToGid($sellingPlanId);
                 }
 
                 $actions[] = [
@@ -182,6 +206,15 @@ class CartLineUpgradeMatcher
                     $addAction['sellingPlanId'] = $sellingPlanId;
                 }
                 $actions[] = $addAction;
+
+                // Capture first-match text overrides (optional).
+                if ($firstOverrides === null) {
+                    $firstOverrides = [
+                        'headline' => (string) ($mapping['headline'] ?? ''),
+                        'description' => (string) ($mapping['description'] ?? ''),
+                        'cta_label' => (string) ($mapping['cta_label'] ?? ''),
+                    ];
+                }
 
                 $usedLineIds[$lineId] = true;
                 break;
@@ -214,15 +247,23 @@ class CartLineUpgradeMatcher
             'plans' => $plansPayload,
             'actions' => $actions,
         ];
-        if (isset($config['headline'])) {
-            $out['headline'] = (string) $config['headline'];
+        $headline = (string) ($config['headline'] ?? '');
+        $description = (string) ($config['description'] ?? '');
+        $cta = (string) ($config['cta_label'] ?? '');
+        if (is_array($firstOverrides)) {
+            if (trim((string) ($firstOverrides['headline'] ?? '')) !== '') {
+                $headline = (string) $firstOverrides['headline'];
+            }
+            if (trim((string) ($firstOverrides['description'] ?? '')) !== '') {
+                $description = (string) $firstOverrides['description'];
+            }
+            if (trim((string) ($firstOverrides['cta_label'] ?? '')) !== '') {
+                $cta = (string) $firstOverrides['cta_label'];
+            }
         }
-        if (isset($config['description'])) {
-            $out['description'] = (string) $config['description'];
-        }
-        if (isset($config['cta_label'])) {
-            $out['cta_label'] = (string) $config['cta_label'];
-        }
+        $out['headline'] = $headline;
+        $out['description'] = $description;
+        $out['cta_label'] = $cta !== '' ? $cta : 'Upgrade';
 
         return $out;
     }

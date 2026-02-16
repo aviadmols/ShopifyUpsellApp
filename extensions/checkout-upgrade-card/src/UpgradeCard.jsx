@@ -63,6 +63,9 @@ function normalizeLineItemsForApi(lines) {
     const id = merch?.id ?? line?.id;
     const productId = merch?.product?.id ?? line?.product_id;
     const variantId = merch?.id ?? line?.variant_id ?? id;
+    const productTitle = merch?.product?.title ?? line?.product_title ?? line?.productTitle ?? '';
+    const variantTitle = merch?.title ?? line?.variant_title ?? line?.variantTitle ?? '';
+    const sku = merch?.sku ?? line?.sku ?? '';
     const properties = toPropertiesObject(
       line?.properties ?? line?.attributes ?? line?.customAttributes ?? merch?.customAttributes ?? merch?.attributes
     );
@@ -72,6 +75,9 @@ function normalizeLineItemsForApi(lines) {
       merchandiseId: variantId,
       product_id: productId,
       variant_id: variantId,
+      product_title: productTitle,
+      variant_title: variantTitle,
+      sku,
       properties,
     };
   });
@@ -232,6 +238,11 @@ function UpgradeCard() {
   const headline = payload?.headline ?? '';
   const description = payload?.description ?? '';
   const ctaLabel = payload?.cta_label ?? 'Upgrade';
+  const ui = payload?.ui && typeof payload.ui === 'object' ? payload.ui : {};
+  const headlineSize = ['small', 'medium', 'large'].includes(String(ui.title_size)) ? String(ui.title_size) : 'medium';
+  const buttonKind = ['primary', 'secondary', 'plain'].includes(String(ui.button_kind)) ? String(ui.button_kind) : 'secondary';
+  const spacing = String(ui.spacing) === 'loose' ? 'loose' : 'tight';
+  const showBorder = ui.show_border !== false;
 
   if (!enabled || items.length === 0) {
     return null;
@@ -247,10 +258,10 @@ function UpgradeCard() {
   const ctaDisabled = !cartEditable || applying;
 
   return (
-    <View padding="base" border="base" borderRadius="base">
-      <BlockStack spacing="tight">
+    <View padding="base" border={showBorder ? 'base' : undefined} borderRadius="base">
+      <BlockStack spacing={spacing}>
         {headline ? (
-          <Text size="medium" emphasis="bold">
+          <Text size={headlineSize} emphasis="bold">
             {headline}
           </Text>
         ) : null}
@@ -291,7 +302,7 @@ function UpgradeCard() {
           </Text>
         ) : null}
         <Button
-          kind="secondary"
+          kind={buttonKind}
           onPress={runActions}
           loading={applying}
           disabled={ctaDisabled}

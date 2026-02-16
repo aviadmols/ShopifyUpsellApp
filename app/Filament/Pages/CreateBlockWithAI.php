@@ -353,13 +353,81 @@ class CreateBlockWithAI extends Page implements HasForms
     {
         $surface = $this->surface ?? '';
         $type = $this->type ?? '';
+        // The AI returns "config" in the API payload shape (e.g. headline/upgrade_mappings for upgrade card),
+        // but CreateBlock::buildBlockConfig expects the Filament form state keys (upgrade_card_headline, upgrade_mappings_items, etc).
+        // Map shapes here so AI-created widgets persist correctly.
+        if ($surface === 'checkout' && $type === 'checkout_upgrade_card') {
+            $ui = is_array($config['ui'] ?? null) ? $config['ui'] : [];
+
+            $data = [
+                'surface' => $surface,
+                'type' => $type,
+                'widget_offers' => [],
+                'offer_ids_csv' => '',
+
+                'upgrade_card_headline' => (string) ($config['headline'] ?? $config['upgrade_card_headline'] ?? ''),
+                'upgrade_card_description' => (string) ($config['description'] ?? $config['upgrade_card_description'] ?? ''),
+                'upgrade_card_cta_label' => (string) ($config['cta_label'] ?? $config['upgrade_card_cta_label'] ?? 'Upgrade'),
+                'upgrade_card_cart_subtotal_min' => $config['cart_subtotal_min'] ?? null,
+                'upgrade_card_cart_items_count_min' => $config['cart_items_count_min'] ?? null,
+
+                'upgrade_card_title_size' => (string) ($ui['title_size'] ?? 'medium'),
+                'upgrade_card_button_kind' => (string) ($ui['button_kind'] ?? 'secondary'),
+                'upgrade_card_spacing' => (string) ($ui['spacing'] ?? 'tight'),
+                'upgrade_card_show_border' => (bool) ($ui['show_border'] ?? true),
+
+                'upgrade_card_plans' => is_array($config['plans'] ?? null) ? $config['plans'] : [],
+                'upgrade_mappings_items' => $this->upgradeMappingsToFormItems(is_array($config['upgrade_mappings'] ?? null) ? $config['upgrade_mappings'] : []),
+                'extra_config' => [],
+            ];
+
+            return CreateBlock::buildBlockConfig($data);
+        }
+
         $data = array_merge([
             'surface' => $surface,
             'type' => $type,
             'widget_offers' => [],
             'offer_ids_csv' => '',
         ], $config);
+
         return CreateBlock::buildBlockConfig($data);
+    }
+
+    /**
+     * Convert stored upgrade_mappings config to Filament form repeater items.
+     *
+     * @param  array<int, array<string, mixed>>  $mappings
+     * @return array<int, array<string, mixed>>
+     */
+    private function upgradeMappingsToFormItems(array $mappings): array
+    {
+        $out = [];
+        foreach ($mappings as $m) {
+            if (! is_array($m)) {
+                continue;
+            }
+            $match = $m['match'] ?? [];
+            $plansList = is_array($m['plans'] ?? null) ? $m['plans'] : [];
+            $firstPlanSellingPlanId = isset($plansList[0]) && is_array($plansList[0])
+                ? (string) ($plansList[0]['selling_plan_id'] ?? '')
+                : '';
+
+            $out[] = [
+                'match_product_id' => (string) ($match['product_id'] ?? ''),
+                'match_variant_id' => (string) ($match['variant_id'] ?? ''),
+                'match_sku_regex' => (string) ($match['sku_regex'] ?? ''),
+                'match_sku_segment' => (string) ($match['sku_segment'] ?? ''),
+                'match_line_item_property_exists' => (string) ($match['line_item_property_exists'] ?? ''),
+                'match_line_item_property_equals' => is_array($match['line_item_property_equals'] ?? null) ? $match['line_item_property_equals'] : [],
+                'action_type' => (string) ($m['action_type'] ?? 'subscription'),
+                'target_variant_id' => (string) ($m['target_variant_id'] ?? ''),
+                'selling_plan_id' => $firstPlanSellingPlanId,
+                'quantity' => (int) ($m['quantity'] ?? 1),
+                'plans' => $plansList,
+            ];
+        }
+        return $out;
     }
 
     public function backToStep1(): void

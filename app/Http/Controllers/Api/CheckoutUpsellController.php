@@ -884,6 +884,25 @@ class CheckoutUpsellController extends Controller
     {
         $vars = $this->lineItemPropertyTemplateVars($context);
 
+        // Common cart-level placeholders.
+        $subtotal = $context['subtotal'] ?? $context['order']['subtotal'] ?? null;
+        if ($subtotal !== null) {
+            $vars['cart_subtotal'] = (string) $subtotal;
+            $vars['subtotal'] = (string) $subtotal;
+        }
+        $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
+        if (is_array($lines)) {
+            $vars['cart_items_count'] = (string) count($lines);
+            $vars['line_items_count'] = (string) count($lines);
+            $first = $lines[0] ?? null;
+            if (is_array($first)) {
+                $vars['first_product_id'] = (string) ($first['product_id'] ?? $first['productId'] ?? '');
+                $vars['first_variant_id'] = (string) ($first['variant_id'] ?? $first['variantId'] ?? $first['merchandiseId'] ?? '');
+                $vars['first_product_title'] = (string) ($first['product_title'] ?? $first['productTitle'] ?? '');
+                $vars['first_variant_title'] = (string) ($first['variant_title'] ?? $first['variantTitle'] ?? '');
+            }
+        }
+
         $runtimeDefs = $blockConfig['runtime_variables'] ?? $blockConfig['runtimeVariables'] ?? null;
         if (is_array($runtimeDefs) && $runtimeDefs !== []) {
             $computed = app(RuntimeTemplateVarsService::class)->compute($runtimeDefs, $context);

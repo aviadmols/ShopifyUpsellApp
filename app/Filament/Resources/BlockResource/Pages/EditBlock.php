@@ -475,6 +475,23 @@ class EditBlock extends EditRecord
             $data['upgrade_card_show_border'] = (bool) ($ui['show_border'] ?? true);
             $data['upgrade_card_plans'] = $config['plans'] ?? [];
             $data['upgrade_mappings_items'] = self::upgradeMappingsToFormItems($config['upgrade_mappings'] ?? []);
+
+            // Backfill older AI-created widgets that saved empty config.
+            if (trim((string) ($data['upgrade_card_headline'] ?? '')) === '' && $this->record?->ai_generated_name) {
+                $data['upgrade_card_headline'] = \Illuminate\Support\Str::limit((string) $this->record->ai_generated_name, 80, '');
+            }
+            if (trim((string) ($data['upgrade_card_description'] ?? '')) === '' && $this->record?->ai_generated_description) {
+                $data['upgrade_card_description'] = (string) $this->record->ai_generated_description;
+            }
+            if (trim((string) ($data['upgrade_card_cta_label'] ?? '')) === '') {
+                $data['upgrade_card_cta_label'] = 'Upgrade';
+            }
+            if ((is_array($data['upgrade_mappings_items'] ?? null) ? $data['upgrade_mappings_items'] : []) === []) {
+                $inferred = self::inferUpgradeMappingsFromAi($this->record);
+                if ($inferred !== []) {
+                    $data['upgrade_mappings_items'] = $inferred;
+                }
+            }
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {
             $data['progress_bar_type'] = (string) ($config['progress_bar_type'] ?? 'free_shipping');
             $data['progress_bar_goal'] = (float) ($config['progress_bar_goal'] ?? 100);
@@ -654,6 +671,8 @@ class EditBlock extends EditRecord
             $firstPlanSellingPlanId = isset($plansList[0]) && is_array($plansList[0])
                 ? (string) ($plansList[0]['selling_plan_id'] ?? '')
                 : '';
+            $mappingSellingPlanId = trim((string) ($m['selling_plan_id'] ?? ''));
+            $effectiveSellingPlanId = $firstPlanSellingPlanId !== '' ? $firstPlanSellingPlanId : $mappingSellingPlanId;
             $item = [
                 'match_product_id' => (string) ($match['product_id'] ?? ''),
                 'match_variant_id' => (string) ($match['variant_id'] ?? ''),
@@ -663,13 +682,98 @@ class EditBlock extends EditRecord
                 'match_line_item_property_equals' => is_array($match['line_item_property_equals'] ?? null) ? $match['line_item_property_equals'] : [],
                 'action_type' => (string) ($m['action_type'] ?? 'subscription'),
                 'target_variant_id' => (string) ($m['target_variant_id'] ?? ''),
-                'selling_plan_id' => $firstPlanSellingPlanId,
+                'selling_plan_id' => $effectiveSellingPlanId,
+                'mapping_headline' => (string) ($m['headline'] ?? ''),
+                'mapping_description' => (string) ($m['description'] ?? ''),
+                'mapping_cta_label' => (string) ($m['cta_label'] ?? ''),
                 'quantity' => (int) ($m['quantity'] ?? 1),
                 'plans' => $plansList,
             ];
             $out[] = $item;
         }
         return $out;
+    }
+
+    /**
+     * Best-effort inference for older AI-created upgrade cards that saved empty config.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function inferUpgradeMappingsFromAi(?Block $record): array
+    {
+        if (! $record) {
+            return [];
+        }
+
+        $php = (string) ($record->ai_generated_php ?? '');
+        if (trim($php) === '') {
+            return [];
+        }
+
+        $matchVariantId = '';
+        $conditions = $record->rule?->conditions ?? [];
+        if (is_array($conditions)) {
+            $groupKey = isset($conditions['or']) ? 'or' : 'and';
+            $rows = is_array($conditions[$groupKey] ?? null) ? $conditions[$groupKey] : [];
+            foreach ($rows as $cond) {
+                if (! is_array($cond)) {
+                    continue;
+                }
+                if (isset($cond['line_items_has_variant_id'])) {
+                    $matchVariantId = (string) $cond['line_items_has_variant_id'];
+                    break;
+                }
+                if (isset($cond['line_items_has_product_id']) && $matchVariantId === '') {
+                    $matchVariantId = (string) $cond['line_items_has_product_id'];
+                }
+            }
+        }
+
+        if ($matchVariantId === '' && preg_match("/variant_id\\s*={2,3}\\s*'([^']+)'/i", $php, $m)) {
+            $matchVariantId = (string) ($m[1] ?? '');
+        }
+
+        $targetVariantId = '';
+        if (preg_match('/addCartLine[\\s\\S]*?ProductVariant\\/(\\d+)/i', $php, $m)) {
+            $targetVariantId = (string) ($m[1] ?? '');
+        } elseif (preg_match_all('/ProductVariant\\/(\\d+)/', $php, $mm) && ! empty($mm[1])) {
+            $targetVariantId = (string) end($mm[1]);
+        }
+
+        $sellingPlanId = '';
+        if (preg_match('/SellingPlan\\/(\\d+)/', $php, $m)) {
+            $sellingPlanId = 'gid://shopify/SellingPlan/' . (string) ($m[1] ?? '');
+        }
+
+        $matchVariantId = trim($matchVariantId);
+        $targetVariantId = trim($targetVariantId);
+        if ($matchVariantId === '' || $targetVariantId === '') {
+            return [];
+        }
+
+        $plans = [];
+        if ($sellingPlanId !== '') {
+            $plans[] = [
+                'id' => 'default',
+                'label' => 'Subscribe',
+                'target_variant_id' => $targetVariantId,
+                'selling_plan_id' => $sellingPlanId,
+            ];
+        }
+
+        return [[
+            'match_product_id' => '',
+            'match_variant_id' => $matchVariantId,
+            'match_sku_regex' => '',
+            'match_sku_segment' => '',
+            'match_line_item_property_exists' => '',
+            'match_line_item_property_equals' => [],
+            'action_type' => 'subscription',
+            'target_variant_id' => $targetVariantId,
+            'selling_plan_id' => $sellingPlanId,
+            'quantity' => 1,
+            'plans' => $plans,
+        ]];
     }
 
     /**

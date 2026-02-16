@@ -266,6 +266,9 @@ function normalizeLineItemsForApi(lines) {
     const id = merch?.id ?? line?.id;
     const productId = merch?.product?.id ?? line?.product_id;
     const variantId = merch?.id ?? line?.variant_id ?? id;
+    const productTitle = merch?.product?.title ?? line?.product_title ?? line?.productTitle ?? '';
+    const variantTitle = merch?.title ?? line?.variant_title ?? line?.variantTitle ?? '';
+    const sku = merch?.sku ?? line?.sku ?? '';
     const properties = toPropertiesObject(
       line?.properties ?? line?.attributes ?? line?.customAttributes ?? merch?.customAttributes ?? merch?.attributes
     );
@@ -275,6 +278,9 @@ function normalizeLineItemsForApi(lines) {
       merchandiseId: variantId,
       product_id: productId,
       variant_id: variantId,
+      product_title: productTitle,
+      variant_title: variantTitle,
+      sku,
       properties,
     };
   });

@@ -439,6 +439,26 @@ class BlockResource extends Resource
                             ->placeholder('Selling plan GID or numeric ID')
                             ->maxLength(255)
                             ->helperText('Optional. Use Tools → Products, variants & selling plans to find selling plan IDs for products that have subscriptions.'),
+                        Forms\Components\Section::make('Display overrides (optional)')
+                            ->description('Override the card text when this mapping is the first match. You can use placeholders like {cart_subtotal} or {first_product_title}.')
+                            ->schema([
+                                Forms\Components\TextInput::make('mapping_headline')
+                                    ->label('Headline override')
+                                    ->maxLength(120)
+                                    ->placeholder('Upgrade to subscribe & save'),
+                                Forms\Components\Textarea::make('mapping_description')
+                                    ->label('Description override')
+                                    ->rows(2)
+                                    ->maxLength(300)
+                                    ->placeholder('Get {discount_percent}% off when you subscribe'),
+                                Forms\Components\TextInput::make('mapping_cta_label')
+                                    ->label('CTA label override')
+                                    ->maxLength(60)
+                                    ->placeholder('Upgrade'),
+                            ])
+                            ->columns(2)
+                            ->collapsible()
+                            ->collapsed(),
                         Forms\Components\TextInput::make('quantity')
                             ->numeric()
                             ->default(1)
