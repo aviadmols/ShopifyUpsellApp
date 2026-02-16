@@ -88,6 +88,7 @@ class BlockAISchemaService
                 'button_kind' => 'primary|secondary|plain',
                 'card_spacing' => 'tight|loose|extraLoose',
                 'show_quantity' => 'bool',
+                'runtime_variables' => 'object (optional). Defines computed template vars usable in text fields as {var_name}. Example: dog_names_message via plural_message_from_property on line item property "Dog Name".',
             ];
         }
         if ($type === 'progress_bar') {
@@ -96,11 +97,13 @@ class BlockAISchemaService
                 'progress_bar_goal' => 'float',
                 'progress_bar_message_below' => 'string, use {amount}',
                 'progress_bar_message_achieved' => 'string',
+                'runtime_variables' => 'object (optional). Computed template vars usable in text fields as {var_name}.',
             ];
         }
         if ($type === 'content_icon_features') {
             return [
                 'icon_features' => 'array of {icon: lock|bag|truck|gift|checkCircle, title, subtitle}',
+                'runtime_variables' => 'object (optional). Computed template vars usable in text fields as {var_name}.',
             ];
         }
         if (in_array($type, ['content_banner', 'content_rich_text', 'content_button'], true)) {
@@ -112,6 +115,7 @@ class BlockAISchemaService
                 'button_url' => 'string',
                 'text_size' => 'small|medium|large',
                 'spacing' => 'tight|loose',
+                'runtime_variables' => 'object (optional). Computed template vars usable in text fields as {var_name}.',
             ];
         }
         if ($type === 'content_product_card') {
@@ -125,6 +129,7 @@ class BlockAISchemaService
                 'button_url' => 'string',
                 'text_size' => 'small|medium|large',
                 'spacing' => 'tight|loose',
+                'runtime_variables' => 'object (optional). Computed template vars usable in text fields as {var_name}.',
             ];
         }
         if ($type === 'post_purchase_funnel') {
@@ -135,6 +140,7 @@ class BlockAISchemaService
                 'funnel_headline_template' => 'string, use {first_name}',
                 'cta_text' => 'string',
                 'decline_text' => 'string',
+                'runtime_variables' => 'object (optional). Computed template vars usable in text fields as {var_name}.',
             ];
         }
         return [];

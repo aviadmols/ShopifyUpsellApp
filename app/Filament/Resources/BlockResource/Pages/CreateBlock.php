@@ -13,6 +13,7 @@ use App\Models\Rule;
 use Filament\Actions;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class CreateBlock extends CreateRecord
@@ -258,7 +259,16 @@ class CreateBlock extends CreateRecord
 
         foreach ($extra as $key => $value) {
             if ($key !== '' && $value !== null && $value !== '') {
-                $config[(string) $key] = $value;
+                $k = (string) $key;
+                // Allow advanced nested config via JSON in Extra config.
+                if (in_array($k, ['runtime_variables', 'runtimeVariables'], true) && is_string($value) && Str::isJson($value)) {
+                    $decoded = json_decode($value, true);
+                    if (is_array($decoded)) {
+                        $config[$k] = $decoded;
+                        continue;
+                    }
+                }
+                $config[$k] = $value;
             }
         }
 

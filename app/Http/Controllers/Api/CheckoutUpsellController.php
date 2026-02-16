@@ -9,6 +9,7 @@ use App\Models\Offer;
 use App\Models\Placement;
 use App\Models\Shop;
 use App\Services\CartLineRulesEvaluator;
+use App\Services\RuntimeTemplateVarsService;
 use App\Services\RuleEngine;
 use App\Services\ShopifyGraphQLService;
 use Illuminate\Contracts\Encryption\DecryptException;
@@ -169,7 +170,7 @@ class CheckoutUpsellController extends Controller
 
         if ($type === 'progress_bar') {
             $ui = $this->buildUiFromBlockConfig($config, true);
-            $ui = $this->interpolateTemplateData($ui, $context);
+            $ui = $this->interpolateTemplateData($ui, $context, (array) $config);
 
             $this->logExt('checkout_offers_block_progress_bar_response', [
                 'block_id' => $block->id,
@@ -191,7 +192,7 @@ class CheckoutUpsellController extends Controller
                 [
                     'id' => $block->id,
                     'type' => $typeLower,
-                    'config' => $this->interpolateTemplateData($config, $context),
+                    'config' => $this->interpolateTemplateData($config, $context, (array) $config),
                 ],
             ];
 
@@ -237,8 +238,8 @@ class CheckoutUpsellController extends Controller
         $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
         $data = $this->enrichOffersFromShopify($shop, $eligible);
         $ui = $this->buildUiFromBlockConfig($config, false);
-        $data = $this->interpolateTemplateData($data, $context);
-        $ui = $this->interpolateTemplateData($ui, $context);
+        $data = $this->interpolateTemplateData($data, $context, (array) $config);
+        $ui = $this->interpolateTemplateData($ui, $context, (array) $config);
 
         $displayMode = (string) ($config['display_mode'] ?? 'stacked');
         $payload = [
@@ -659,9 +660,9 @@ class CheckoutUpsellController extends Controller
      * @param  mixed  $value
      * @return mixed
      */
-    protected function interpolateTemplateData(mixed $value, array $context): mixed
+    protected function interpolateTemplateData(mixed $value, array $context, array $blockConfig = []): mixed
     {
-        $vars = $this->lineItemPropertyTemplateVars($context);
+        $vars = $this->buildTemplateVars($context, $blockConfig);
         if ($vars === []) {
             return $value;
         }
@@ -745,6 +746,32 @@ class CheckoutUpsellController extends Controller
                 $exactKeyLookup = 'prop:' . mb_strtolower(trim((string) $key));
                 if ($exactKeyLookup !== 'prop:' && ! array_key_exists($exactKeyLookup, $vars)) {
                     $vars[$exactKeyLookup] = $val;
+                }
+            }
+        }
+
+        return $vars;
+    }
+
+    /**
+     * Build full template var map: line item properties + computed runtime variables from block config.
+     *
+     * Block config can define `runtime_variables` (array) which produces additional placeholders
+     * like `{dog_names_message}` at runtime (server-side).
+     *
+     * @return array<string, string>
+     */
+    protected function buildTemplateVars(array $context, array $blockConfig = []): array
+    {
+        $vars = $this->lineItemPropertyTemplateVars($context);
+
+        $runtimeDefs = $blockConfig['runtime_variables'] ?? $blockConfig['runtimeVariables'] ?? null;
+        if (is_array($runtimeDefs) && $runtimeDefs !== []) {
+            $computed = app(RuntimeTemplateVarsService::class)->compute($runtimeDefs, $context);
+            foreach ($computed as $key => $val) {
+                $normalized = $this->normalizeTemplateKey((string) $key);
+                if ($normalized !== '') {
+                    $vars[$normalized] = (string) $val;
                 }
             }
         }

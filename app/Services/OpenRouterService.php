@@ -324,6 +324,19 @@ You are a widget (block) generator for a Shopify upsell app. Given the user's re
   - {property:Dog Name} (explicit property lookup; recommended)
   - {prop:Dog Name} (alias)
   Use placeholders when user asks to inject a product property value into the message.
+- Computed placeholders ("shortcodes") are supported via config.runtime_variables (object). These variables are computed SERVER-SIDE from the checkout context and can be referenced in text fields as {var_name}. Supported runtime variable definition types:
+  - plural_message_from_property: {type, property, singular, plural, empty?, separator?, case_insensitive_unique?, max?}
+  - unique_line_item_property_values: {type, property, separator?, case_insensitive_unique?, max?} (returns joined string)
+  Example:
+    runtime_variables: {
+      "dog_names_message": {
+        "type": "plural_message_from_property",
+        "property": "Dog Name",
+        "singular": "Your dog ({value}) deserves the best",
+        "plural": "Your dogs ({values}) deserve the best",
+        "empty": ""
+      }
+    }
 - "rule_match_type": "and" or "or". How to combine conditions.
 - "name": string. Short widget name (e.g. "Subscription message").
 - "description": string. One sentence what this widget does and when it shows.
