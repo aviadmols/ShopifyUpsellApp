@@ -52,6 +52,95 @@
       @endif
     @endif
 
+    @if($surface === 'checkout' && $type === 'checkout_upgrade_card')
+      @php
+        $headline = (string) ($config['headline'] ?? 'Upgrade to a subscription and save!');
+        $description = (string) ($config['description'] ?? 'Upgrade eligible items in your cart to a subscription.');
+        $cta = (string) ($config['cta_label'] ?? 'Upgrade');
+        $plans = is_array($config['plans'] ?? null) ? $config['plans'] : [];
+        $mappings = is_array($config['upgrade_mappings'] ?? null) ? $config['upgrade_mappings'] : [];
+
+        $previewItems = [];
+        foreach ($mappings as $m) {
+          if (!is_array($m)) continue;
+          $match = is_array($m['match'] ?? null) ? $m['match'] : [];
+          $target = (string) ($m['target_variant_id'] ?? '');
+          $actionType = (string) ($m['action_type'] ?? 'subscription');
+
+          $parts = [];
+          if (!empty($match['product_id'])) $parts[] = 'product_id=' . $match['product_id'];
+          if (!empty($match['variant_id'])) $parts[] = 'variant_id=' . $match['variant_id'];
+          if (!empty($match['sku_segment'])) $parts[] = 'sku_contains=' . $match['sku_segment'];
+          if (!empty($match['sku_regex'])) $parts[] = 'sku_regex';
+          if (!empty($match['line_item_property_exists'])) $parts[] = 'prop_exists=' . $match['line_item_property_exists'];
+          if (!empty($match['line_item_property_equals']) && is_array($match['line_item_property_equals'])) $parts[] = 'prop_equals';
+
+          $matchLabel = $parts ? implode(', ', $parts) : 'No match conditions (will never show)';
+          $previewItems[] = [
+            'match' => $matchLabel,
+            'action' => $actionType,
+            'target' => $target !== '' ? $target : '—',
+          ];
+        }
+
+        if (count($previewItems) === 0) {
+          $previewItems = [
+            ['match' => 'variant_id=gid://shopify/ProductVariant/…', 'action' => 'subscription', 'target' => 'gid://shopify/ProductVariant/…'],
+            ['match' => 'sku_contains=SUB', 'action' => 'bundle_swap', 'target' => 'gid://shopify/ProductVariant/…'],
+          ];
+        }
+
+        $planOptions = [];
+        foreach ($plans as $p) {
+          if (!is_array($p)) continue;
+          $id = (string) ($p['id'] ?? $p['value'] ?? '');
+          $label = (string) ($p['label'] ?? $p['name'] ?? $id);
+          if ($id !== '') $planOptions[] = $label;
+        }
+      @endphp
+
+      <div class="border border-gray-200 dark:border-white/10 rounded-lg p-4 space-y-3">
+        @if($headline !== '')
+          <p class="font-semibold text-gray-900 dark:text-white">{{ $headline }}</p>
+        @endif
+        @if($description !== '')
+          <p class="text-sm text-gray-600 dark:text-gray-300">{{ Str::limit($description, 140) }}</p>
+        @endif
+
+        <div class="space-y-1">
+          @foreach(array_slice($previewItems, 0, 3) as $it)
+            <p class="text-xs text-gray-600 dark:text-gray-300">
+              <span class="font-medium">Match:</span> {{ $it['match'] }}
+              <span class="mx-1">→</span>
+              <span class="font-medium">Action:</span> {{ $it['action'] }}
+              <span class="mx-1">→</span>
+              <span class="font-medium">Target:</span> <span class="font-mono break-all">{{ $it['target'] }}</span>
+            </p>
+          @endforeach
+          @if(count($previewItems) > 3)
+            <p class="text-xs text-gray-500 dark:text-gray-400">+{{ count($previewItems) - 3 }} more mapping(s)…</p>
+          @endif
+        </div>
+
+        @if(count($planOptions) > 0)
+          <div>
+            <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Plan</p>
+            <div class="w-full rounded border border-gray-300 dark:border-white/20 bg-white dark:bg-white/5 px-3 py-2 text-sm text-gray-700 dark:text-gray-200">
+              {{ $planOptions[0] }}
+            </div>
+          </div>
+        @endif
+
+        <button type="button" class="w-full text-sm px-3 py-2 rounded bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900">
+          {{ $cta }}
+        </button>
+
+        <p class="text-xs text-gray-500 dark:text-gray-400">
+          Preview only. This card appears in Checkout only when a cart line matches your mapping conditions.
+        </p>
+      </div>
+    @endif
+
     @if($surface === 'checkout' && $type === 'progress_bar')
       @php
         $goal = (float)($config['progress_bar_goal'] ?? 100);
