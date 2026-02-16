@@ -362,18 +362,17 @@ class BlockResource extends Resource
                             ->options(['subscription' => 'Subscription (Recharge)', 'bundle_swap' => 'Bundle swap'])
                             ->default('subscription')
                             ->required(),
-                        Forms\Components\Select::make('target_variant_id')
-                            ->label('Target variant')
-                            ->placeholder('Search product variant from store…')
+                        Forms\Components\TextInput::make('target_variant_id')
+                            ->label('Target variant ID')
+                            ->placeholder('GID או מספר וריאנט (השתמש ב״כלי עזר״ בתפריט לצפייה ברשימת המוצרים והוריאנטים)')
                             ->required()
-                            ->searchable()
-                            ->getSearchResultsUsing(fn (string $search, Get $get): array => OfferResource::variantOptions($get('shop_id'), $search))
-                            ->getOptionLabelsUsing(fn ($value, Get $get): array => $value ? OfferResource::variantLabels($get('shop_id'), [(string) $value]) : []),
-                        Forms\Components\Select::make('selling_plan_id')
-                            ->label('Selling plan (optional)')
-                            ->placeholder('Select variant first')
-                            ->options(fn (Get $get): array => self::sellingPlanOptionsForVariant($get('shop_id'), $get('target_variant_id')))
-                            ->live(),
+                            ->maxLength(255)
+                            ->helperText('שדה חופשי: הזן GID (למשל gid://shopify/ProductVariant/123) או מספר וריאנט. בדף ״כלי עזר״ תוכל לראות את כל המוצרים והוריאנטים בחנות.'),
+                        Forms\Components\TextInput::make('selling_plan_id')
+                            ->label('Selling plan ID (optional)')
+                            ->placeholder('GID או מספר תוכנית מכירה')
+                            ->maxLength(255)
+                            ->helperText('אופציונלי. ברשימת ״כלי עזר״ תופיע תוכנית המכירה לכל מוצר במידה ויש.'),
                         Forms\Components\TextInput::make('quantity')
                             ->numeric()
                             ->default(1)

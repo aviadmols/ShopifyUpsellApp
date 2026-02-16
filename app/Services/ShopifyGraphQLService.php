@@ -279,6 +279,85 @@ class ShopifyGraphQLService
     }
 
     /**
+     * List active products with variants and selling plans for admin tools.
+     *
+     * @return array<int, array{id: string, title: string, image_url: string|null, variants: array<int, array{id: string, title: string, price: string|null}>, selling_plans: array<int, array{id: string, name: string}>}>
+     */
+    public function listProductsWithVariantsAndSellingPlans(Shop $shop, int $first = 50): array
+    {
+        $query = <<<'GRAPHQL'
+            query listProductsWithVariants($first: Int!, $query: String) {
+                products(first: $first, query: $query) {
+                    nodes {
+                        id
+                        title
+                        featuredImage { url }
+                        variants(first: 100) {
+                            nodes {
+                                id
+                                title
+                                price
+                            }
+                        }
+                        sellingPlanGroups(first: 20) {
+                            nodes {
+                                id
+                                name
+                                sellingPlans(first: 30) {
+                                    nodes {
+                                        id
+                                        name
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        GRAPHQL;
+
+        try {
+            $data = $this->request($shop, $query, [
+                'first' => max(1, min($first, 250)),
+                'query' => 'status:active',
+            ]);
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        $products = $data['products']['nodes'] ?? [];
+        $out = [];
+        foreach ($products as $product) {
+            $variants = [];
+            foreach (($product['variants']['nodes'] ?? []) as $v) {
+                $variants[] = [
+                    'id' => (string) ($v['id'] ?? ''),
+                    'title' => (string) ($v['title'] ?? ''),
+                    'price' => isset($v['price']) ? (string) $v['price'] : null,
+                ];
+            }
+            $sellingPlans = [];
+            foreach (($product['sellingPlanGroups']['nodes'] ?? []) as $group) {
+                foreach (($group['sellingPlans']['nodes'] ?? []) as $plan) {
+                    $id = (string) ($plan['id'] ?? '');
+                    $name = (string) ($plan['name'] ?? $group['name'] ?? '');
+                    if ($id !== '') {
+                        $sellingPlans[] = ['id' => $id, 'name' => $name];
+                    }
+                }
+            }
+            $out[] = [
+                'id' => (string) ($product['id'] ?? ''),
+                'title' => (string) ($product['title'] ?? ''),
+                'image_url' => $product['featuredImage']['url'] ?? null,
+                'variants' => $variants,
+                'selling_plans' => $sellingPlans,
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * If search string looks like a variant ID (numeric or GID), return GID for getProductVariant.
      */
     protected function parseVariantIdFromSearch(string $search): ?string
