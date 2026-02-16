@@ -288,16 +288,42 @@ class CheckoutUpsellController extends Controller
             ]);
         }
 
-        // Helpful error: merchant set Widget ID to an Upgrade Card block (wrong extension).
+        // Support Upgrade Card inside Zyg Blocks (single draggable checkout app block).
         if ($typeLower === 'checkout_upgrade_card') {
-            $this->logExt('checkout_offers_block_type_mismatch', ['block_id' => $block->id, 'type' => $type]);
+            $upgradeConfig = $block->config ?? [];
+            $matcher = app(\App\Services\CartLineUpgradeMatcher::class);
+            $payload = $matcher->run(is_array($upgradeConfig) ? $upgradeConfig : [], $context);
+
+            $vars = $this->buildTemplateVars($context, is_array($upgradeConfig) ? $upgradeConfig : []);
+            if ($vars !== []) {
+                foreach (['headline', 'description', 'cta_label'] as $key) {
+                    if (isset($payload[$key]) && is_string($payload[$key])) {
+                        $payload[$key] = $this->interpolateValueRecursive($payload[$key], $vars);
+                    }
+                }
+            }
+
+            $this->logExt('checkout_offers_block_upgrade_card_response', [
+                'block_id' => $block->id,
+                'shop_id' => $shop->id,
+                'enabled' => (bool) ($payload['enabled'] ?? false),
+                'items_count' => count($payload['items'] ?? []),
+                'actions_count' => count($payload['actions'] ?? []),
+            ]);
+
             return response()->json([
                 'offers' => [],
-                'blocks' => [],
+                'blocks' => [
+                    [
+                        'id' => $block->id,
+                        'type' => 'checkout_upgrade_card',
+                        'config' => $payload,
+                    ],
+                ],
                 'ui' => [],
+                'display_mode' => 'stacked',
                 'resolved_block_id' => $block->id,
                 'is_ai_generated_widget' => $this->isAiGeneratedBlock($block),
-                'block_error' => 'Widget ID '.$block->id.' is an Upgrade Card (type=checkout_upgrade_card). The "Zyg Blocks" checkout offers extension expects a Checkout Upsell widget (type=upsell). Set Widget ID to an Upsell block ID, or add/configure the separate "Zyg Upgrade Card" checkout block.',
             ]);
         }
 

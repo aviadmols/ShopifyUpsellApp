@@ -15,10 +15,11 @@ import {
   Progress,
   Grid,
   InlineLayout,
+  Select,
   useApplyCartLinesChange,
   useSubtotalAmount,
 } from '@shopify/ui-extensions-react/checkout';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 const BUILD_ID = 'zyg-upsell-checkout-20260212-widgets';
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
@@ -62,12 +63,119 @@ function sendLog(apiUrl, secret, payload) {
 
 export default reactExtension('purchase.checkout.block.render', () => <CheckoutUpsell />);
 
+function UpgradeCardBlock({ config }) {
+  const api = useApi();
+  const applyCartLinesChange = useApplyCartLinesChange();
+
+  const payload = config && typeof config === 'object' ? config : {};
+  const enabled = payload?.enabled === true;
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  const plans = Array.isArray(payload?.plans) ? payload.plans : [];
+  const actions = Array.isArray(payload?.actions) ? payload.actions : [];
+
+  const headline = payload?.headline ?? '';
+  const description = payload?.description ?? '';
+  const ctaLabel = payload?.cta_label ?? 'Upgrade';
+
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [applying, setApplying] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const instructions = api?.instructions ?? {};
+  const linesInstructions = instructions?.lines ?? {};
+  const canAdd = linesInstructions.canAddCartLine !== false;
+  const canRemove = linesInstructions.canRemoveCartLine !== false;
+  const canUpdate = linesInstructions.canUpdateCartLine !== false;
+  const cartEditable = canAdd && canRemove && canUpdate;
+
+  const runActions = useCallback(async () => {
+    if (!cartEditable || actions.length === 0) return;
+    setApplying(true);
+    setErrorMessage('');
+    try {
+      for (let i = 0; i < actions.length; i++) {
+        const action = actions[i];
+        const type = action?.type;
+        if (type === 'removeCartLine' && action?.lineId) {
+          await applyCartLinesChange({
+            type: 'removeCartLine',
+            id: action.lineId,
+            quantity: action.quantity ?? 1,
+          });
+        } else if (type === 'addCartLine' && action?.merchandiseId) {
+          const change = {
+            type: 'addCartLine',
+            merchandiseId: action.merchandiseId,
+            quantity: Math.max(1, action.quantity ?? 1),
+          };
+          if (action.sellingPlanId) change.sellingPlanId = action.sellingPlanId;
+          await applyCartLinesChange(change);
+        }
+      }
+    } catch (err) {
+      setErrorMessage(err?.message || 'Update failed.');
+    } finally {
+      setApplying(false);
+    }
+  }, [actions, cartEditable, applyCartLinesChange]);
+
+  if (!enabled || items.length === 0) return null;
+
+  const planOptions = plans
+    .map((p) => ({
+      value: String(p.id ?? p.value ?? ''),
+      label: p.label ?? p.name ?? String(p.id ?? p.value ?? ''),
+    }))
+    .filter((o) => o.value);
+
+  return (
+    <BlockStack spacing="tight">
+      {headline ? <Text size="medium" emphasis="bold">{headline}</Text> : null}
+      {description ? <Text appearance="subdued" size="small">{description}</Text> : null}
+
+      <BlockStack spacing="extraTight">
+        {items.slice(0, 3).map((it, idx) => (
+          <Text key={it.line_id ?? idx} size="small" appearance="subdued">
+            {it.product_title ?? it.title ?? 'Item'}
+            {it.variant_title ? ` — ${it.variant_title}` : ''}
+          </Text>
+        ))}
+        {items.length > 3 ? (
+          <Text size="small" appearance="subdued">
+            See {items.length - 3} more item{items.length - 3 !== 1 ? 's' : ''}
+          </Text>
+        ) : null}
+      </BlockStack>
+
+      {planOptions.length > 0 ? (
+        <Select label="Plan" options={planOptions} value={selectedPlanId} onChange={setSelectedPlanId} />
+      ) : null}
+
+      {!cartEditable ? (
+        <Text size="small" appearance="subdued">
+          Cart cannot be changed in this checkout (e.g. express checkout).
+        </Text>
+      ) : null}
+
+      {errorMessage ? <Text size="small" appearance="critical">{errorMessage}</Text> : null}
+
+      <Button kind="secondary" onPress={runActions} loading={applying} disabled={!cartEditable || applying}>
+        {ctaLabel}
+      </Button>
+    </BlockStack>
+  );
+}
+
 function ContentBlockRender({ block }) {
   const type = block?.type || '';
   const config = block?.config || {};
   const spacing = config.spacing === 'loose' ? 'loose' : 'tight';
   const textSize = ['small', 'medium', 'large'].includes(config.text_size) ? config.text_size : 'medium';
   const buttonKind = ['primary', 'secondary', 'plain'].includes(config.button_kind) ? config.button_kind : 'secondary';
+
+  if (type === 'checkout_upgrade_card') {
+    return <UpgradeCardBlock config={config} />;
+  }
 
   if (type === 'content_icon_features') {
     const items = Array.isArray(config.icon_features) ? config.icon_features : [];
