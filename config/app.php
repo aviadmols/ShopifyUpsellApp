@@ -37,9 +37,12 @@ return [
     | stack traces will be shown on every error that occurs within your
     | application. If disabled, a simple generic error page is shown.
     |
+    | APP_SHOW_ERRORS: when true, errors are printed to the screen (debug
+    | display). Use for debugging 500s in staging/production. Turn off when done.
+    |
     */
 
-    'debug' => (bool) env('APP_DEBUG', false),
+    'debug' => (bool) (env('APP_DEBUG', false) || env('APP_SHOW_ERRORS', false)),
 
     /*
     |--------------------------------------------------------------------------

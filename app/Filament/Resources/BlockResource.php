@@ -83,24 +83,31 @@ class BlockResource extends Resource
                         Forms\Components\Placeholder::make('preview_live')
                             ->label('')
                             ->content(function (Get $get): \Illuminate\Support\HtmlString {
-                                $state = CreateBlock::getStateFromGet($get);
-                                $surface = (string) ($state['surface'] ?? '');
-                                $type = (string) ($state['type'] ?? '');
-                                $config = CreateBlock::buildBlockConfig($state);
-                                $previewOffers = [];
-                                if (($surface === 'checkout' && $type === 'upsell') || ($surface === 'post_purchase' && $type === 'post_purchase_funnel')) {
-                                    $shopId = $state['shop_id'] ?? null;
-                                    $widgetOffers = $state['widget_offers'] ?? [];
-                                    $previewOffers = CreateBlock::enrichPreviewOffers($shopId, is_array($widgetOffers) ? $widgetOffers : []);
-                                }
-                                $html = view('filament.components.block-preview', [
-                                    'surface' => $surface,
-                                    'type' => $type,
-                                    'config' => $config,
-                                    'preview_offers' => $previewOffers,
-                                ])->render();
+                                try {
+                                    $state = CreateBlock::getStateFromGet($get);
+                                    $surface = (string) ($state['surface'] ?? '');
+                                    $type = (string) ($state['type'] ?? '');
+                                    $config = CreateBlock::buildBlockConfig($state);
+                                    $previewOffers = [];
+                                    if (($surface === 'checkout' && $type === 'upsell') || ($surface === 'post_purchase' && $type === 'post_purchase_funnel')) {
+                                        $shopId = $state['shop_id'] ?? null;
+                                        $widgetOffers = $state['widget_offers'] ?? [];
+                                        $previewOffers = CreateBlock::enrichPreviewOffers($shopId, is_array($widgetOffers) ? $widgetOffers : []);
+                                    }
+                                    $html = view('filament.components.block-preview', [
+                                        'surface' => $surface,
+                                        'type' => $type,
+                                        'config' => $config,
+                                        'preview_offers' => $previewOffers,
+                                    ])->render();
 
-                                return new \Illuminate\Support\HtmlString($html);
+                                    return new \Illuminate\Support\HtmlString($html);
+                                } catch (\Throwable $e) {
+                                    return new \Illuminate\Support\HtmlString(
+                                        '<div class="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-400">'
+                                        . '<p class="font-medium">Preview error</p><p class="mt-1">' . e($e->getMessage()) . '</p></div>'
+                                    );
+                                }
                             }),
                     ])
                     ->collapsible()
@@ -230,7 +237,7 @@ class BlockResource extends Resource
                     ->helperText('Example for "Dog Name" line item property: {"dog_names_message":{"type":"plural_message_from_property","property":"Dog Name","singular":"Your dog ({value}) deserves the best","plural":"Your dogs ({values}) deserve the best","empty":""}}')
                     ->placeholder('{}'),
             ])
-            ->visible(fn (Get $get): bool => in_array($get('type'), $typesWithPlaceholders, true))
+            ->visible(fn (Get $get): bool => in_array((string) ($get('type') ?? ''), $typesWithPlaceholders, true))
             ->collapsible()
             ->collapsed(false);
     }
@@ -345,7 +352,8 @@ class BlockResource extends Resource
                                 Forms\Components\KeyValue::make('match_line_item_property_equals')
                                     ->label('Property equals (optional)')
                                     ->keyPlaceholder('key')
-                                    ->valuePlaceholder('value'),
+                                    ->valuePlaceholder('value')
+                                    ->default([]),
                             ])
                             ->columns(2)
                             ->collapsible(),
