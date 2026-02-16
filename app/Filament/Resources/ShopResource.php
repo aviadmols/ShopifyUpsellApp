@@ -43,6 +43,17 @@ class ShopResource extends Resource
                     ->splitKeys(['Tab', ',']),
                 Forms\Components\TextInput::make('scope')
                     ->maxLength(255),
+                Forms\Components\Section::make('Recharge (optional)')
+                    ->description('For pulling subscription plans and variant mappings from Recharge. Leave empty to use only Shopify Selling Plans.')
+                    ->schema([
+                        Forms\Components\TextInput::make('recharge_api_token')
+                            ->label('Recharge API token')
+                            ->password()
+                            ->revealable()
+                            ->maxLength(512)
+                            ->helperText('From Recharge Dashboard → Settings → API. Used to fetch subscription data when configured.'),
+                    ])
+                    ->collapsible(),
                 Forms\Components\DateTimePicker::make('installed_at')
                     ->disabled(),
                 Forms\Components\DateTimePicker::make('uninstalled_at')

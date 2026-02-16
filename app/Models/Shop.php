@@ -12,6 +12,7 @@ class Shop extends Model
         'alternate_domains',
         'access_token',
         'scope',
+        'recharge_api_token',
         'installed_at',
         'uninstalled_at',
     ];
@@ -20,6 +21,7 @@ class Shop extends Model
     {
         return [
             'access_token' => 'encrypted',
+            'recharge_api_token' => 'encrypted',
             'alternate_domains' => 'array',
             'installed_at' => 'datetime',
             'uninstalled_at' => 'datetime',

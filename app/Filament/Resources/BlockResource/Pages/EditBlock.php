@@ -610,6 +610,10 @@ class EditBlock extends EditRecord
                 continue;
             }
             $match = $m['match'] ?? [];
+            $plansList = is_array($m['plans'] ?? null) ? $m['plans'] : [];
+            $firstPlanSellingPlanId = isset($plansList[0]) && is_array($plansList[0])
+                ? (string) ($plansList[0]['selling_plan_id'] ?? '')
+                : '';
             $item = [
                 'match_product_id' => (string) ($match['product_id'] ?? ''),
                 'match_variant_id' => (string) ($match['variant_id'] ?? ''),
@@ -619,8 +623,9 @@ class EditBlock extends EditRecord
                 'match_line_item_property_equals' => is_array($match['line_item_property_equals'] ?? null) ? $match['line_item_property_equals'] : [],
                 'action_type' => (string) ($m['action_type'] ?? 'subscription'),
                 'target_variant_id' => (string) ($m['target_variant_id'] ?? ''),
+                'selling_plan_id' => $firstPlanSellingPlanId,
                 'quantity' => (int) ($m['quantity'] ?? 1),
-                'plans' => is_array($m['plans'] ?? null) ? $m['plans'] : [],
+                'plans' => $plansList,
             ];
             $out[] = $item;
         }

@@ -12,6 +12,7 @@ use App\Models\Offer;
 use App\Models\Placement;
 use App\Models\Rule;
 use App\Models\Shop;
+use App\Services\ShopifyGraphQLService;
 use Filament\Forms;
 use Filament\Forms\Get;
 use Filament\Forms\Form;
@@ -361,10 +362,18 @@ class BlockResource extends Resource
                             ->options(['subscription' => 'Subscription (Recharge)', 'bundle_swap' => 'Bundle swap'])
                             ->default('subscription')
                             ->required(),
-                        Forms\Components\TextInput::make('target_variant_id')
-                            ->label('Target variant ID')
-                            ->placeholder('GID or numeric')
-                            ->required(),
+                        Forms\Components\Select::make('target_variant_id')
+                            ->label('Target variant')
+                            ->placeholder('Search product variant from store…')
+                            ->required()
+                            ->searchable()
+                            ->getSearchResultsUsing(fn (string $search, Get $get): array => OfferResource::variantOptions($get('shop_id'), $search))
+                            ->getOptionLabelsUsing(fn ($value, Get $get): array => $value ? OfferResource::variantLabels($get('shop_id'), [(string) $value]) : []),
+                        Forms\Components\Select::make('selling_plan_id')
+                            ->label('Selling plan (optional)')
+                            ->placeholder('Select variant first')
+                            ->options(fn (Get $get): array => self::sellingPlanOptionsForVariant($get('shop_id'), $get('target_variant_id')))
+                            ->live(),
                         Forms\Components\TextInput::make('quantity')
                             ->numeric()
                             ->default(1)
@@ -413,6 +422,36 @@ class BlockResource extends Resource
             ])
             ->columns(2)
             ->visible(fn (Get $get): bool => $get('surface') === 'checkout' && $get('type') === 'checkout_upgrade_card');
+    }
+
+    /**
+     * Selling plan options for variant (Shopify) for Upgrade card.
+     *
+     * @return array<string, string>  id => name
+     */
+    public static function sellingPlanOptionsForVariant(?int $shopId, ?string $variantGid): array
+    {
+        if (! $shopId || ! $variantGid || trim($variantGid) === '') {
+            return [];
+        }
+        $shop = Shop::whereNull('uninstalled_at')->find($shopId);
+        if (! $shop) {
+            return [];
+        }
+        try {
+            $plans = app(ShopifyGraphQLService::class)->getSellingPlansForVariant($shop, trim($variantGid));
+        } catch (\Throwable $e) {
+            return [];
+        }
+        $out = [];
+        foreach ($plans as $plan) {
+            $id = (string) ($plan['id'] ?? '');
+            $name = (string) ($plan['name'] ?? $id);
+            if ($id !== '') {
+                $out[$id] = $name;
+            }
+        }
+        return $out;
     }
 
     protected static function schemaCheckoutProgressBar(Form $form): Forms\Components\Section

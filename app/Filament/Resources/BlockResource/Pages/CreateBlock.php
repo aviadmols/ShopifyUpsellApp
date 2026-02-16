@@ -81,6 +81,12 @@ class CreateBlock extends CreateRecord
         $type = (string) ($data['type'] ?? '');
         $shopId = $data['shop_id'] ?? null;
         $surface = (string) ($data['surface'] ?? '');
+        $name = isset($data['name']) ? trim((string) $data['name']) : '';
+        if ($name === '') {
+            $data['name'] = $type !== '' ? Str::headline(str_replace('_', ' ', $type)) : 'Block';
+        } else {
+            $data['name'] = $name;
+        }
         if (WidgetRegistry::isSingleton($type) && $shopId && $surface) {
             $exists = Block::where('shop_id', $shopId)->where('surface', $surface)->where('type', $type)->exists();
             if ($exists) {
@@ -168,7 +174,8 @@ class CreateBlock extends CreateRecord
     public static function normalizeUpgradeCardPlans(array $items): array
     {
         $out = [];
-        foreach (is_array($items) ? $items : [] as $p) {
+        $items = is_array($items) ? $items : [];
+        foreach ($items as $p) {
             if (! is_array($p)) {
                 continue;
             }
@@ -188,7 +195,8 @@ class CreateBlock extends CreateRecord
     public static function normalizeUpgradeMappings(array $items): array
     {
         $out = [];
-        foreach (is_array($items) ? $items : [] as $m) {
+        $items = is_array($items) ? $items : [];
+        foreach ($items as $m) {
             if (! is_array($m)) {
                 continue;
             }
@@ -216,7 +224,11 @@ class CreateBlock extends CreateRecord
                 $match['line_item_property_equals'] = $m['match_line_item_property_equals'];
             }
             $plans = [];
-            foreach (is_array($m['plans'] ?? []) ?: [] as $plan) {
+            $plansRaw = $m['plans'] ?? null;
+            $plansRaw = is_array($plansRaw) ? $plansRaw : [];
+            $mappingSellingPlanId = trim((string) ($m['selling_plan_id'] ?? ''));
+            $planIndex = 0;
+            foreach ($plansRaw as $plan) {
                 if (! is_array($plan)) {
                     continue;
                 }
@@ -230,12 +242,16 @@ class CreateBlock extends CreateRecord
                 if (trim((string) ($plan['target_variant_id'] ?? '')) !== '') {
                     $entry['target_variant_id'] = trim((string) $plan['target_variant_id']);
                 }
-                if (trim((string) ($plan['selling_plan_id'] ?? '')) !== '') {
-                    $entry['selling_plan_id'] = trim((string) $plan['selling_plan_id']);
+                $planSellingPlanId = trim((string) ($plan['selling_plan_id'] ?? ''));
+                if ($planSellingPlanId !== '') {
+                    $entry['selling_plan_id'] = $planSellingPlanId;
+                } elseif ($planIndex === 0 && $mappingSellingPlanId !== '') {
+                    $entry['selling_plan_id'] = $mappingSellingPlanId;
                 }
                 if ($entry !== []) {
                     $plans[] = $entry;
                 }
+                $planIndex++;
             }
             $out[] = [
                 'match' => $match,
@@ -287,8 +303,8 @@ class CreateBlock extends CreateRecord
                 'cta_label' => (string) ($data['upgrade_card_cta_label'] ?? 'Upgrade'),
                 'cart_subtotal_min' => isset($data['upgrade_card_cart_subtotal_min']) && $data['upgrade_card_cart_subtotal_min'] !== '' ? (float) $data['upgrade_card_cart_subtotal_min'] : null,
                 'cart_items_count_min' => isset($data['upgrade_card_cart_items_count_min']) && $data['upgrade_card_cart_items_count_min'] !== '' ? (int) $data['upgrade_card_cart_items_count_min'] : null,
-                'plans' => self::normalizeUpgradeCardPlans($data['upgrade_card_plans'] ?? []),
-                'upgrade_mappings' => self::normalizeUpgradeMappings($data['upgrade_mappings_items'] ?? []),
+                'plans' => self::normalizeUpgradeCardPlans(is_array($data['upgrade_card_plans'] ?? null) ? $data['upgrade_card_plans'] : []),
+                'upgrade_mappings' => self::normalizeUpgradeMappings(is_array($data['upgrade_mappings_items'] ?? null) ? $data['upgrade_mappings_items'] : []),
             ];
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {
             $config = [
