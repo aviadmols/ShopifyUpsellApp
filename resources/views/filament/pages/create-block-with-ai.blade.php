@@ -2,6 +2,66 @@
     @if($step === 1)
         <form wire:submit="generate">
             {{ $this->form }}
+            @if(($type ?? null) === 'checkout_upgrade_card')
+                <div class="mt-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 p-4 space-y-3">
+                    <div>
+                        <p class="text-sm font-medium text-gray-900 dark:text-white">Product / Variant helper</p>
+                        <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                            Type <code class="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800">@</code> in the prompt, then start typing a product/variant name.
+                            Click a result to insert the Variant ID. After selecting a variant, selling plan IDs will appear (if any) and you can click to insert.
+                        </p>
+                    </div>
+
+                    @if($mentionOpen)
+                        <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3">
+                            <p class="text-xs text-gray-600 dark:text-gray-300 mb-2">Search: <span class="font-mono">@{{ $mentionQuery }}</span></p>
+                            @if(empty($mentionResults))
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Type at least 2 characters after @ to search variants.</p>
+                            @else
+                                <div class="space-y-1">
+                                    @foreach($mentionResults as $r)
+                                        <button
+                                            type="button"
+                                            wire:click="selectMentionVariant(@js($r['id']))"
+                                            class="w-full text-left rounded-md px-2 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        >
+                                            <span class="block text-gray-900 dark:text-white">{{ $r['label'] }}</span>
+                                            <span class="block text-xs font-mono text-gray-500 dark:text-gray-400 break-all">{{ $r['id'] }}</span>
+                                        </button>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                    @endif
+
+                    @if($mentionSelectedVariantId)
+                        <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-2">
+                            <p class="text-xs text-gray-600 dark:text-gray-300">
+                                Selected variant:
+                                <span class="font-mono break-all">{{ $mentionSelectedVariantId }}</span>
+                            </p>
+
+                            @if(!empty($mentionSellingPlans))
+                                <p class="text-xs font-medium text-gray-700 dark:text-gray-200">Selling plans (click to insert ID)</p>
+                                <div class="space-y-1">
+                                    @foreach($mentionSellingPlans as $sp)
+                                        <button
+                                            type="button"
+                                            wire:click="insertSellingPlanId(@js($sp['id']))"
+                                            class="w-full text-left rounded-md px-2 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        >
+                                            <span class="block text-gray-900 dark:text-white">{{ $sp['name'] ?? $sp['id'] }}</span>
+                                            <span class="block text-xs font-mono text-gray-500 dark:text-gray-400 break-all">{{ $sp['id'] }}</span>
+                                        </button>
+                                    @endforeach
+                                </div>
+                            @else
+                                <p class="text-xs text-gray-500 dark:text-gray-400">No selling plans found for this variant.</p>
+                            @endif
+                        </div>
+                    @endif
+                </div>
+            @endif
             <div class="mt-6 flex gap-3">
                 <x-filament::button type="submit" color="primary">
                     Generate with AI

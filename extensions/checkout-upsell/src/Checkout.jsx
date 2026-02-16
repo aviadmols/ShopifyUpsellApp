@@ -6,6 +6,7 @@ import {
   reactExtension,
   useSettings,
   useApi,
+  View,
   BlockStack,
   Button,
   Link,
@@ -76,6 +77,11 @@ function UpgradeCardBlock({ config }) {
   const headline = payload?.headline ?? '';
   const description = payload?.description ?? '';
   const ctaLabel = payload?.cta_label ?? 'Upgrade';
+  const ui = payload?.ui && typeof payload.ui === 'object' ? payload.ui : {};
+  const headlineSize = ['small', 'medium', 'large'].includes(String(ui.title_size)) ? String(ui.title_size) : 'medium';
+  const buttonKind = ['primary', 'secondary', 'plain'].includes(String(ui.button_kind)) ? String(ui.button_kind) : 'secondary';
+  const spacing = String(ui.spacing) === 'loose' ? 'loose' : 'tight';
+  const showBorder = ui.show_border !== false;
 
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [applying, setApplying] = useState(false);
@@ -129,40 +135,42 @@ function UpgradeCardBlock({ config }) {
     .filter((o) => o.value);
 
   return (
-    <BlockStack spacing="tight">
-      {headline ? <Text size="medium" emphasis="bold">{headline}</Text> : null}
-      {description ? <Text appearance="subdued" size="small">{description}</Text> : null}
+    <View padding="base" border={showBorder ? 'base' : undefined} borderRadius="base">
+      <BlockStack spacing={spacing}>
+        {headline ? <Text size={headlineSize} emphasis="bold">{headline}</Text> : null}
+        {description ? <Text appearance="subdued" size="small">{description}</Text> : null}
 
-      <BlockStack spacing="extraTight">
-        {items.slice(0, 3).map((it, idx) => (
-          <Text key={it.line_id ?? idx} size="small" appearance="subdued">
-            {it.product_title ?? it.title ?? 'Item'}
-            {it.variant_title ? ` — ${it.variant_title}` : ''}
-          </Text>
-        ))}
-        {items.length > 3 ? (
+        <BlockStack spacing="extraTight">
+          {items.slice(0, 3).map((it, idx) => (
+            <Text key={it.line_id ?? idx} size="small" appearance="subdued">
+              {it.product_title ?? it.title ?? 'Item'}
+              {it.variant_title ? ` — ${it.variant_title}` : ''}
+            </Text>
+          ))}
+          {items.length > 3 ? (
+            <Text size="small" appearance="subdued">
+              See {items.length - 3} more item{items.length - 3 !== 1 ? 's' : ''}
+            </Text>
+          ) : null}
+        </BlockStack>
+
+        {planOptions.length > 0 ? (
+          <Select label="Plan" options={planOptions} value={selectedPlanId} onChange={setSelectedPlanId} />
+        ) : null}
+
+        {!cartEditable ? (
           <Text size="small" appearance="subdued">
-            See {items.length - 3} more item{items.length - 3 !== 1 ? 's' : ''}
+            Cart cannot be changed in this checkout (e.g. express checkout).
           </Text>
         ) : null}
+
+        {errorMessage ? <Text size="small" appearance="critical">{errorMessage}</Text> : null}
+
+        <Button kind={buttonKind} onPress={runActions} loading={applying} disabled={!cartEditable || applying}>
+          {ctaLabel}
+        </Button>
       </BlockStack>
-
-      {planOptions.length > 0 ? (
-        <Select label="Plan" options={planOptions} value={selectedPlanId} onChange={setSelectedPlanId} />
-      ) : null}
-
-      {!cartEditable ? (
-        <Text size="small" appearance="subdued">
-          Cart cannot be changed in this checkout (e.g. express checkout).
-        </Text>
-      ) : null}
-
-      {errorMessage ? <Text size="small" appearance="critical">{errorMessage}</Text> : null}
-
-      <Button kind="secondary" onPress={runActions} loading={applying} disabled={!cartEditable || applying}>
-        {ctaLabel}
-      </Button>
-    </BlockStack>
+    </View>
   );
 }
 

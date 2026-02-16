@@ -9,9 +9,11 @@ use App\Models\Block;
 use App\Models\Rule;
 use App\Models\Shop;
 use App\Services\BlockAISchemaService;
+use App\Services\CartLineUpgradeMatcher;
 use App\Services\OfferBuilderService;
 use App\Services\OpenRouterService;
 use App\Services\RuleEngine;
+use App\Services\ShopifyGraphQLService;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -38,6 +40,19 @@ class CreateBlockWithAI extends Page implements HasForms
     public ?array $generated = null;
     public string $testLog = '';
     public ?string $testSummary = null;
+
+    /** @var string */
+    public string $mentionQuery = '';
+
+    /** @var array<int, array{id: string, label: string}> */
+    public array $mentionResults = [];
+
+    public bool $mentionOpen = false;
+
+    public ?string $mentionSelectedVariantId = null;
+
+    /** @var array<int, array{id: string, name: string}> */
+    public array $mentionSellingPlans = [];
 
     public function mount(): void
     {
@@ -74,10 +89,133 @@ class CreateBlockWithAI extends Page implements HasForms
                     ->placeholder('e.g. Show message for subscription save only for customers without subscription who have in cart product with SKU X.')
                     ->rows(5)
                     ->required()
+                    ->live()
                     ->columnSpanFull(),
             ])
             ->statePath('')
             ->columns(2);
+    }
+
+    public function updatedPrompt(string $value): void
+    {
+        $this->refreshMentionState($value);
+    }
+
+    public function updatedType(): void
+    {
+        $this->resetMention();
+    }
+
+    public function updatedShopId(): void
+    {
+        $this->resetMention();
+    }
+
+    private function resetMention(): void
+    {
+        $this->mentionQuery = '';
+        $this->mentionResults = [];
+        $this->mentionOpen = false;
+        $this->mentionSelectedVariantId = null;
+        $this->mentionSellingPlans = [];
+    }
+
+    private function refreshMentionState(string $prompt): void
+    {
+        // Only enable mention search for Upgrade Card widgets.
+        if (($this->type ?? '') !== 'checkout_upgrade_card') {
+            $this->resetMention();
+            return;
+        }
+        if (! $this->shop_id) {
+            $this->resetMention();
+            return;
+        }
+
+        // Detect last "@query" token at end of prompt.
+        if (! preg_match('/(?:^|\\s)@([^\\s]{1,40})$/u', $prompt, $m)) {
+            $this->mentionOpen = false;
+            $this->mentionQuery = '';
+            $this->mentionResults = [];
+            return;
+        }
+
+        $query = trim((string) ($m[1] ?? ''));
+        $this->mentionQuery = $query;
+        $this->mentionSelectedVariantId = null;
+        $this->mentionSellingPlans = [];
+
+        if ($query === '' || mb_strlen($query) < 2) {
+            $this->mentionOpen = true;
+            $this->mentionResults = [];
+            return;
+        }
+
+        $shopId = (int) $this->shop_id;
+        $shop = Shop::whereNull('uninstalled_at')->find($shopId);
+        if (! $shop) {
+            $this->mentionOpen = true;
+            $this->mentionResults = [];
+            return;
+        }
+
+        try {
+            $items = app(ShopifyGraphQLService::class)->searchProductVariants($shop, $query, 10);
+        } catch (\Throwable) {
+            $items = [];
+        }
+
+        $results = [];
+        foreach ($items as $it) {
+            $id = (string) ($it['id'] ?? '');
+            $label = (string) ($it['label'] ?? '');
+            if ($id !== '' && $label !== '') {
+                $results[] = ['id' => $id, 'label' => $label];
+            }
+        }
+
+        $this->mentionOpen = true;
+        $this->mentionResults = $results;
+    }
+
+    public function selectMentionVariant(string $variantId): void
+    {
+        $variantId = trim($variantId);
+        if ($variantId === '' || ! $this->shop_id) {
+            return;
+        }
+
+        // Replace the last "@query" token with the selected variant ID.
+        $this->prompt = preg_replace('/(?:^|\\s)@[^\\s]{1,40}$/u', ' ' . $variantId, $this->prompt) ?? $this->prompt;
+        $this->mentionOpen = false;
+        $this->mentionSelectedVariantId = $variantId;
+        $this->mentionResults = [];
+        $this->mentionQuery = '';
+
+        $shop = Shop::whereNull('uninstalled_at')->find((int) $this->shop_id);
+        if (! $shop) {
+            return;
+        }
+
+        $variantGid = CartLineUpgradeMatcher::variantToGid($variantId);
+        if ($variantGid === '') {
+            return;
+        }
+
+        try {
+            $this->mentionSellingPlans = app(ShopifyGraphQLService::class)->getSellingPlansForVariant($shop, $variantGid);
+        } catch (\Throwable) {
+            $this->mentionSellingPlans = [];
+        }
+    }
+
+    public function insertSellingPlanId(string $sellingPlanId): void
+    {
+        $sellingPlanId = trim($sellingPlanId);
+        if ($sellingPlanId === '') {
+            return;
+        }
+        $this->prompt = rtrim($this->prompt) . "\n" . $sellingPlanId . "\n";
     }
 
     public function generate(): void

@@ -468,6 +468,11 @@ class EditBlock extends EditRecord
             $data['upgrade_card_cta_label'] = (string) ($config['cta_label'] ?? 'Upgrade');
             $data['upgrade_card_cart_subtotal_min'] = isset($config['cart_subtotal_min']) ? (string) $config['cart_subtotal_min'] : '';
             $data['upgrade_card_cart_items_count_min'] = isset($config['cart_items_count_min']) ? (string) $config['cart_items_count_min'] : '';
+            $ui = is_array($config['ui'] ?? null) ? $config['ui'] : [];
+            $data['upgrade_card_title_size'] = (string) ($ui['title_size'] ?? 'medium');
+            $data['upgrade_card_button_kind'] = (string) ($ui['button_kind'] ?? 'secondary');
+            $data['upgrade_card_spacing'] = (string) ($ui['spacing'] ?? 'tight');
+            $data['upgrade_card_show_border'] = (bool) ($ui['show_border'] ?? true);
             $data['upgrade_card_plans'] = $config['plans'] ?? [];
             $data['upgrade_mappings_items'] = self::upgradeMappingsToFormItems($config['upgrade_mappings'] ?? []);
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {

@@ -294,6 +294,11 @@ class CheckoutUpsellController extends Controller
             $matcher = app(\App\Services\CartLineUpgradeMatcher::class);
             $payload = $matcher->run(is_array($upgradeConfig) ? $upgradeConfig : [], $context);
 
+            // Pass UI design settings through to the extension renderer.
+            if (is_array($upgradeConfig) && isset($upgradeConfig['ui']) && is_array($upgradeConfig['ui'])) {
+                $payload['ui'] = $upgradeConfig['ui'];
+            }
+
             $vars = $this->buildTemplateVars($context, is_array($upgradeConfig) ? $upgradeConfig : []);
             if ($vars !== []) {
                 foreach (['headline', 'description', 'cta_label'] as $key) {

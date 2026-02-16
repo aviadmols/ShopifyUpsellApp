@@ -330,6 +330,38 @@ class BlockResource extends Resource
                     ->minValue(0)
                     ->integer()
                     ->placeholder('0'),
+                Forms\Components\Section::make('Design')
+                    ->schema([
+                        Forms\Components\Select::make('upgrade_card_title_size')
+                            ->label('Headline size')
+                            ->options([
+                                'small' => 'Small',
+                                'medium' => 'Medium',
+                                'large' => 'Large',
+                            ])
+                            ->default('medium'),
+                        Forms\Components\Select::make('upgrade_card_button_kind')
+                            ->label('CTA button style')
+                            ->options([
+                                'primary' => 'Primary',
+                                'secondary' => 'Secondary',
+                                'plain' => 'Plain',
+                            ])
+                            ->default('secondary'),
+                        Forms\Components\Select::make('upgrade_card_spacing')
+                            ->label('Card spacing')
+                            ->options([
+                                'tight' => 'Tight',
+                                'loose' => 'Loose',
+                            ])
+                            ->default('tight'),
+                        Forms\Components\Toggle::make('upgrade_card_show_border')
+                            ->label('Show card border')
+                            ->default(true),
+                    ])
+                    ->columns(2)
+                    ->collapsible()
+                    ->collapsed(),
                 Forms\Components\Repeater::make('upgrade_mappings_items')
                     ->label('Upgrade mappings')
                     ->schema([
