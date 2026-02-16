@@ -156,6 +156,8 @@ class BlockAISchemaService
             ['field' => 'url_param_contains', 'value_format' => 'param,substring', 'description' => 'URL param contains'],
             ['field' => 'line_item_property_equals', 'value_format' => 'key,value', 'description' => 'Line item property (e.g. subscription, no)'],
             ['field' => 'line_item_property_exists', 'value_format' => 'key', 'description' => 'Line item has property key (e.g. SKU in properties)'],
+            ['field' => 'line_item_sku_matches', 'value_format' => 'regex', 'description' => 'At least one line item SKU matches regex (e.g. /^XXX-XXX-\\d+-XXX$/)'],
+            ['field' => 'line_item_sku_segment_between', 'value_format' => 'segment_index,min,max or separator,segment_index,min,max', 'description' => 'SKU split by separator (default -), segment at index numeric between min and max'],
         ];
     }
 }

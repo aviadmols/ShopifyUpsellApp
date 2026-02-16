@@ -30,6 +30,13 @@ class EditBlock extends EditRecord
     /** @var array<int, array<string, mixed>> */
     public array $widgetOffersData = [];
 
+    public string $refinePrompt = '';
+
+    /** @var array{updated_rule_conditions: array, updated_php_snippet: string, updated_text_fields: array, explanation: string, warnings: array}|null */
+    public ?array $refinePreview = null;
+
+    public ?string $refineError = null;
+
     protected function getHeaderActions(): array
     {
         return [
@@ -94,6 +101,19 @@ class EditBlock extends EditRecord
                 ->modalContent(fn (): View => view('filament.components.ai-widget-test-result', [
                     'result' => $this->aiTestResult ?? ['log' => '', 'summary' => null],
                 ])),
+            Actions\Action::make('refine_with_ai')
+                ->label('Refine with AI')
+                ->icon('heroicon-o-sparkles')
+                ->color('gray')
+                ->visible(fn (): bool => $this->record !== null && (strlen($this->record->ai_generated_php ?? '') > 0 || strlen($this->record->ai_generated_description ?? '') > 0 || $this->record->rule_id !== null))
+                ->modalHeading('Refine widget logic')
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Close')
+                ->modalContent(fn (): View => view('filament.components.refine-ai-modal', [
+                    'refinePrompt' => $this->refinePrompt,
+                    'refinePreview' => $this->refinePreview,
+                    'refineError' => $this->refineError,
+                ])),
             Actions\DeleteAction::make(),
         ];
     }
@@ -132,6 +152,100 @@ class EditBlock extends EditRecord
             'log' => implode("\n", $log),
         ]);
         return ['log' => implode("\n", $log), 'summary' => $summary];
+    }
+
+    public function runRefinePreview(): void
+    {
+        $this->refineError = null;
+        $this->refinePreview = null;
+
+        $block = $this->record;
+        if (! $block) {
+            $this->refineError = 'No widget selected.';
+            return;
+        }
+
+        $openRouter = app(OpenRouterService::class);
+        if (! $openRouter->isConfigured()) {
+            $this->refineError = 'OpenRouter is not configured. Set your API key in Developer → AI (OpenRouter).';
+            return;
+        }
+
+        $snapshot = [
+            'rule_conditions' => $block->rule?->conditions ?? [],
+            'ai_generated_php' => (string) ($block->ai_generated_php ?? ''),
+            'config' => is_array($block->config) ? $block->config : [],
+            'surface' => (string) $block->surface,
+            'type' => (string) $block->type,
+        ];
+
+        $result = $openRouter->refineWidget(trim($this->refinePrompt), $snapshot);
+        if ($result === null) {
+            $this->refineError = 'AI could not generate a refinement. Check your prompt and try again.';
+            return;
+        }
+
+        $this->refinePreview = $result;
+    }
+
+    public function applyRefinePreview(): void
+    {
+        if (! $this->refinePreview || ! $this->record) {
+            $this->clearRefinePreview();
+            return;
+        }
+
+        $block = $this->record;
+        $updatedRule = $this->refinePreview['updated_rule_conditions'] ?? [];
+        $updatedPhp = (string) ($this->refinePreview['updated_php_snippet'] ?? '');
+        $updatedText = $this->refinePreview['updated_text_fields'] ?? [];
+
+        if ($updatedRule !== []) {
+            $existingRule = $block->rule;
+            if ($existingRule) {
+                $existingRule->update(['conditions' => $updatedRule]);
+            } else {
+                $rule = Rule::create([
+                    'shop_id' => $block->shop_id,
+                    'name' => 'Widget rule ' . $block->id,
+                    'conditions' => $updatedRule,
+                ]);
+                $block->update(['rule_id' => $rule->id]);
+            }
+        } else {
+            $block->rule_id?->delete();
+            $block->update(['rule_id' => null]);
+        }
+
+        $block->update(['ai_generated_php' => $updatedPhp]);
+
+        if ($updatedText !== []) {
+            $config = is_array($block->config) ? $block->config : [];
+            foreach ($updatedText as $key => $value) {
+                if (is_string($key) && $key !== '' && is_string($value)) {
+                    $config[$key] = $value;
+                }
+            }
+            $block->update(['config' => $config]);
+        }
+
+        $this->refinePreview = null;
+        $this->refinePrompt = '';
+        $this->refineError = null;
+
+        $this->record->refresh();
+        $this->form->fill($this->mutateFormDataBeforeFill($this->record->toArray()));
+
+        \Filament\Notifications\Notification::make()
+            ->title('Widget refined and saved')
+            ->success()
+            ->send();
+    }
+
+    public function clearRefinePreview(): void
+    {
+        $this->refinePreview = null;
+        $this->refineError = null;
     }
 
     /**

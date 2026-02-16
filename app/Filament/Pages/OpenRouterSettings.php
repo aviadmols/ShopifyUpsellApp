@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\AiRequestLog;
 use App\Models\Setting;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -10,6 +11,7 @@ use Filament\Pages\Page;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Actions\Action;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class OpenRouterSettings extends Page implements HasForms
 {
@@ -25,10 +27,99 @@ class OpenRouterSettings extends Page implements HasForms
     public ?string $openrouter_api_key = null;
     public ?string $openrouter_model = null;
 
+    /** @var string */
+    public $activeTab = 'settings';
+
+    /** Logs tab filters */
+    public ?string $logFlow = null;
+    public ?string $logStatus = null;
+    public ?string $logModel = null;
+    public ?string $logDateFrom = null;
+    public ?string $logDateTo = null;
+
+    /** Modal: selected log for detail view */
+    public ?int $viewingLogId = null;
+
     public function mount(): void
     {
         $this->openrouter_api_key = Setting::get('openrouter_api_key') ?? '';
         $this->openrouter_model = Setting::get('openrouter_model') ?? 'openai/gpt-4o-mini';
+    }
+
+    public function getAiLogs(): LengthAwarePaginator
+    {
+        $query = AiRequestLog::query()->orderByDesc('created_at');
+
+        if ($this->logFlow !== null && $this->logFlow !== '') {
+            $query->where('flow', $this->logFlow);
+        }
+        if ($this->logStatus !== null && $this->logStatus !== '') {
+            $query->where('status', $this->logStatus);
+        }
+        if ($this->logModel !== null && $this->logModel !== '') {
+            $query->where('model', $this->logModel);
+        }
+        if ($this->logDateFrom !== null && $this->logDateFrom !== '') {
+            $query->whereDate('created_at', '>=', $this->logDateFrom);
+        }
+        if ($this->logDateTo !== null && $this->logDateTo !== '') {
+            $query->whereDate('created_at', '<=', $this->logDateTo);
+        }
+
+        return $query->paginate(15);
+    }
+
+    public function getViewingLog(): ?AiRequestLog
+    {
+        if ($this->viewingLogId === null) {
+            return null;
+        }
+        return AiRequestLog::find($this->viewingLogId);
+    }
+
+    public function openLogModal(int $id): void
+    {
+        $this->viewingLogId = $id;
+        $this->dispatch('open-modal', 'ai-log-detail');
+    }
+
+    public function closeLogModal(): void
+    {
+        $this->viewingLogId = null;
+    }
+
+    public function getUserPromptFromRequest(?string $requestPayload): string
+    {
+        if ($requestPayload === null || $requestPayload === '') {
+            return '';
+        }
+        $data = json_decode($requestPayload, true);
+        if (! is_array($data) || empty($data['messages'])) {
+            return '';
+        }
+        foreach ($data['messages'] as $msg) {
+            if (isset($msg['role']) && $msg['role'] === 'user' && isset($msg['content'])) {
+                return is_string($msg['content']) ? $msg['content'] : json_encode($msg['content']);
+            }
+        }
+        return '';
+    }
+
+    public function getSystemPromptFromRequest(?string $requestPayload): string
+    {
+        if ($requestPayload === null || $requestPayload === '') {
+            return '';
+        }
+        $data = json_decode($requestPayload, true);
+        if (! is_array($data) || empty($data['messages'])) {
+            return '';
+        }
+        foreach ($data['messages'] as $msg) {
+            if (isset($msg['role']) && $msg['role'] === 'system' && isset($msg['content'])) {
+                return is_string($msg['content']) ? $msg['content'] : json_encode($msg['content']);
+            }
+        }
+        return '';
     }
 
     protected function getHeaderActions(): array

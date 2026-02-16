@@ -93,6 +93,8 @@ class RuleEngine
             'url_param_contains' => $this->urlParamContains($context, $value),
             'line_item_property_equals' => $this->lineItemPropertyEquals($context, $value),
             'line_item_property_exists' => $this->lineItemPropertyExists($context, (string) $value),
+            'line_item_sku_matches' => $this->lineItemSkuMatches($context, $value),
+            'line_item_sku_segment_between' => $this->lineItemSkuSegmentBetween($context, $value),
             default => false,
         };
     }
@@ -238,6 +240,92 @@ class RuleEngine
                 continue;
             }
             if (array_key_exists($propKey, $props) && (string) ($props[$propKey] ?? '') !== '') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get SKU for each line item (from sku key or properties).
+     *
+     * @return array<int, string>
+     */
+    protected function getLineItemSkus(array $context): array
+    {
+        $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
+        $skus = [];
+        foreach ($lines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $sku = $line['sku'] ?? null;
+            if ($sku === null || $sku === '') {
+                $props = $line['properties'] ?? $line['attributes'] ?? $line['customAttributes'] ?? [];
+                if (is_array($props)) {
+                    $sku = $props['sku'] ?? $props['SKU'] ?? '';
+                }
+            }
+            $skus[] = trim((string) $sku);
+        }
+        return $skus;
+    }
+
+    /**
+     * At least one line item has SKU matching the given regex.
+     * Value: regex string (e.g. "/^XXX-XXX-\d+-XXX$/") or pattern without delimiters (then wrapped as regex).
+     */
+    protected function lineItemSkuMatches(array $context, mixed $value): bool
+    {
+        $pattern = trim((string) $value);
+        if ($pattern === '') {
+            return false;
+        }
+        if (! str_starts_with($pattern, '/')) {
+            $pattern = '/^' . preg_quote($pattern, '/') . '$/';
+        }
+        foreach ($this->getLineItemSkus($context) as $sku) {
+            if ($sku !== '' && @preg_match($pattern, $sku) === 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * At least one line item has SKU whose segment (split by separator) at index is a number between min and max (inclusive).
+     * Value: "segment_index,min,max" or "separator,segment_index,min,max" (default separator "-").
+     */
+    protected function lineItemSkuSegmentBetween(array $context, mixed $value): bool
+    {
+        $parts = is_array($value) ? $value : array_map('trim', explode(',', (string) $value));
+        $separator = '-';
+        $segmentIndex = 0;
+        $min = 0;
+        $max = 0;
+        if (count($parts) === 3) {
+            $segmentIndex = (int) $parts[0];
+            $min = (int) $parts[1];
+            $max = (int) $parts[2];
+        } elseif (count($parts) >= 4) {
+            $separator = (string) $parts[0];
+            $segmentIndex = (int) $parts[1];
+            $min = (int) $parts[2];
+            $max = (int) $parts[3];
+        } else {
+            return false;
+        }
+        foreach ($this->getLineItemSkus($context) as $sku) {
+            if ($sku === '') {
+                continue;
+            }
+            $segments = explode($separator, $sku);
+            $seg = $segments[$segmentIndex] ?? null;
+            if ($seg === null || $seg === '') {
+                continue;
+            }
+            $num = (int) $seg;
+            if ($num >= $min && $num <= $max) {
                 return true;
             }
         }

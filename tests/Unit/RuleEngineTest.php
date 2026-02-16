@@ -130,4 +130,79 @@ class RuleEngineTest extends TestCase
             $context
         ));
     }
+
+    public function test_line_item_sku_matches(): void
+    {
+        $context = [
+            'line_items' => [
+                ['product_id' => 1, 'sku' => 'WIDGET-100-BLUE'],
+                ['product_id' => 2, 'sku' => 'GADGET-200-RED'],
+            ],
+        ];
+        $this->assertTrue($this->engine->evaluate(
+            ['and' => [['line_item_sku_matches' => '/^WIDGET-\d+-/']]],
+            $context
+        ));
+        $this->assertFalse($this->engine->evaluate(
+            ['and' => [['line_item_sku_matches' => '/^OTHER-/']]],
+            $context
+        ));
+        $this->assertTrue($this->engine->evaluate(
+            ['and' => [['line_item_sku_matches' => 'GADGET-200-RED']]],
+            $context
+        ));
+    }
+
+    public function test_line_item_sku_matches_from_properties(): void
+    {
+        $context = [
+            'line_items' => [
+                ['product_id' => 1, 'properties' => ['SKU' => 'SUB-555-X']],
+            ],
+        ];
+        $this->assertTrue($this->engine->evaluate(
+            ['and' => [['line_item_sku_matches' => '/^SUB-\d+-/']]],
+            $context
+        ));
+    }
+
+    public function test_line_item_sku_segment_between(): void
+    {
+        $context = [
+            'line_items' => [
+                ['product_id' => 1, 'sku' => 'XXX-YYY-250-ZZZ'],
+                ['product_id' => 2, 'sku' => 'AAA-BBB-99-CCC'],
+            ],
+        ];
+        // segment index 2 (0-based), min 100, max 300; value "2,100,300"
+        $this->assertTrue($this->engine->evaluate(
+            ['and' => [['line_item_sku_segment_between' => '2,100,300']]],
+            $context
+        ));
+        $this->assertFalse($this->engine->evaluate(
+            ['and' => [['line_item_sku_segment_between' => '2,300,400']]],
+            $context
+        ));
+        $this->assertTrue($this->engine->evaluate(
+            ['and' => [['line_item_sku_segment_between' => '2,50,100']]],
+            $context
+        ));
+    }
+
+    public function test_line_item_sku_segment_between_custom_separator(): void
+    {
+        $context = [
+            'line_items' => [
+                ['product_id' => 1, 'sku' => 'A_B_150_C'],
+            ],
+        ];
+        $this->assertTrue($this->engine->evaluate(
+            ['and' => [['line_item_sku_segment_between' => '_,2,100,200']]],
+            $context
+        ));
+        $this->assertFalse($this->engine->evaluate(
+            ['and' => [['line_item_sku_segment_between' => '_,2,200,300']]],
+            $context
+        ));
+    }
 }
