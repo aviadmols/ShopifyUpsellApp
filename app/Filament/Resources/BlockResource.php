@@ -154,7 +154,24 @@ class BlockResource extends Resource
                 Forms\Components\KeyValue::make('extra_config')
                     ->label('Extra config (optional)')
                     ->reorderable()
-                    ->helperText('Merged into block config for advanced use.'),
+                    ->helperText('Merged into block config for advanced use.')
+                    ->dehydrateStateUsing(static function ($state): array {
+                        $state = is_array($state) ? $state : [];
+                        $out = [];
+                        foreach ($state as $k => $v) {
+                            $key = trim((string) $k);
+                            if ($key === '') {
+                                continue;
+                            }
+                            if (is_array($v) || is_object($v)) {
+                                $val = json_encode($v, JSON_UNESCAPED_UNICODE);
+                            } else {
+                                $val = $v === null ? null : trim((string) $v);
+                            }
+                            $out[$key] = ($val !== null && $val !== '') ? $val : null;
+                        }
+                        return $out;
+                    }),
             ]);
     }
 
@@ -386,7 +403,24 @@ class BlockResource extends Resource
                                     ->label('Property equals (optional)')
                                     ->keyPlaceholder('key')
                                     ->valuePlaceholder('value')
-                                    ->default([]),
+                                    ->default([])
+                                    ->dehydrateStateUsing(static function ($state): array {
+                                        $state = is_array($state) ? $state : [];
+                                        $out = [];
+                                        foreach ($state as $k => $v) {
+                                            $key = trim((string) $k);
+                                            if ($key === '') {
+                                                continue;
+                                            }
+                                            if (is_array($v) || is_object($v)) {
+                                                $val = json_encode($v, JSON_UNESCAPED_UNICODE);
+                                            } else {
+                                                $val = $v === null ? null : trim((string) $v);
+                                            }
+                                            $out[$key] = ($val !== null && $val !== '') ? $val : null;
+                                        }
+                                        return $out;
+                                    }),
                             ])
                             ->columns(2)
                             ->collapsible(),

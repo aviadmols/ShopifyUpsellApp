@@ -55,6 +55,8 @@ class RuleResource extends Resource
                                 'subtotal_lte' => 'Subtotal <=',
                                 'line_items_has_product_id' => 'Cart has product ID',
                                 'line_items_has_any_product_id' => 'Cart has any product IDs (comma separated)',
+                                'line_items_has_variant_id' => 'Cart has variant ID',
+                                'line_items_has_any_variant_id' => 'Cart has any variant IDs (comma separated)',
                                 'customer_has_tag' => 'Customer has tag',
                                 'shipping_country_in' => 'Shipping country in (comma separated ISO codes)',
                                 'utm_param_equals' => 'UTM param equals (param_name,value)',

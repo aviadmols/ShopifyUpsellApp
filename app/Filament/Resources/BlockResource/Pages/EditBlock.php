@@ -533,6 +533,7 @@ class EditBlock extends EditRecord
             'image_aspect_ratio', 'image_fit', 'image_corner_radius', 'button_kind', 'button_appearance',
             'card_spacing', 'divider_between_cards',
             'headline', 'description', 'cta_label', 'upgrade_mappings', 'plans', 'cart_subtotal_min', 'cart_items_count_min',
+            'ui',
             'runtime_variables', 'runtimeVariables',
             'progress_bar_enabled', 'progress_bar_type', 'progress_bar_goal', 'progress_bar_message_below',
             'progress_bar_message_achieved', 'progress_bar_discount_type', 'progress_bar_discount_value',

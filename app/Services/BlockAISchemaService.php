@@ -172,6 +172,8 @@ class BlockAISchemaService
             ['field' => 'subtotal_lte', 'value_format' => 'number', 'description' => 'Cart subtotal <= value'],
             ['field' => 'line_items_has_product_id', 'value_format' => 'product ID', 'description' => 'Cart has this product ID'],
             ['field' => 'line_items_has_any_product_id', 'value_format' => 'comma product IDs', 'description' => 'Cart has any of these products'],
+            ['field' => 'line_items_has_variant_id', 'value_format' => 'variant ID or GID', 'description' => 'Cart has this variant ID (numeric or gid://shopify/ProductVariant/...)'],
+            ['field' => 'line_items_has_any_variant_id', 'value_format' => 'comma variant IDs or GIDs', 'description' => 'Cart has any of these variants'],
             ['field' => 'customer_has_tag', 'value_format' => 'tag', 'description' => 'Customer has tag'],
             ['field' => 'shipping_country_in', 'value_format' => 'US,IL', 'description' => 'Shipping country in list'],
             ['field' => 'utm_param_equals', 'value_format' => 'param,value', 'description' => 'UTM param equals'],

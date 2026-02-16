@@ -51,8 +51,11 @@ class OfferBuilderService
         return match ($field) {
             'subtotal_gte' => ['subtotal_gte' => (float) $value],
             'subtotal_lte' => ['subtotal_lte' => (float) $value],
-            'line_items_has_product_id' => ['line_items_has_product_id' => (int) $value],
+            // Keep as string to allow Shopify GIDs; RuleEngine will normalize.
+            'line_items_has_product_id' => ['line_items_has_product_id' => $value === null ? '' : (string) $value],
             'line_items_has_any_product_id' => ['line_items_has_any_product_id' => $this->csvToIntArray($value)],
+            'line_items_has_variant_id' => ['line_items_has_variant_id' => $value === null ? '' : (string) $value],
+            'line_items_has_any_variant_id' => ['line_items_has_any_variant_id' => $this->csvToStringArray($value)],
             'customer_has_tag' => ['customer_has_tag' => (string) $value],
             'shipping_country_in' => ['shipping_country_in' => $this->csvToUpperArray($value)],
             'utm_param_equals' => ['utm_param_equals' => (string) $value],
@@ -88,6 +91,20 @@ class OfferBuilderService
             static fn ($v) => strtoupper(trim((string) $v)),
             $parts
         )));
+    }
+
+    /**
+     * @param  mixed  $value
+     * @return array<int, string>
+     */
+    protected function csvToStringArray(mixed $value): array
+    {
+        $parts = is_array($value) ? $value : explode(',', (string) $value);
+
+        return array_values(array_filter(array_map(
+            static fn ($v) => trim((string) $v),
+            $parts
+        ), static fn ($v) => $v !== ''));
     }
 
     /**

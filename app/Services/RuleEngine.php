@@ -83,8 +83,12 @@ class RuleEngine
         return match ($key) {
             'order_subtotal_gte', 'subtotal_gte', 'cart_subtotal_gte' => $this->subtotalGte($context, $value),
             'order_subtotal_lte', 'subtotal_lte', 'cart_subtotal_lte' => $this->subtotalLte($context, $value),
-            'line_items_has_product_id' => $this->lineItemsHasProductId($context, (int) $value),
+            // Accept numeric IDs or Shopify GIDs (e.g. gid://shopify/Product/123).
+            // For backwards-compatibility, "product_id" checks also accept matching variant IDs if product_id isn't present in line payload.
+            'line_items_has_product_id' => $this->lineItemsHasProductId($context, $value),
             'line_items_has_any_product_id' => $this->lineItemsHasAnyProductId($context, (array) $value),
+            'line_items_has_variant_id' => $this->lineItemsHasVariantId($context, $value),
+            'line_items_has_any_variant_id' => $this->lineItemsHasAnyVariantId($context, (array) $value),
             'customer_has_tag' => $this->customerHasTag($context, (string) $value),
             'shipping_country_in' => $this->shippingCountryIn($context, (array) $value),
             'utm_param_equals' => $this->utmParamEquals($context, $value),
@@ -111,12 +115,25 @@ class RuleEngine
         return $subtotal <= (float) $max;
     }
 
-    protected function lineItemsHasProductId(array $context, int $productId): bool
+    protected function lineItemsHasProductId(array $context, mixed $productId): bool
     {
+        $want = $this->normalizeId($productId);
+        if ($want === '') {
+            return false;
+        }
         $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
         foreach ($lines as $line) {
-            $pid = $line['product_id'] ?? $line['productId'] ?? $line['id'] ?? null;
-            if ($pid && (int) $pid === $productId) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $pidRaw = $line['product_id'] ?? $line['productId'] ?? null;
+            $vidRaw = $line['variant_id'] ?? $line['variantId'] ?? $line['merchandiseId'] ?? $line['id'] ?? null;
+
+            $pid = $this->normalizeId($pidRaw);
+            $vid = $this->normalizeId($vidRaw);
+
+            // Be tolerant: Shopify payloads vary; match either product_id or variant_id.
+            if (($pid !== '' && $pid === $want) || ($vid !== '' && $vid === $want)) {
                 return true;
             }
         }
@@ -126,14 +143,82 @@ class RuleEngine
     protected function lineItemsHasAnyProductId(array $context, array $productIds): bool
     {
         $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
-        $ids = array_map('intval', $productIds);
+        $ids = array_values(array_filter(array_map(fn ($v) => $this->normalizeId($v), $productIds), fn ($v) => $v !== ''));
+        if ($ids === []) {
+            return false;
+        }
         foreach ($lines as $line) {
-            $pid = $line['product_id'] ?? $line['productId'] ?? $line['id'] ?? null;
-            if ($pid && in_array((int) $pid, $ids, true)) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $pidRaw = $line['product_id'] ?? $line['productId'] ?? null;
+            $vidRaw = $line['variant_id'] ?? $line['variantId'] ?? $line['merchandiseId'] ?? $line['id'] ?? null;
+
+            $pid = $this->normalizeId($pidRaw);
+            $vid = $this->normalizeId($vidRaw);
+
+            if (($pid !== '' && in_array($pid, $ids, true)) || ($vid !== '' && in_array($vid, $ids, true))) {
                 return true;
             }
         }
         return false;
+    }
+
+    protected function lineItemsHasVariantId(array $context, mixed $variantId): bool
+    {
+        $want = $this->normalizeId($variantId);
+        if ($want === '') {
+            return false;
+        }
+        $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
+        foreach ($lines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $vidRaw = $line['variant_id'] ?? $line['variantId'] ?? $line['merchandiseId'] ?? $line['id'] ?? null;
+            $vid = $this->normalizeId($vidRaw);
+            if ($vid !== '' && $vid === $want) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected function lineItemsHasAnyVariantId(array $context, array $variantIds): bool
+    {
+        $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
+        $ids = array_values(array_filter(array_map(fn ($v) => $this->normalizeId($v), $variantIds), fn ($v) => $v !== ''));
+        if ($ids === []) {
+            return false;
+        }
+        foreach ($lines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $vidRaw = $line['variant_id'] ?? $line['variantId'] ?? $line['merchandiseId'] ?? $line['id'] ?? null;
+            $vid = $this->normalizeId($vidRaw);
+            if ($vid !== '' && in_array($vid, $ids, true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function normalizeId(mixed $id): string
+    {
+        if ($id === null) {
+            return '';
+        }
+        $str = trim((string) $id);
+        if ($str === '') {
+            return '';
+        }
+        if (str_starts_with($str, 'gid://')) {
+            preg_match('/\d+/', $str, $m);
+            return $m ? $m[0] : '';
+        }
+        $digits = preg_replace('/\D/', '', $str);
+        return $digits !== '' ? $digits : $str;
     }
 
     protected function customerHasTag(array $context, string $tag): bool
