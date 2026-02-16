@@ -396,7 +396,7 @@ class BlockResource extends Resource
                     ->addActionLabel('Add mapping'),
                 Forms\Components\Repeater::make('upgrade_card_plans')
                     ->label('Card plans dropdown (optional)')
-                    ->description('Options shown in the card dropdown (id + label).')
+                    ->helperText('Options shown in the card dropdown (id + label).')
                     ->schema([
                         Forms\Components\TextInput::make('id')
                             ->label('Plan ID')

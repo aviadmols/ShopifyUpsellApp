@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Middleware\CorsForExtensions;
-use Throwable;
 use App\Http\Middleware\VerifyCheckoutExtensionSignature;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
