@@ -512,7 +512,7 @@ function CheckoutUpsell() {
     status.type === 'not_configured'
       ? 'Not configured'
       : status.type === 'loading'
-        ? 'Loading'
+        ? ''
         : status.type === 'error'
           ? (status.detail || 'Error')
           : status.type === 'connected'

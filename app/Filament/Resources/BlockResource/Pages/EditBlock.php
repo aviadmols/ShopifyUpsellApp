@@ -469,6 +469,8 @@ class EditBlock extends EditRecord
             $data['upgrade_card_cart_subtotal_min'] = isset($config['cart_subtotal_min']) ? (string) $config['cart_subtotal_min'] : '';
             $data['upgrade_card_cart_items_count_min'] = isset($config['cart_items_count_min']) ? (string) $config['cart_items_count_min'] : '';
             $ui = is_array($config['ui'] ?? null) ? $config['ui'] : [];
+            $data['upgrade_card_display_mode'] = (string) ($ui['display_mode'] ?? 'text');
+            $data['upgrade_card_image_url'] = (string) ($ui['image_url'] ?? '');
             $data['upgrade_card_title_size'] = (string) ($ui['title_size'] ?? 'medium');
             $data['upgrade_card_button_kind'] = (string) ($ui['button_kind'] ?? 'secondary');
             $data['upgrade_card_spacing'] = (string) ($ui['spacing'] ?? 'tight');

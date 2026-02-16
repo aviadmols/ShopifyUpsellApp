@@ -371,6 +371,8 @@ class CreateBlockWithAI extends Page implements HasForms
                 'upgrade_card_cart_subtotal_min' => $config['cart_subtotal_min'] ?? null,
                 'upgrade_card_cart_items_count_min' => $config['cart_items_count_min'] ?? null,
 
+                'upgrade_card_display_mode' => (string) ($ui['display_mode'] ?? 'text'),
+                'upgrade_card_image_url' => (string) ($ui['image_url'] ?? ''),
                 'upgrade_card_title_size' => (string) ($ui['title_size'] ?? 'medium'),
                 'upgrade_card_button_kind' => (string) ($ui['button_kind'] ?? 'secondary'),
                 'upgrade_card_spacing' => (string) ($ui['spacing'] ?? 'tight'),

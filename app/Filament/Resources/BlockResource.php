@@ -323,6 +323,22 @@ class BlockResource extends Resource
         return Forms\Components\Section::make('Upgrade card (Checkout Order Summary)')
             ->description('Single card after cart line list. Match cart lines by product/variant/SKU/properties and offer subscription or bundle swap. To show in Checkout: (1) Note this block\'s ID (from the Blocks table or the URL when editing). (2) In Shopify Partners → your app → Extensions → "Zyg Upgrade Card" → Settings, set Widget ID to that ID, and set Extension secret / API URL. (3) In the store: Settings → Checkout → Customize → add the "Zyg Upgrade Card" app block to the Order summary (cart) area → Save.')
             ->schema([
+                Forms\Components\Section::make('When to show this block (Checkout Order Summary)')
+                    ->description('The block is shown only when the rule conditions are met and at least one upgrade mapping below matches a cart line. Select the rule in "Widget identity" above.')
+                    ->schema([
+                        Forms\Components\Placeholder::make('upgrade_card_rule_summary')
+                            ->label('Selected rule')
+                            ->content(function (Get $get): string {
+                                $ruleId = $get('rule_id');
+                                if (! $ruleId) {
+                                    return 'No rule selected — block can show whenever a mapping matches.';
+                                }
+                                $rule = Rule::find($ruleId);
+                                return $rule ? $rule->name : 'Rule #'.(int) $ruleId;
+                            }),
+                    ])
+                    ->collapsible()
+                    ->collapsed(),
                 Forms\Components\TextInput::make('upgrade_card_headline')
                     ->label('Headline')
                     ->placeholder('Upgrade to subscribe & save')
@@ -349,8 +365,25 @@ class BlockResource extends Resource
                     ->placeholder('0'),
                 Forms\Components\Section::make('Design')
                     ->schema([
+                        Forms\Components\Select::make('upgrade_card_display_mode')
+                            ->label('Card content')
+                            ->options([
+                                'text' => 'Headline + description + button (default)',
+                                'image' => 'Image + button only',
+                            ])
+                            ->default('text')
+                            ->live()
+                            ->helperText('Image mode shows only the image and CTA button; no headline or description.'),
+                        Forms\Components\TextInput::make('upgrade_card_image_url')
+                            ->label('Image URL')
+                            ->url()
+                            ->placeholder('https://…')
+                            ->maxLength(2048)
+                            ->visible(fn (Get $get): bool => (string) ($get('upgrade_card_display_mode') ?? '') === 'image')
+                            ->helperText('Required when using "Image + button only". Image will be shown above the button.'),
                         Forms\Components\Select::make('upgrade_card_title_size')
                             ->label('Headline size')
+                            ->visible(fn (Get $get): bool => (string) ($get('upgrade_card_display_mode') ?? 'text') !== 'image')
                             ->options([
                                 'small' => 'Small',
                                 'medium' => 'Medium',
@@ -394,7 +427,8 @@ class BlockResource extends Resource
                             ->default('base'),
                         Forms\Components\Toggle::make('upgrade_card_show_items')
                             ->label('Show matched items list')
-                            ->default(true),
+                            ->default(true)
+                            ->visible(fn (Get $get): bool => (string) ($get('upgrade_card_display_mode') ?? 'text') !== 'image'),
                         Forms\Components\TextInput::make('upgrade_card_plan_label')
                             ->label('Plan dropdown label')
                             ->default('Plan')
@@ -410,9 +444,106 @@ class BlockResource extends Resource
                     ->columns(2)
                     ->collapsible()
                     ->collapsed(),
+                Forms\Components\Section::make('Flow view')
+                    ->description('Summary of when each offer is shown and what is offered (read-only).')
+                    ->schema([
+                        Forms\Components\Placeholder::make('upgrade_flow_view')
+                            ->label('')
+                            ->content(function (Get $get): \Illuminate\Support\HtmlString {
+                                $items = $get('upgrade_mappings_items');
+                                if (! is_array($items) || $items === []) {
+                                    return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500">Add mappings below to see the flow.</p>');
+                                }
+                                $steps = [];
+                                foreach ($items as $i => $m) {
+                                    if (! is_array($m)) {
+                                        continue;
+                                    }
+                                    $when = [];
+                                    if (! empty($m['match_product_id'])) {
+                                        $when[] = 'Product '.preg_replace('/\D/', '', (string) $m['match_product_id']) ?: $m['match_product_id'];
+                                    }
+                                    if (! empty($m['match_variant_id'])) {
+                                        $when[] = 'Variant '.preg_replace('/\D/', '', (string) $m['match_variant_id']) ?: $m['match_variant_id'];
+                                    }
+                                    if (! empty($m['match_sku_segment'])) {
+                                        $when[] = 'SKU contains «'.e((string) $m['match_sku_segment']).'»';
+                                    }
+                                    if (! empty($m['match_quantity_min'])) {
+                                        $when[] = 'Qty ≥ '.$m['match_quantity_min'];
+                                    }
+                                    if (! empty($m['match_quantity_max'])) {
+                                        $when[] = 'Qty ≤ '.$m['match_quantity_max'];
+                                    }
+                                    $sub = (string) ($m['match_subscription'] ?? 'any');
+                                    if ($sub === 'must_be_subscription') {
+                                        $when[] = 'Subscription only';
+                                    } elseif ($sub === 'must_be_one_time') {
+                                        $when[] = 'One-time only';
+                                    }
+                                    $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
+                                    $offer = (string) ($m['target_variant_id'] ?? '');
+                                    $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
+                                    $plans = $m['plans'] ?? [];
+                                    if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
+                                        $offerStr .= ' · '.e((string) $plans[0]['label']);
+                                    }
+                                    $next = isset($items[$i + 1]) ? 'Step '.($i + 2) : 'End';
+                                    $steps[] = '<div class="border border-gray-200 rounded p-2 mb-2 text-sm"><strong>Step '.($i + 1).':</strong> When cart: '.e($whenStr).' → Offer: '.e($offerStr).'<br><span class="text-gray-500">Next: '.e($next).'</span></div>';
+                                }
+                                return new \Illuminate\Support\HtmlString('<div class="space-y-1">'.implode('', $steps).'</div>');
+                            }),
+                    ])
+                    ->collapsible()
+                    ->collapsed(),
                 Forms\Components\Repeater::make('upgrade_mappings_items')
                     ->label('Upgrade mappings')
                     ->schema([
+                        Forms\Components\Placeholder::make('mapping_summary')
+                            ->label('')
+                            ->content(function (Get $get): \Illuminate\Support\HtmlString {
+                                $when = [];
+                                if ((string) $get('match_product_id') !== '') {
+                                    $when[] = 'Product '.preg_replace('/\D/', '', (string) $get('match_product_id')) ?: $get('match_product_id');
+                                }
+                                if ((string) $get('match_variant_id') !== '') {
+                                    $when[] = 'Variant '.preg_replace('/\D/', '', (string) $get('match_variant_id')) ?: $get('match_variant_id');
+                                }
+                                if ((string) $get('match_sku_segment') !== '') {
+                                    $when[] = 'SKU contains «'.e((string) $get('match_sku_segment')).'»';
+                                }
+                                if ((string) $get('match_sku_regex') !== '') {
+                                    $when[] = 'SKU regex';
+                                }
+                                $qMin = $get('match_quantity_min');
+                                $qMax = $get('match_quantity_max');
+                                if ($qMin !== null && $qMin !== '') {
+                                    $when[] = 'Qty ≥ '.$qMin;
+                                }
+                                if ($qMax !== null && $qMax !== '') {
+                                    $when[] = 'Qty ≤ '.$qMax;
+                                }
+                                $sub = (string) ($get('match_subscription') ?? 'any');
+                                if ($sub === 'must_be_subscription') {
+                                    $when[] = 'Subscription only';
+                                } elseif ($sub === 'must_be_one_time') {
+                                    $when[] = 'One-time only';
+                                }
+                                $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
+                                $offer = (string) $get('target_variant_id');
+                                $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
+                                $plans = $get('plans');
+                                $firstPlanLabel = null;
+                                if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
+                                    $firstPlanLabel = (string) $plans[0]['label'];
+                                }
+                                if ($firstPlanLabel !== null) {
+                                    $offerStr .= ' · '.$firstPlanLabel;
+                                }
+                                return new \Illuminate\Support\HtmlString(
+                                    '<div class="text-sm"><strong>When:</strong> '.e($whenStr).'</div><div class="text-sm mt-1"><strong>Offer:</strong> '.e($offerStr).'</div>'
+                                );
+                            }),
                         Forms\Components\Section::make('Match (when to show this upgrade)')
                             ->schema([
                                 Forms\Components\TextInput::make('match_product_id')
@@ -494,8 +625,8 @@ class BlockResource extends Resource
                             ->placeholder('Selling plan GID or numeric ID')
                             ->maxLength(255)
                             ->helperText('Optional. Use Tools → Products, variants & selling plans to find selling plan IDs for products that have subscriptions.'),
-                        Forms\Components\Section::make('Display overrides (optional)')
-                            ->description('Override the card text when this mapping is the first match. You can use placeholders like {cart_subtotal} or {first_product_title}.')
+                        Forms\Components\Section::make('Offer design (text for this mapping)')
+                            ->description('Override the card headline, description and CTA when this mapping is the first match. Placeholders: {cart_subtotal}, {first_product_title}, {matched_quantity}, {matched_variant_id}, {matched_is_subscription}.')
                             ->schema([
                                 Forms\Components\TextInput::make('mapping_headline')
                                     ->label('Headline override')
@@ -519,7 +650,8 @@ class BlockResource extends Resource
                             ->default(1)
                             ->minValue(1),
                         Forms\Components\Repeater::make('plans')
-                            ->label('Plans (optional, for subscription)')
+                            ->label('Plan options for this offer (dropdown + action)')
+                            ->helperText('Options shown in the card dropdown when this mapping matches. Each plan can have its own variant and selling plan ID for the action.')
                             ->schema([
                                 Forms\Components\TextInput::make('id')
                                     ->label('Plan ID')
@@ -544,8 +676,8 @@ class BlockResource extends Resource
                     ->defaultItems(0)
                     ->addActionLabel('Add mapping'),
                 Forms\Components\Repeater::make('upgrade_card_plans')
-                    ->label('Card plans dropdown (optional)')
-                    ->helperText('Options shown in the card dropdown (id + label).')
+                    ->label('Card plans dropdown (fallback only)')
+                    ->helperText('Used only when the matching mapping has no plan options. Prefer defining plans inside each mapping above.')
                     ->schema([
                         Forms\Components\TextInput::make('id')
                             ->label('Plan ID')

@@ -15,6 +15,7 @@ import {
   InlineLayout,
   Select,
   View,
+  Image,
 } from '@shopify/ui-extensions-react/checkout';
 import { useEffect, useState, useCallback, useRef } from 'react';
 
@@ -241,13 +242,7 @@ function UpgradeCard() {
   }, [payload?.actions, cartEditable, applyCartLinesChange]);
 
   if (loading) {
-    return (
-      <View padding="base">
-        <Text appearance="subdued" size="small">
-          Loading…
-        </Text>
-      </View>
-    );
+    return null;
   }
 
   const enabled = payload?.enabled === true;
@@ -272,6 +267,9 @@ function UpgradeCard() {
     return null;
   }
 
+  const displayMode = String(ui.display_mode ?? 'text');
+  const imageMode = displayMode === 'image';
+  const imageUrl = imageMode && ui.image_url ? String(ui.image_url).trim() : '';
   const showPlans = plans.length > 0;
   const planOptions = plans.map((p) => ({
     value: String(p.id ?? p.value ?? ''),
@@ -284,17 +282,20 @@ function UpgradeCard() {
   return (
     <View padding={padding} border={showBorder ? 'base' : undefined} borderRadius={borderRadius}>
       <BlockStack spacing={spacing}>
-        {headline ? (
+        {imageMode && imageUrl ? (
+          <Image source={imageUrl} accessibilityDescription={ctaLabel || 'Upgrade offer'} />
+        ) : null}
+        {!imageMode && headline ? (
           <Text size={headlineSize} emphasis="bold">
             {headline}
           </Text>
         ) : null}
-        {description ? (
+        {!imageMode && description ? (
           <Text appearance="subdued" size="small">
             {description}
           </Text>
         ) : null}
-        {showItems ? (
+        {!imageMode && showItems ? (
           <BlockStack spacing="extraTight">
             {visibleItems.map((item, idx) => (
               <Text key={item.line_id ?? idx} size="small" appearance="subdued">

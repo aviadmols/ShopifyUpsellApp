@@ -171,6 +171,8 @@ class CartLineUpgradeMatcher
         $usedLineIds = [];
         /** @var array{headline: string, description: string, cta_label: string}|null $firstOverrides */
         $firstOverrides = null;
+        /** @var array<string, mixed>|null $firstMatchedMapping */
+        $firstMatchedMapping = null;
 
         foreach ($lineItems as $line) {
             if (! is_array($line)) {
@@ -252,13 +254,14 @@ class CartLineUpgradeMatcher
                 }
                 $actions[] = $addAction;
 
-                // Capture first-match text overrides (optional).
+                // Capture first-match text overrides and mapping for plans dropdown.
                 if ($firstOverrides === null) {
                     $firstOverrides = [
                         'headline' => (string) ($mapping['headline'] ?? ''),
                         'description' => (string) ($mapping['description'] ?? ''),
                         'cta_label' => (string) ($mapping['cta_label'] ?? ''),
                     ];
+                    $firstMatchedMapping = $mapping;
                 }
 
                 $usedLineIds[$lineId] = true;
@@ -266,7 +269,14 @@ class CartLineUpgradeMatcher
             }
         }
 
-        $plans = $config['plans'] ?? [];
+        // Use first-matched mapping's plans for dropdown; fallback to card-level plans (backward compat).
+        $plans = null;
+        if ($firstMatchedMapping !== null && isset($firstMatchedMapping['plans']) && is_array($firstMatchedMapping['plans']) && $firstMatchedMapping['plans'] !== []) {
+            $plans = $firstMatchedMapping['plans'];
+        }
+        if ($plans === null) {
+            $plans = $config['plans'] ?? [];
+        }
         if (! is_array($plans)) {
             $plans = [];
         }
