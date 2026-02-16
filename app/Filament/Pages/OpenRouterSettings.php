@@ -80,7 +80,8 @@ class OpenRouterSettings extends Page implements HasForms
     public function openLogModal(int $id): void
     {
         $this->viewingLogId = $id;
-        $this->dispatch('open-modal', 'ai-log-detail');
+        // Filament modal listens for browser event: open-modal { id: '...' }
+        $this->dispatch('open-modal', id: 'ai-log-detail');
     }
 
     public function closeLogModal(): void

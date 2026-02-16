@@ -100,56 +100,59 @@
         @endif
     </div>
 
-    {{-- Modal: log detail + copy prompt --}}
-    @if($viewingLogId)
-        @php $viewLog = $this->getViewingLog(); @endphp
-        @if($viewLog)
-            <x-filament::modal id="ai-log-detail" width="4xl" :close-button="true" wire:close="closeLogModal">
-                <x-slot name="heading">AI Request #{{ $viewLog->id }}</x-slot>
-                <div class="space-y-4 max-h-[70vh] overflow-y-auto">
-                    <div>
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Flow / Model / Status / Duration</h4>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ $viewLog->flow }} · {{ $viewLog->model ?? '—' }} · {{ $viewLog->status }} · {{ $viewLog->duration_ms !== null ? $viewLog->duration_ms . ' ms' : '—' }} · {{ $viewLog->created_at?->format('Y-m-d H:i:s') }}</p>
-                    </div>
-                    <div class="flex gap-2 flex-wrap">
-                        @php
-                            $userPrompt = $this->getUserPromptFromRequest($viewLog->request_payload);
-                            $systemPrompt = $this->getSystemPromptFromRequest($viewLog->request_payload);
-                        @endphp
-                        @if($userPrompt !== '')
-                            <button type="button" x-data x-on:click="navigator.clipboard.writeText(@js($userPrompt)); $dispatch('notify', { message: 'User prompt copied' })" class="fi-btn relative grid-flow-col items-center justify-center font-semibold outline-none transition duration-75 focus:ring-2 rounded-lg fi-btn-color-gray fi-btn-size-sm fi-btn-outline">
-                                Copy user prompt
-                            </button>
-                        @endif
-                        @if($systemPrompt !== '')
-                            <button type="button" x-data x-on:click="navigator.clipboard.writeText(@js($systemPrompt)); $dispatch('notify', { message: 'System prompt copied' })" class="fi-btn relative grid-flow-col items-center justify-center font-semibold outline-none transition duration-75 focus:ring-2 rounded-lg fi-btn-color-gray fi-btn-size-sm fi-btn-outline">
-                                Copy system prompt
-                            </button>
-                        @endif
-                    </div>
-                    @if($viewLog->error)
-                        <div>
-                            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Error</h4>
-                            <pre class="text-sm bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto">{{ $viewLog->error }}</pre>
-                        </div>
+    {{-- Modal: log detail + copy prompt (render always so open-modal works reliably) --}}
+    @php $viewLog = $this->getViewingLog(); @endphp
+    <x-filament::modal id="ai-log-detail" width="4xl" :close-button="true" wire:close="closeLogModal">
+        <x-slot name="heading">
+            {{ $viewLog ? ('AI Request #' . $viewLog->id) : 'AI Request' }}
+        </x-slot>
+
+        @if(! $viewLog)
+            <p class="text-sm text-gray-600 dark:text-gray-400">Select a log row and click “View” to see details.</p>
+        @else
+            <div class="space-y-4 max-h-[70vh] overflow-y-auto">
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Flow / Model / Status / Duration</h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ $viewLog->flow }} · {{ $viewLog->model ?? '—' }} · {{ $viewLog->status }} · {{ $viewLog->duration_ms !== null ? $viewLog->duration_ms . ' ms' : '—' }} · {{ $viewLog->created_at?->format('Y-m-d H:i:s') }}</p>
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                    @php
+                        $userPrompt = $this->getUserPromptFromRequest($viewLog->request_payload);
+                        $systemPrompt = $this->getSystemPromptFromRequest($viewLog->request_payload);
+                    @endphp
+                    @if($userPrompt !== '')
+                        <button type="button" x-data x-on:click="navigator.clipboard.writeText(@js($userPrompt)); $dispatch('notify', { message: 'User prompt copied' })" class="fi-btn relative grid-flow-col items-center justify-center font-semibold outline-none transition duration-75 focus:ring-2 rounded-lg fi-btn-color-gray fi-btn-size-sm fi-btn-outline">
+                            Copy user prompt
+                        </button>
                     @endif
-                    <div>
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Request payload</h4>
-                        <pre class="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto max-h-48 overflow-y-auto">{{ $viewLog->request_payload ? (is_string($viewLog->request_payload) && \Illuminate\Support\Str::isJson($viewLog->request_payload) ? json_encode(json_decode($viewLog->request_payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : e($viewLog->request_payload)) : '—' }}</pre>
-                    </div>
-                    <div>
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Response payload</h4>
-                        <pre class="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto max-h-48 overflow-y-auto">{{ $viewLog->response_payload ? (\Illuminate\Support\Str::isJson($viewLog->response_payload) ? json_encode(json_decode($viewLog->response_payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : e($viewLog->response_payload)) : '—' }}</pre>
-                    </div>
-                    @if($viewLog->parsed_output)
-                        <div>
-                            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Parsed output</h4>
-                            <pre class="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto max-h-48 overflow-y-auto">{{ $viewLog->parsed_output ? (is_string($viewLog->parsed_output) && \Illuminate\Support\Str::isJson($viewLog->parsed_output) ? json_encode(json_decode($viewLog->parsed_output), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : e($viewLog->parsed_output)) : '—' }}</pre>
-                        </div>
+                    @if($systemPrompt !== '')
+                        <button type="button" x-data x-on:click="navigator.clipboard.writeText(@js($systemPrompt)); $dispatch('notify', { message: 'System prompt copied' })" class="fi-btn relative grid-flow-col items-center justify-center font-semibold outline-none transition duration-75 focus:ring-2 rounded-lg fi-btn-color-gray fi-btn-size-sm fi-btn-outline">
+                            Copy system prompt
+                        </button>
                     @endif
                 </div>
-            </x-filament::modal>
+                @if($viewLog->error)
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Error</h4>
+                        <pre class="text-sm bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto">{{ $viewLog->error }}</pre>
+                    </div>
+                @endif
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Request payload</h4>
+                    <pre class="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto max-h-48 overflow-y-auto">{{ $viewLog->request_payload ? (is_string($viewLog->request_payload) && \Illuminate\Support\Str::isJson($viewLog->request_payload) ? json_encode(json_decode($viewLog->request_payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : e($viewLog->request_payload)) : '—' }}</pre>
+                </div>
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Response payload</h4>
+                    <pre class="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto max-h-48 overflow-y-auto">{{ $viewLog->response_payload ? (\Illuminate\Support\Str::isJson($viewLog->response_payload) ? json_encode(json_decode($viewLog->response_payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : e($viewLog->response_payload)) : '—' }}</pre>
+                </div>
+                @if($viewLog->parsed_output)
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Parsed output</h4>
+                        <pre class="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto max-h-48 overflow-y-auto">{{ $viewLog->parsed_output ? (is_string($viewLog->parsed_output) && \Illuminate\Support\Str::isJson($viewLog->parsed_output) ? json_encode(json_decode($viewLog->parsed_output), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : e($viewLog->parsed_output)) : '—' }}</pre>
+                    </div>
+                @endif
+            </div>
         @endif
-    @endif
+    </x-filament::modal>
 
 </x-filament-panels::page>
