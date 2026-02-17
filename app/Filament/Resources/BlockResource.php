@@ -642,6 +642,7 @@ class BlockResource extends Resource
                                             ->label('Property equals (optional)')
                                             ->keyPlaceholder('key')
                                             ->valuePlaceholder('value')
+                                            ->helperText('For «no selling plan» or «has subscription» use «Line subscription status» below — do not use keys like subscription or selling_plan_id here. Property equals is for custom line item properties (e.g. Dog Name, gift message).')
                                             ->default([])
                                             ->dehydrateStateUsing(static function ($state): array {
                                                 $state = is_array($state) ? $state : [];

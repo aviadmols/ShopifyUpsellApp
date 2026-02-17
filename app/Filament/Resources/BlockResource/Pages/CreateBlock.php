@@ -245,7 +245,7 @@ class CreateBlock extends CreateRecord
                 $match['line_item_property_exists'] = (string) $m['match_line_item_property_exists'];
             }
             if (! empty($m['match_line_item_property_equals']) && is_array($m['match_line_item_property_equals'])) {
-                $match['line_item_property_equals'] = $m['match_line_item_property_equals'];
+                $match['line_item_property_equals'] = self::filterSubscriptionKeysFromPropertyEquals($m['match_line_item_property_equals']);
             }
             if (isset($m['match_quantity_min']) && $m['match_quantity_min'] !== '' && $m['match_quantity_min'] !== null) {
                 $match['quantity_min'] = (int) $m['match_quantity_min'];
@@ -352,6 +352,30 @@ class CreateBlock extends CreateRecord
                 $entry['ui'] = $mappingUi;
             }
             $out[] = $entry;
+        }
+        return $out;
+    }
+
+    /**
+     * Remove subscription/selling_plan keys from Property equals so we use only "Line subscription status".
+     * Prevents storing "subscription": "on"/"OF" etc. in properties; use match.subscription (must_be_one_time / must_be_subscription) instead.
+     *
+     * @param  array<string, mixed>  $propertyEquals
+     * @return array<string, mixed>
+     */
+    public static function filterSubscriptionKeysFromPropertyEquals(array $propertyEquals): array
+    {
+        $strip = ['subscription', 'selling_plan_id', 'selling_plan', 'sellingplan', 'subscription_id'];
+        $out = [];
+        foreach ($propertyEquals as $k => $v) {
+            $keyLower = strtolower(trim((string) $k));
+            if ($keyLower === '' || in_array($keyLower, $strip, true)) {
+                continue;
+            }
+            if (str_contains($keyLower, 'subscription') || str_contains($keyLower, 'selling_plan')) {
+                continue;
+            }
+            $out[$k] = $v;
         }
         return $out;
     }

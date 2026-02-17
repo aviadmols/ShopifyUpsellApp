@@ -686,7 +686,7 @@ class EditBlock extends EditRecord
                 'match_sku_regex' => (string) ($match['sku_regex'] ?? ''),
                 'match_sku_segment' => (string) ($match['sku_segment'] ?? ''),
                 'match_line_item_property_exists' => (string) ($match['line_item_property_exists'] ?? ''),
-                'match_line_item_property_equals' => is_array($match['line_item_property_equals'] ?? null) ? $match['line_item_property_equals'] : [],
+                'match_line_item_property_equals' => is_array($match['line_item_property_equals'] ?? null) ? \App\Filament\Resources\BlockResource\Pages\CreateBlock::filterSubscriptionKeysFromPropertyEquals($match['line_item_property_equals']) : [],
                 'match_quantity_min' => isset($match['quantity_min']) ? (string) $match['quantity_min'] : '',
                 'match_quantity_max' => isset($match['quantity_max']) ? (string) $match['quantity_max'] : '',
                 'match_subscription' => (string) ($match['subscription'] ?? 'any'),

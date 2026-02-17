@@ -281,6 +281,79 @@ class OpenRouterService
     }
 
     /**
+     * Summarize widget session events (timeline + what happened) in English.
+     *
+     * @param  array<string, mixed>  $sessionContext  session_key, stats, events (sanitized)
+     */
+    public function summarizeWidgetSession(array $sessionContext): ?string
+    {
+        $apiKey = $this->getApiKey();
+        if (! $apiKey) {
+            return null;
+        }
+
+        $system = <<<PROMPT
+You are an expert Shopify Checkout extension debugging assistant.
+
+Given structured session logs for a single session_key, produce a clear ENGLISH summary for a developer.
+
+Requirements:
+- Output in English only.
+- Include a short executive summary, then a chronological timeline.
+- Mention whether the widget was shown (widget_shown), whether rules passed (rule_passed), and any clicks (click_target + meta).
+- If there are user identifiers in checkout_attributes (e.g. _zyxel_user_id, _axon_client_id, igId), surface them.
+- Call out anomalies (e.g. multiple shops, missing view events, clicks without view, rule failed, widget not shown).
+- Keep it concise but high-signal. Use bullet points and timestamps.
+PROMPT;
+
+        $userContent = "Session logs (JSON):\n" . json_encode($sessionContext, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+        $body = [
+            'model' => $this->getModel(),
+            'messages' => [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => $userContent],
+            ],
+            'max_tokens' => 1200,
+            'temperature' => 0.2,
+        ];
+
+        $start = microtime(true);
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $apiKey,
+                'Content-Type' => 'application/json',
+            ])->timeout(45)->post(self::BASE_URL, $body);
+
+            $durationMs = max(1, (int) round((microtime(true) - $start) * 1000));
+            $responseBody = $response->body();
+
+            if (! $response->successful()) {
+                $this->logAiRequest('session_summary', $body, $responseBody, null, 'error', 'HTTP ' . $response->status(), $durationMs);
+                return null;
+            }
+
+            $content = $response->json('choices.0.message.content');
+            $summary = is_string($content) ? trim($content) : null;
+            $this->logAiRequest(
+                'session_summary',
+                $body,
+                $responseBody,
+                $summary !== null ? ['summary' => $summary] : null,
+                $summary !== null ? 'ok' : 'error',
+                $summary !== null ? null : 'Missing content',
+                $durationMs
+            );
+            return $summary;
+        } catch (\Throwable $e) {
+            $durationMs = max(1, (int) round((microtime(true) - $start) * 1000));
+            $this->logAiRequest('session_summary', $body, null, null, 'error', $e->getMessage(), $durationMs);
+            Log::error('OpenRouter session summary failed', ['message' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
      * Refine widget logic from a user prompt: update rule conditions JSON and PHP snippet (and optionally config text).
      * Used for "Prompt-to-Fix" in Edit Block. Logic runs server-side via rule_conditions; php_snippet is reference only.
      *
@@ -384,6 +457,72 @@ class OpenRouterService
             $durationMs = max(1, (int) round((microtime(true) - $start) * 1000));
             $this->logAiRequest('refine', $body, null, null, 'error', $e->getMessage(), $durationMs);
             Log::error('OpenRouter refine failed', ['message' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
+     * Diagnose why a widget was or was not visible for a single session event.
+     * Returns a short diagnosis in English, or null on failure.
+     *
+     * @param  array<string, mixed>  $payload  block metadata, rule, context_snapshot, computed diagnostics, stored widget_shown/rule_passed
+     */
+    public function diagnoseWidgetSessionEventVisibility(array $payload): ?string
+    {
+        $apiKey = $this->getApiKey();
+        if (! $apiKey) {
+            return null;
+        }
+
+        $system = <<<PROMPT
+You are an expert at debugging Shopify Checkout extension visibility. You receive a single widget session event payload: block metadata, rule conditions, context snapshot (cart, customer, country, UTMs, etc.), and computed diagnostics (whether the rule was expected to pass, upgrade card expected state, item counts). You also see the stored values for widget_shown and rule_passed from the actual session.
+
+Your task: produce a short, clear diagnosis IN ENGLISH ONLY explaining why the widget was or was not visible for this session. Call out any contradictions (e.g. widget_shown=true but rule_passed=false, or rule passed but upgrade card enabled=false or items_count=0). Mention the most likely cause (rule condition mismatch, cart line not matching upgrade mappings, missing variant/product in context, etc.). Keep it concise and actionable for a developer.
+PROMPT;
+
+        $userContent = "Session event payload (JSON):\n" . json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+        $body = [
+            'model' => $this->getModel(),
+            'messages' => [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => $userContent],
+            ],
+            'max_tokens' => 800,
+            'temperature' => 0.2,
+        ];
+
+        $start = microtime(true);
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $apiKey,
+                'Content-Type' => 'application/json',
+            ])->timeout(45)->post(self::BASE_URL, $body);
+
+            $durationMs = max(1, (int) round((microtime(true) - $start) * 1000));
+            $responseBody = $response->body();
+
+            if (! $response->successful()) {
+                $this->logAiRequest('widget_visibility_diagnosis', $body, $responseBody, null, 'error', 'HTTP ' . $response->status(), $durationMs);
+                return null;
+            }
+
+            $content = $response->json('choices.0.message.content');
+            $diagnosis = is_string($content) ? trim($content) : null;
+            $this->logAiRequest(
+                'widget_visibility_diagnosis',
+                $body,
+                $responseBody,
+                $diagnosis !== null ? ['diagnosis' => $diagnosis] : null,
+                $diagnosis !== null ? 'ok' : 'error',
+                $diagnosis !== null ? null : 'Missing content',
+                $durationMs
+            );
+            return $diagnosis;
+        } catch (\Throwable $e) {
+            $durationMs = max(1, (int) round((microtime(true) - $start) * 1000));
+            $this->logAiRequest('widget_visibility_diagnosis', $body, null, null, 'error', $e->getMessage(), $durationMs);
+            Log::error('OpenRouter widget visibility diagnosis failed', ['message' => $e->getMessage()]);
             return null;
         }
     }
