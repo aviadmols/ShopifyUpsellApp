@@ -20,6 +20,12 @@ class WidgetSessionEvent extends Model
         'click_target',
     ];
 
+    public function getShopDomainAttribute(): string
+    {
+        $this->loadMissing('shop');
+        return $this->shop?->shop_domain ?? (string) $this->shop_id;
+    }
+
     protected function casts(): array
     {
         return [
