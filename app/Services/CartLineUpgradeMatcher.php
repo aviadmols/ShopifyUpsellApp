@@ -242,13 +242,21 @@ class CartLineUpgradeMatcher
                 $lineVariantNorm = $this->normalizeId($lineVariantId);
                 $targetVariantNorm = $this->normalizeId($targetVariantId);
                 $sameVariant = $lineVariantNorm !== '' && $targetVariantNorm !== '' && $lineVariantNorm === $targetVariantNorm;
+                $upgradeToSubscriptionOnly = $sameVariant && $actionType === 'subscription' && $sellingPlanId !== '';
 
-                // When same variant and we only add a selling plan, use updateCartLine so checkout stays in place (avoids redirect to cart).
-                if ($sameVariant && $actionType === 'subscription' && $sellingPlanId !== '') {
+                // When upgrading to subscription (same variant, add selling plan): add new line with selling plan first, then remove the old line so the cart reflects the subscription and we don't rely on updateCartLine which may not apply.
+                if ($upgradeToSubscriptionOnly) {
+                    $addAction = [
+                        'type' => 'addCartLine',
+                        'merchandiseId' => $targetVariantId,
+                        'quantity' => $quantity,
+                    ];
+                    $addAction['sellingPlanId'] = $sellingPlanId;
+                    $actions[] = $addAction;
                     $actions[] = [
-                        'type' => 'updateCartLine',
+                        'type' => 'removeCartLine',
                         'lineId' => $lineId,
-                        'sellingPlanId' => $sellingPlanId,
+                        'quantity' => (int) ($line['quantity'] ?? 1),
                     ];
                 } else {
                     $actions[] = [
