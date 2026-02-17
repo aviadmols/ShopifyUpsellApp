@@ -73,10 +73,9 @@ class WidgetSessionEventResource extends Resource
                     ->dateTime('Y-m-d H:i:s')
                     ->sortable()
                     ->searchable(false),
-                Tables\Columns\TextColumn::make('shop.shop_domain')
+                Tables\Columns\TextColumn::make('shop_domain')
                     ->label('Shop')
-                    ->sortable()
-                    ->searchable(),
+                    ->getStateUsing(fn ($record): string => $record->shop?->shop_domain ?? (string) $record->shop_id ?? '-'),
                 Tables\Columns\TextColumn::make('block_id')
                     ->label('Block ID')
                     ->sortable(),
@@ -112,7 +111,7 @@ class WidgetSessionEventResource extends Resource
                     ->wrap(),
                 Tables\Columns\TextColumn::make('event_type')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn ($state): string => match ((string) ($state ?? '')) {
                         'view' => 'gray',
                         'click' => 'success',
                         default => 'primary',

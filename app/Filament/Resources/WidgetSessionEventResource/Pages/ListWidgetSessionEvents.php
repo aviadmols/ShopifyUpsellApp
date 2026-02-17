@@ -15,17 +15,21 @@ class ListWidgetSessionEvents extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [
-            Action::make('byUserId')
+        $actions = [];
+        if (class_exists(WidgetSessionByUserId::class)) {
+            $actions[] = Action::make('byUserId')
                 ->label('By User ID')
                 ->icon('heroicon-o-user-circle')
-                ->url(WidgetSessionByUserId::getUrl()),
-            Action::make('aiSessionSummary')
+                ->url(WidgetSessionByUserId::getUrl());
+        }
+        if (class_exists(WidgetSessionAISummary::class)) {
+            $actions[] = Action::make('aiSessionSummary')
                 ->label('AI Session Summary')
                 ->icon('heroicon-o-sparkles')
                 ->url(WidgetSessionAISummary::getUrl())
-                ->openUrlInNewTab(),
-        ];
+                ->openUrlInNewTab();
+        }
+        return $actions;
     }
 
     protected function getTableQuery(): ?Builder

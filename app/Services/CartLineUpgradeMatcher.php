@@ -239,20 +239,33 @@ class CartLineUpgradeMatcher
                     $sellingPlanId = self::sellingPlanToGid($sellingPlanId);
                 }
 
-                $actions[] = [
-                    'type' => 'removeCartLine',
-                    'lineId' => $lineId,
-                    'quantity' => (int) ($line['quantity'] ?? 1),
-                ];
-                $addAction = [
-                    'type' => 'addCartLine',
-                    'merchandiseId' => $targetVariantId,
-                    'quantity' => $quantity,
-                ];
-                if ($sellingPlanId !== '') {
-                    $addAction['sellingPlanId'] = $sellingPlanId;
+                $lineVariantNorm = $this->normalizeId($lineVariantId);
+                $targetVariantNorm = $this->normalizeId($targetVariantId);
+                $sameVariant = $lineVariantNorm !== '' && $targetVariantNorm !== '' && $lineVariantNorm === $targetVariantNorm;
+
+                // When same variant and we only add a selling plan, use updateCartLine so checkout stays in place (avoids redirect to cart).
+                if ($sameVariant && $actionType === 'subscription' && $sellingPlanId !== '') {
+                    $actions[] = [
+                        'type' => 'updateCartLine',
+                        'lineId' => $lineId,
+                        'sellingPlanId' => $sellingPlanId,
+                    ];
+                } else {
+                    $actions[] = [
+                        'type' => 'removeCartLine',
+                        'lineId' => $lineId,
+                        'quantity' => (int) ($line['quantity'] ?? 1),
+                    ];
+                    $addAction = [
+                        'type' => 'addCartLine',
+                        'merchandiseId' => $targetVariantId,
+                        'quantity' => $quantity,
+                    ];
+                    if ($sellingPlanId !== '') {
+                        $addAction['sellingPlanId'] = $sellingPlanId;
+                    }
+                    $actions[] = $addAction;
                 }
-                $actions[] = $addAction;
 
                 // Capture first-match text/image overrides and mapping for plans dropdown.
                 if ($firstOverrides === null) {

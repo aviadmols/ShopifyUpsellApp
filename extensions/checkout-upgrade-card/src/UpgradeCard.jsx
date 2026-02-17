@@ -276,7 +276,13 @@ function UpgradeCard() {
       for (let i = 0; i < actions.length; i++) {
         const action = actions[i];
         const type = action?.type;
-        if (type === 'removeCartLine' && action?.lineId) {
+        if (type === 'updateCartLine' && action?.lineId && action?.sellingPlanId) {
+          await applyCartLinesChange({
+            type: 'updateCartLine',
+            id: action.lineId,
+            sellingPlanId: action.sellingPlanId,
+          });
+        } else if (type === 'removeCartLine' && action?.lineId) {
           await applyCartLinesChange({
             type: 'removeCartLine',
             id: action.lineId,

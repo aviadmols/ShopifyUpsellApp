@@ -295,15 +295,16 @@ class OpenRouterService
         $system = <<<PROMPT
 You are an expert Shopify Checkout extension debugging assistant.
 
-Given structured session logs for a single session_key, produce a clear ENGLISH summary for a developer.
+Given structured session logs for a single session_key, produce a clear ENGLISH summary for a developer. Format the entire response as clear bullet points so it is easy to scan.
 
 Requirements:
 - Output in English only.
-- Include a short executive summary, then a chronological timeline.
-- Mention whether the widget was shown (widget_shown), whether rules passed (rule_passed), and any clicks (click_target + meta).
-- If there are user identifiers in checkout_attributes (e.g. _zyxel_user_id, _axon_client_id, igId), surface them.
-- Call out anomalies (e.g. multiple shops, missing view events, clicks without view, rule failed, widget not shown).
-- Keep it concise but high-signal. Use bullet points and timestamps.
+- Start with 1–2 short executive summary bullets (what happened in this session).
+- Then use only bullet points: each point must be one focused sentence on its own line. Use a hyphen and space "- " at the start of each bullet line.
+- Include: whether the widget was shown (widget_shown), whether rules passed (rule_passed), and any clicks (click_target + meta). Use timestamps where relevant.
+- If there are user identifiers in checkout_attributes (e.g. _zyxel_user_id, _axon_client_id, igId), put them in a dedicated bullet.
+- Call out anomalies in separate bullets (e.g. multiple shops, missing view events, clicks without view, rule failed, widget not shown).
+- Keep each bullet concise and high-signal. No long paragraphs.
 PROMPT;
 
         $userContent = "Session logs (JSON):\n" . json_encode($sessionContext, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
@@ -477,7 +478,14 @@ PROMPT;
         $system = <<<PROMPT
 You are an expert at debugging Shopify Checkout extension visibility. You receive a single widget session event payload: block metadata, rule conditions, context snapshot (cart, customer, country, UTMs, etc.), and computed diagnostics (whether the rule was expected to pass, upgrade card expected state, item counts). You also see the stored values for widget_shown and rule_passed from the actual session.
 
-Your task: produce a short, clear diagnosis IN ENGLISH ONLY explaining why the widget was or was not visible for this session. Call out any contradictions (e.g. widget_shown=true but rule_passed=false, or rule passed but upgrade card enabled=false or items_count=0). Mention the most likely cause (rule condition mismatch, cart line not matching upgrade mappings, missing variant/product in context, etc.). Keep it concise and actionable for a developer.
+Your task: produce a short, clear diagnosis IN ENGLISH ONLY. Format your response as clear bullet points so a developer can scan quickly.
+
+Requirements:
+- Start with one short conclusion line (what happened: widget shown or not, and why).
+- Then list 3–6 bullet points. Each bullet must be one focused sentence on its own line.
+- Use a hyphen and space "- " at the start of each bullet line.
+- Cover: whether the rule passed (expected vs stored), upgrade card state if applicable (enabled, items count), any contradiction (e.g. widget_shown=true but rule_passed=false), and the most likely cause (rule condition mismatch, cart line not matching mappings, missing variant in context, etc.).
+- Keep each point concise and actionable.
 PROMPT;
 
         $userContent = "Session event payload (JSON):\n" . json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);

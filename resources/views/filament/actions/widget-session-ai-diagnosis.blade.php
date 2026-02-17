@@ -16,7 +16,18 @@
   @if($diagnosis)
     <div class="rounded-lg bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 p-4">
       <h4 class="text-sm font-medium text-primary-800 dark:text-primary-200 mb-2">Diagnosis</h4>
-      <div class="text-sm text-primary-700 dark:text-primary-300 whitespace-pre-wrap">{{ $diagnosis }}</div>
+      @php
+        $diagLines = array_filter(array_map('trim', explode("\n", (string) $diagnosis)));
+      @endphp
+      @if(count($diagLines) > 0)
+        <ul class="list-disc list-inside space-y-1.5 text-sm text-primary-700 dark:text-primary-300">
+          @foreach($diagLines as $line)
+            <li>{{ e(ltrim($line, "- •\t ")) }}</li>
+          @endforeach
+        </ul>
+      @else
+        <div class="text-sm text-primary-700 dark:text-primary-300 whitespace-pre-wrap">{{ e($diagnosis) }}</div>
+      @endif
     </div>
   @endif
 

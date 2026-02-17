@@ -26,7 +26,18 @@
                         Copy
                     </x-filament::button>
                 </div>
-                <pre class="text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-200">{{ e($summary) }}</pre>
+                @php
+                    $summaryLines = array_filter(array_map('trim', explode("\n", (string) $summary)));
+                @endphp
+                @if(count($summaryLines) > 0)
+                    <ul class="list-disc list-inside space-y-1.5 text-sm text-gray-700 dark:text-gray-200">
+                        @foreach($summaryLines as $line)
+                            <li>{{ e(ltrim($line, "- •\t ")) }}</li>
+                        @endforeach
+                    </ul>
+                @else
+                    <pre class="text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-200">{{ e($summary) }}</pre>
+                @endif
             </div>
         @endif
 
