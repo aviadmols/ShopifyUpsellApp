@@ -95,6 +95,10 @@ class RuleEngine
             'utm_param_contains' => $this->utmParamContains($context, $value),
             'url_param_equals' => $this->urlParamEquals($context, $value),
             'url_param_contains' => $this->urlParamContains($context, $value),
+            'checkout_attribute_equals' => $this->checkoutAttributeEquals($context, $value),
+            'checkout_attribute_not_equals' => $this->checkoutAttributeNotEquals($context, $value),
+            'checkout_attribute_contains' => $this->checkoutAttributeContains($context, $value),
+            'checkout_attribute_exists' => $this->checkoutAttributeExists($context, (string) $value),
             'line_item_property_equals' => $this->lineItemPropertyEquals($context, $value),
             'line_item_property_exists' => $this->lineItemPropertyExists($context, (string) $value),
             'line_item_sku_matches' => $this->lineItemSkuMatches($context, $value),
@@ -270,6 +274,43 @@ class RuleEngine
         $params = $context['url_params'] ?? $context['query'] ?? [];
         $actual = is_array($params) ? ($params[$param] ?? '') : '';
         return str_contains((string) $actual, (string) $substring);
+    }
+
+    protected function checkoutAttributeEquals(array $context, mixed $value): bool
+    {
+        [$key, $expected] = $this->parseParamValue($value);
+        $attrs = $context['checkout_attributes'] ?? [];
+        $actual = is_array($attrs) ? ($attrs[$key] ?? null) : null;
+        return $actual !== null && (string) $actual === (string) $expected;
+    }
+
+    protected function checkoutAttributeContains(array $context, mixed $value): bool
+    {
+        [$key, $substring] = $this->parseParamValue($value);
+        $attrs = $context['checkout_attributes'] ?? [];
+        $actual = is_array($attrs) ? ($attrs[$key] ?? '') : '';
+        return str_contains((string) $actual, (string) $substring);
+    }
+
+    protected function checkoutAttributeNotEquals(array $context, mixed $value): bool
+    {
+        [$key, $expected] = $this->parseParamValue($value);
+        $attrs = $context['checkout_attributes'] ?? [];
+        $actual = is_array($attrs) ? ($attrs[$key] ?? null) : null;
+        return $actual === null || (string) $actual !== (string) $expected;
+    }
+
+    protected function checkoutAttributeExists(array $context, string $key): bool
+    {
+        $key = trim($key);
+        if ($key === '') {
+            return false;
+        }
+        $attrs = $context['checkout_attributes'] ?? [];
+        if (! is_array($attrs)) {
+            return false;
+        }
+        return array_key_exists($key, $attrs) && (string) ($attrs[$key] ?? '') !== '';
     }
 
     /**

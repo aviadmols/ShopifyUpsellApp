@@ -8,6 +8,7 @@ use App\Models\CheckoutExperience;
 use App\Models\Offer;
 use App\Models\Placement;
 use App\Models\Shop;
+use App\Models\WidgetSessionEvent;
 use App\Services\CartLineRulesEvaluator;
 use App\Services\CartLineUpgradeMatcher;
 use App\Services\RuntimeTemplateVarsService;
@@ -40,12 +41,75 @@ class CheckoutUpsellController extends Controller
     }
 
     /**
+     * Build a safe context snapshot for session event logging (no full line_items).
+     *
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    protected function buildContextSnapshot(array $context): array
+    {
+        $lineItems = $context['line_items'] ?? $context['lineItems'] ?? [];
+        $attrs = $context['checkout_attributes'] ?? [];
+        return [
+            'subtotal' => $context['subtotal'] ?? 0,
+            'line_items_count' => is_array($lineItems) ? count($lineItems) : 0,
+            'shipping_country' => $context['shipping_country'] ?? null,
+            'checkout_attribute_keys' => is_array($attrs) ? array_keys($attrs) : [],
+        ];
+    }
+
+    /**
+     * Log a widget view event to widget_session_events (for session analytics).
+     */
+    protected function logWidgetView(Request $request, Shop $shop, Block $block, array $context, bool $rulePassed, bool $widgetShown): void
+    {
+        try {
+            WidgetSessionEvent::create([
+                'shop_id' => $shop->id,
+                'block_id' => $block->id,
+                'session_key' => $request->input('session_key') ?? $request->query('session_key'),
+                'event_type' => 'view',
+                'context_snapshot' => $this->buildContextSnapshot($context),
+                'rule_passed' => $rulePassed,
+                'widget_shown' => $widgetShown,
+                'click_target' => null,
+            ]);
+        } catch (\Throwable $e) {
+            $this->logExt('widget_session_event_failed', ['message' => $e->getMessage()]);
+        }
+    }
+
+    /**
      * Receive logs from the Checkout extension (widget load, fetch result, errors).
+     * If event is widget_click, also writes to widget_session_events.
      * Writes to storage/logs/checkout_extension.log.
      */
     public function log(Request $request): JsonResponse
     {
         $payload = $request->all();
+        $isClick = (isset($payload['event']) && $payload['event'] === 'widget_click')
+            || (isset($payload['event_type']) && $payload['event_type'] === 'click');
+
+        if ($isClick) {
+            try {
+                $shop = $this->resolveShop($request);
+                if ($shop) {
+                    WidgetSessionEvent::create([
+                        'shop_id' => $shop->id,
+                        'block_id' => isset($payload['block_id']) ? (int) $payload['block_id'] : null,
+                        'session_key' => $payload['session_key'] ?? $request->query('session_key'),
+                        'event_type' => 'click',
+                        'context_snapshot' => null,
+                        'rule_passed' => null,
+                        'widget_shown' => null,
+                        'click_target' => $payload['click_target'] ?? null,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                $this->logExt('widget_session_click_failed', ['message' => $e->getMessage()]);
+            }
+        }
+
         // Avoid accidentally storing huge payloads.
         if (is_array($payload) && isset($payload['line_items']) && is_array($payload['line_items'])) {
             $payload['line_items_count'] = count($payload['line_items']);
@@ -161,6 +225,7 @@ class CheckoutUpsellController extends Controller
             $rule = $block->rule;
             if (! $rule || ! $this->ruleEngine->evaluate($rule->conditions, $context)) {
                 $this->logExt('checkout_upgrade_card_rule_failed', ['block_id' => $block->id]);
+                $this->logWidgetView($request, $shop, $block, $context, false, false);
                 return $empty();
             }
         }
@@ -201,6 +266,7 @@ class CheckoutUpsellController extends Controller
             'actions_count' => count($payload['actions'] ?? []),
         ]);
 
+        $this->logWidgetView($request, $shop, $block, $context, true, true);
         return response()->json($payload);
     }
 
@@ -215,6 +281,7 @@ class CheckoutUpsellController extends Controller
             $rule = $block->rule;
             if (! $rule || ! $this->ruleEngine->evaluate($rule->conditions, $context)) {
                 $this->logExt('checkout_offers_block_rule_failed', ['block_id' => $block->id, 'rule_id' => $block->rule_id]);
+                $this->logWidgetView($request, $shop, $block, $context, false, false);
                 return response()->json([
                     'offers' => [],
                     'blocks' => [],
@@ -241,6 +308,7 @@ class CheckoutUpsellController extends Controller
                     'block_error' => $payload['block_error'] ?? null,
                 ]);
 
+                $this->logWidgetView($request, $shop, $block, $context, true, true);
                 return response()->json($payload);
             } catch (\Throwable $e) {
                 $this->logExt('checkout_offers_block_upsell_error', [
@@ -269,6 +337,7 @@ class CheckoutUpsellController extends Controller
                 'goal' => $ui['progress_bar']['goal'] ?? null,
             ]);
 
+            $this->logWidgetView($request, $shop, $block, $context, true, true);
             return response()->json([
                 'offers' => [],
                 'display_mode' => 'stacked',
@@ -294,6 +363,7 @@ class CheckoutUpsellController extends Controller
                 'config_keys' => array_keys((array) $config),
             ]);
 
+            $this->logWidgetView($request, $shop, $block, $context, true, true);
             return response()->json([
                 'offers' => [],
                 'blocks' => $blocksPayload,
@@ -343,6 +413,7 @@ class CheckoutUpsellController extends Controller
                 'actions_count' => count($payload['actions'] ?? []),
             ]);
 
+            $this->logWidgetView($request, $shop, $block, $context, true, true);
             return response()->json([
                 'offers' => [],
                 'blocks' => [
@@ -360,6 +431,7 @@ class CheckoutUpsellController extends Controller
         }
 
         $this->logExt('checkout_offers_block_unknown_type', ['block_id' => $block->id, 'type' => $type]);
+        $this->logWidgetView($request, $shop, $block, $context, true, false);
         return response()->json([
             'offers' => [],
             'blocks' => [],
@@ -1014,10 +1086,45 @@ class CheckoutUpsellController extends Controller
             'subtotal' => $request->input('subtotal') ?? $request->input('cart.subtotal') ?? 0,
             'line_items' => $request->input('line_items') ?? $request->input('cart.line_items') ?? $request->input('lineItems') ?? [],
             'customer' => $request->input('customer') ?? [],
-            'shipping_country' => $request->input('shipping_country') ?? $request->input('shippingAddress.countryCode') ?? null,
+            'shipping_country' => $this->shippingCountryFromRequest($request),
             'utms' => $this->utmsFromRequest($request),
             'url_params' => $this->urlParamsFromRequest($request),
+            'checkout_attributes' => $this->checkoutAttributesFromRequest($request),
         ];
+    }
+
+    /**
+     * Checkout/cart attributes (key => value) sent by the extension for block visibility rules.
+     * Can be set on the storefront (e.g. from localStorage) via Cart API before checkout.
+     *
+     * @return array<string, string>
+     */
+    protected function checkoutAttributesFromRequest(Request $request): array
+    {
+        $attrs = $request->input('attributes') ?? $request->input('checkout_attributes') ?? [];
+        if (! is_array($attrs)) {
+            return [];
+        }
+        $out = [];
+        foreach ($attrs as $k => $v) {
+            if (is_string($k) && $k !== '') {
+                $out[$k] = (string) $v;
+            }
+        }
+        return $out;
+    }
+
+    protected function shippingCountryFromRequest(Request $request): ?string
+    {
+        $v = $request->input('shipping_country') ?? $request->input('shippingAddress.countryCode') ?? $request->input('shipping_address.country_code');
+        if (is_string($v) && $v !== '') {
+            return $v;
+        }
+        $arr = $request->input('shipping_address');
+        if (is_array($arr) && ! empty($arr['country_code'])) {
+            return (string) $arr['country_code'];
+        }
+        return null;
     }
 
     /**

@@ -236,6 +236,10 @@ class OfferResource extends Resource
                                         'utm_param_contains' => 'UTM param contains (param_name,substring)',
                                         'url_param_equals' => 'URL param equals (param_name,value)',
                                         'url_param_contains' => 'URL param contains (param_name,substring)',
+                                        'checkout_attribute_equals' => 'Checkout attribute equals (key,value)',
+                                        'checkout_attribute_not_equals' => 'Checkout attribute not equals (key,value)',
+                                        'checkout_attribute_contains' => 'Checkout attribute contains (key,substring)',
+                                        'checkout_attribute_exists' => 'Checkout attribute exists (key)',
                                         'line_item_property_equals' => 'Line item has property (key,value)',
                                         'line_item_property_exists' => 'Line item has property key',
                                     ])

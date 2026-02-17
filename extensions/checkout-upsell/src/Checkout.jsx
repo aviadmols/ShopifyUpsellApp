@@ -19,6 +19,7 @@ import {
   Select,
   useApplyCartLinesChange,
   useSubtotalAmount,
+  useCheckoutToken,
 } from '@shopify/ui-extensions-react/checkout';
 import { useEffect, useState, useCallback } from 'react';
 
@@ -46,6 +47,50 @@ function getSetting(settings, key) {
   return raw;
 }
 
+/** Get checkout/cart attributes from API for rules (e.g. set on storefront or in checkout). Returns plain object key -> value. */
+function getCheckoutAttributes(api) {
+  const out = {};
+  try {
+    const a = api?.attributes;
+    if (!a) return out;
+    const raw = typeof a.current === 'function' ? a.current() : (a.value !== undefined ? a.value : a.current);
+    if (Array.isArray(raw)) {
+      raw.forEach((item) => {
+        if (item && item.key != null) out[String(item.key)] = String(item.value ?? '');
+      });
+    }
+  } catch (_) {}
+  return out;
+}
+
+/** Build context payload for "when to show" rules: customer (tags), shipping_country, utms, url_params. Safe for any API shape. */
+function getContextPayloadFromApi(api) {
+  const payload = {};
+  try {
+    const addr = api?.shippingAddress ?? api?.addresses?.shippingAddress;
+    if (addr) {
+      const raw = typeof addr.current === 'function' ? addr.current() : (addr.value !== undefined ? addr.value : addr.current);
+      if (raw && typeof raw === 'object' && raw.countryCode) {
+        payload.shipping_country = String(raw.countryCode);
+      }
+    }
+  } catch (_) {}
+  try {
+    const cust = api?.customer;
+    if (cust) {
+      const raw = typeof cust.current === 'function' ? cust.current() : (cust.value !== undefined ? cust.value : cust.current);
+      if (raw && typeof raw === 'object') {
+        const tags = raw.tags ?? raw.tags_array;
+        payload.customer = Array.isArray(tags) ? { tags } : { tags: [] };
+      }
+    }
+  } catch (_) {}
+  return payload;
+}
+
+/** Hidden line item attribute to mark products added from this checkout widget (visible in Admin, order, and APIs). */
+const ZYG_SOURCE_ATTR = { key: '_zyg_source', value: 'checkout_upsell' };
+
 /** Send a log payload to the server (fire-and-forget). No sensitive data in payload. */
 function sendLog(apiUrl, secret, payload) {
   if (!apiUrl || !secret) return;
@@ -62,9 +107,20 @@ function sendLog(apiUrl, secret, payload) {
   }).catch(() => {});
 }
 
+/** Send widget click event for session analytics (fire-and-forget). */
+function sendClickLog(apiUrl, secret, { block_id, session_key, click_target }) {
+  if (!apiUrl || !secret) return;
+  sendLog(apiUrl, secret, {
+    event: 'widget_click',
+    block_id: block_id ?? undefined,
+    session_key: session_key ?? undefined,
+    click_target: click_target ?? 'add_to_cart',
+  });
+}
+
 export default reactExtension('purchase.checkout.block.render', () => <CheckoutUpsell />);
 
-function UpgradeCardBlock({ config }) {
+function UpgradeCardBlock({ config, apiUrl, secret, sessionKey, blockId }) {
   const api = useApi();
   const applyCartLinesChange = useApplyCartLinesChange();
 
@@ -119,17 +175,21 @@ function UpgradeCardBlock({ config }) {
             type: 'addCartLine',
             merchandiseId: action.merchandiseId,
             quantity: Math.max(1, action.quantity ?? 1),
+            attributes: [{ key: '_zyg_source', value: 'checkout_upgrade_card' }],
           };
           if (action.sellingPlanId) change.sellingPlanId = action.sellingPlanId;
           await applyCartLinesChange(change);
         }
+      }
+      if (apiUrl && secret) {
+        sendClickLog(apiUrl, secret, { block_id: blockId, session_key: sessionKey, click_target: 'upgrade_cta' });
       }
     } catch (err) {
       setErrorMessage(err?.message || 'Update failed.');
     } finally {
       setApplying(false);
     }
-  }, [actions, cartEditable, applyCartLinesChange]);
+  }, [actions, cartEditable, applyCartLinesChange, apiUrl, secret, sessionKey, blockId]);
 
   if (!enabled || items.length === 0) return null;
 
@@ -190,7 +250,15 @@ function ContentBlockRender({ block }) {
   const buttonKind = ['primary', 'secondary', 'plain'].includes(config.button_kind) ? config.button_kind : 'secondary';
 
   if (type === 'checkout_upgrade_card') {
-    return <UpgradeCardBlock config={config} />;
+    return (
+      <UpgradeCardBlock
+        config={config}
+        apiUrl={block?.apiUrl}
+        secret={block?.secret}
+        sessionKey={block?.sessionKey}
+        blockId={block?.id}
+      />
+    );
   }
 
   if (type === 'content_icon_features') {
@@ -302,6 +370,8 @@ function CheckoutUpsell() {
   const api = useApi();
   const applyCartLinesChange = useApplyCartLinesChange();
   const subtotalMoney = useSubtotalAmount();
+  const checkoutToken = useCheckoutToken();
+  const sessionKey = typeof checkoutToken === 'string' && checkoutToken ? checkoutToken : '';
   const [offers, setOffers] = useState([]);
   const [contentBlocks, setContentBlocks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -369,11 +439,16 @@ function CheckoutUpsell() {
       subtotal: subtotalMoney?.amount ?? 0,
     });
 
+    const attributesForRequest = getCheckoutAttributes(api);
+    const contextPayload = getContextPayloadFromApi(api);
     const body = {
       shop,
       ...(blockId !== undefined && { block_id: parseInt(blockId, 10) || blockId }),
+      ...(sessionKey && { session_key: sessionKey }),
       subtotal: subtotalMoney?.amount ?? 0,
       line_items: lineItemsNormalized,
+      ...(Object.keys(attributesForRequest).length > 0 && { attributes: attributesForRequest }),
+      ...contextPayload,
     };
 
     fetch(`${apiUrl}/api/checkout/offers`, {
@@ -457,7 +532,7 @@ function CheckoutUpsell() {
         setContentBlocks([]);
       })
       .finally(() => setLoading(false));
-  }, [apiUrl, secret, shopDomain, blockId, subtotalMoney?.amount, JSON.stringify(normalizeLineItemsForApi(lineItems))]);
+  }, [apiUrl, secret, shopDomain, blockId, sessionKey, subtotalMoney?.amount, JSON.stringify(normalizeLineItemsForApi(lineItems))]);
 
   const getQuantityForOffer = (variantId) => {
     const q = offerQuantities[variantId];
@@ -484,12 +559,14 @@ function CheckoutUpsell() {
         type: 'addCartLine',
         merchandiseId: variantId,
         quantity: Math.max(1, quantity),
+        attributes: [ZYG_SOURCE_ATTR],
       };
       if (sellingPlanId) {
         line.sellingPlanId = sellingPlanId;
       }
       await applyCartLinesChange(line);
       setAdded((s) => new Set([...s, variantId]));
+      sendClickLog(apiUrl, secret, { block_id: blockId, session_key: sessionKey, click_target: 'add_to_cart' });
     } catch (_) {}
   };
 
@@ -556,7 +633,10 @@ function CheckoutUpsell() {
     return (
       <BlockStack spacing="loose">
         {contentBlocks.map((blk) => (
-          <ContentBlockRender key={blk.id || blk.type} block={blk} />
+          <ContentBlockRender
+            key={blk.id || blk.type}
+            block={{ ...blk, apiUrl, secret, sessionKey, id: blk.id }}
+          />
         ))}
         {progressBar && (
           <BlockStack spacing="tight">

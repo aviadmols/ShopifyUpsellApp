@@ -34,6 +34,60 @@ function getSetting(settings, key) {
   return raw;
 }
 
+function sendClickLog(apiUrl, secret, { block_id, session_key, click_target }) {
+  if (!apiUrl || !secret) return;
+  const url = `${String(apiUrl).replace(/\/$/, '')}/api/checkout/logs`;
+  fetch(url, {
+    method: 'POST',
+    headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      event: 'widget_click',
+      block_id: block_id ?? undefined,
+      session_key: session_key ?? undefined,
+      click_target: click_target ?? 'upgrade_cta',
+    }),
+  }).catch(() => {});
+}
+
+function getCheckoutAttributes(api) {
+  const out = {};
+  try {
+    const a = api?.attributes;
+    if (!a) return out;
+    const raw = typeof a.current === 'function' ? a.current() : (a.value !== undefined ? a.value : a.current);
+    if (Array.isArray(raw)) {
+      raw.forEach((item) => {
+        if (item && item.key != null) out[String(item.key)] = String(item.value ?? '');
+      });
+    }
+  } catch (_) {}
+  return out;
+}
+
+function getContextPayloadFromApi(api) {
+  const payload = {};
+  try {
+    const addr = api?.shippingAddress ?? api?.addresses?.shippingAddress;
+    if (addr) {
+      const raw = typeof addr.current === 'function' ? addr.current() : (addr.value !== undefined ? addr.value : addr.current);
+      if (raw && typeof raw === 'object' && raw.countryCode) {
+        payload.shipping_country = String(raw.countryCode);
+      }
+    }
+  } catch (_) {}
+  try {
+    const cust = api?.customer;
+    if (cust) {
+      const raw = typeof cust.current === 'function' ? cust.current() : (cust.value !== undefined ? cust.value : cust.current);
+      if (raw && typeof raw === 'object') {
+        const tags = raw.tags ?? raw.tags_array;
+        payload.customer = Array.isArray(tags) ? { tags } : { tags: [] };
+      }
+    }
+  } catch (_) {}
+  return payload;
+}
+
 function normalizeLineItemsForApi(lines) {
   if (!Array.isArray(lines)) return [];
   const toPropertiesObject = (props) => {
@@ -149,12 +203,16 @@ function UpgradeCard() {
     setLoading(true);
     setErrorMessage('');
     const lineItemsNormalized = normalizeLineItemsForApi(lineItems);
+    const attributesForRequest = getCheckoutAttributes(api);
+    const contextPayload = getContextPayloadFromApi(api);
     const body = {
       shop: shop || undefined,
       block_id: blockId,
       session_key: sessionKey || undefined,
       subtotal: subtotalMoney?.amount ?? 0,
       line_items: lineItemsNormalized,
+      ...(Object.keys(attributesForRequest).length > 0 && { attributes: attributesForRequest }),
+      ...contextPayload,
     };
 
     fetch(`${apiUrl}/api/checkout/upgrade-card`, {
@@ -228,18 +286,20 @@ function UpgradeCard() {
             type: 'addCartLine',
             merchandiseId: action.merchandiseId,
             quantity: Math.max(1, action.quantity ?? 1),
+            attributes: [{ key: '_zyg_source', value: 'checkout_upgrade_card' }],
           };
           if (action.sellingPlanId) change.sellingPlanId = action.sellingPlanId;
           await applyCartLinesChange(change);
         }
       }
       setPayload((prev) => (prev ? { ...prev, enabled: false } : prev));
+      sendClickLog(apiUrl, secret, { block_id: blockId, session_key: sessionKey, click_target: 'upgrade_cta' });
     } catch (err) {
       setErrorMessage(err?.message || 'Update failed.');
     } finally {
       setApplying(false);
     }
-  }, [payload?.actions, cartEditable, applyCartLinesChange]);
+  }, [payload?.actions, cartEditable, applyCartLinesChange, apiUrl, secret, blockId, sessionKey]);
 
   if (loading) {
     return null;
