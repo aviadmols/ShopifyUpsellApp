@@ -103,6 +103,8 @@ class RuleEngine
             'line_item_property_exists' => $this->lineItemPropertyExists($context, (string) $value),
             'line_item_sku_matches' => $this->lineItemSkuMatches($context, $value),
             'line_item_sku_segment_between' => $this->lineItemSkuSegmentBetween($context, $value),
+            'line_items_has_line_without_selling_plan' => $this->lineItemsHasLineWithoutSellingPlan($context),
+            'line_items_has_line_with_selling_plan' => $this->lineItemsHasLineWithSellingPlan($context),
             default => false,
         };
     }
@@ -347,6 +349,42 @@ class RuleEngine
             }
             $actual = $props[$propKey] ?? null;
             if ($actual !== null && (string) $actual === (string) $expected) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * At least one line item has no selling plan (selling_plan_id null or empty) — one-time purchase.
+     */
+    protected function lineItemsHasLineWithoutSellingPlan(array $context): bool
+    {
+        $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
+        foreach ($lines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $planId = trim((string) ($line['selling_plan_id'] ?? $line['sellingPlanId'] ?? ''));
+            if ($planId === '') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * At least one line item has a selling plan (selling_plan_id set) — subscription.
+     */
+    protected function lineItemsHasLineWithSellingPlan(array $context): bool
+    {
+        $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
+        foreach ($lines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $planId = trim((string) ($line['selling_plan_id'] ?? $line['sellingPlanId'] ?? ''));
+            if ($planId !== '') {
                 return true;
             }
         }

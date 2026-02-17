@@ -65,6 +65,8 @@ The **database** (the empty MySQL database) is created by the platform when you 
 php artisan migrate --force
 ```
 
+**⚠️ NEVER run in production:** `php artisan migrate:fresh`, `php artisan db:wipe`, or `php artisan migrate:refresh`. These commands **destroy all data**. The start script (`docker-start.sh`) runs only `migrate --force` (applies new migrations incrementally). Do not add any Variable in Railway that would run `migrate:fresh` or the DB will be reset on every deploy.
+
 Add this to your deploy/build or start script, for example:
 
 **Build command (example):**

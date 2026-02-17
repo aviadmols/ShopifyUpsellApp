@@ -2,9 +2,14 @@
   $diagnosis = $diagnosis ?? null;
   $payload = $payload ?? null;
   $error = $error ?? null;
+  $loading = $loading ?? false;
 @endphp
 <div class="space-y-4">
-  @if($error)
+  @if($loading)
+    <p class="text-sm text-gray-600 dark:text-gray-300">Running diagnosis…</p>
+  @endif
+
+  @if($error && !$loading)
     <p class="text-sm text-danger-600 dark:text-danger-400">{{ $error }}</p>
   @endif
 
@@ -27,7 +32,12 @@
     </details>
   @endif
 
-  @if(!$diagnosis && !$error)
-    <p class="text-sm text-gray-500 dark:text-gray-400">Click the button to run the diagnosis.</p>
+  @if(!$diagnosis && !$error && !$loading)
+    <div>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">Run the AI diagnosis for this event (rule + context + OpenRouter).</p>
+      <x-filament::button wire:click="runAiDiagnosis" color="primary">
+        Run diagnosis
+      </x-filament::button>
+    </div>
   @endif
 </div>

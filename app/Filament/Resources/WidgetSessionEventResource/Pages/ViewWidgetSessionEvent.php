@@ -23,6 +23,8 @@ class ViewWidgetSessionEvent extends ViewRecord
 
     public ?string $aiDiagnosisError = null;
 
+    public bool $aiDiagnosisLoading = false;
+
     public function mutateFormDataBeforeFill(array $data): array
     {
         $data['shop_domain'] = $this->record->shop_domain;
@@ -36,9 +38,6 @@ class ViewWidgetSessionEvent extends ViewRecord
                 ->label('AI Diagnosis')
                 ->icon('heroicon-o-sparkles')
                 ->color('gray')
-                ->action(function (): void {
-                    $this->runAiDiagnosis();
-                })
                 ->modalHeading('Widget visibility diagnosis')
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('Close')
@@ -46,26 +45,30 @@ class ViewWidgetSessionEvent extends ViewRecord
                     'diagnosis' => $this->aiDiagnosisResult,
                     'payload' => $this->aiDiagnosisPayload,
                     'error' => $this->aiDiagnosisError,
+                    'loading' => $this->aiDiagnosisLoading,
                 ])),
         ];
     }
 
-    protected function runAiDiagnosis(): void
+    public function runAiDiagnosis(): void
     {
         $this->aiDiagnosisResult = null;
         $this->aiDiagnosisPayload = null;
         $this->aiDiagnosisError = null;
+        $this->aiDiagnosisLoading = true;
 
         $event = $this->record;
         $blockId = $event->block_id;
         if (! $blockId) {
             $this->aiDiagnosisError = 'No block_id on this event.';
+            $this->aiDiagnosisLoading = false;
             return;
         }
 
         $block = Block::with('rule')->find($blockId);
         if (! $block) {
             $this->aiDiagnosisError = 'Block not found.';
+            $this->aiDiagnosisLoading = false;
             return;
         }
 
@@ -77,6 +80,7 @@ class ViewWidgetSessionEvent extends ViewRecord
                 ->danger()
                 ->send();
             $this->aiDiagnosisError = 'OpenRouter is not configured. Set your API key in Developer → AI (OpenRouter).';
+            $this->aiDiagnosisLoading = false;
             return;
         }
 
@@ -135,6 +139,7 @@ class ViewWidgetSessionEvent extends ViewRecord
         } else {
             $this->aiDiagnosisError = 'AI diagnosis failed. Check Developer → AI logs for details.';
         }
+        $this->aiDiagnosisLoading = false;
     }
 
     /**

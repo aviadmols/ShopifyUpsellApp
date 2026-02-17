@@ -240,6 +240,8 @@ class OfferResource extends Resource
                                         'checkout_attribute_not_equals' => 'Checkout attribute not equals (key,value)',
                                         'checkout_attribute_contains' => 'Checkout attribute contains (key,substring)',
                                         'checkout_attribute_exists' => 'Checkout attribute exists (key)',
+                                        'line_items_has_line_without_selling_plan' => 'Cart has line without selling plan (one-time)',
+                                        'line_items_has_line_with_selling_plan' => 'Cart has line with selling plan (subscription)',
                                         'line_item_property_equals' => 'Line item has property (key,value)',
                                         'line_item_property_exists' => 'Line item has property key',
                                     ])

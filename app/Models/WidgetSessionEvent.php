@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -38,5 +39,30 @@ class WidgetSessionEvent extends Model
     public function shop(): BelongsTo
     {
         return $this->belongsTo(Shop::class);
+    }
+
+    /**
+     * Scope: only events where context_snapshot.checkout_attributes._zyxel_user_id equals the given value.
+     */
+    public function scopeWhereZyxelUserId(Builder $query, string $userId): Builder
+    {
+        $userId = trim($userId);
+        if ($userId === '') {
+            return $query;
+        }
+        $driver = $query->getConnection()->getDriverName();
+        if ($driver === 'mysql') {
+            return $query->whereRaw(
+                "JSON_UNQUOTE(JSON_EXTRACT(context_snapshot, '$.checkout_attributes._zyxel_user_id')) = ?",
+                [$userId]
+            );
+        }
+        if ($driver === 'sqlite') {
+            return $query->whereRaw(
+                "json_extract(context_snapshot, '$.checkout_attributes._zyxel_user_id') = ?",
+                [$userId]
+            );
+        }
+        return $query->where('context_snapshot', 'like', '%"_zyxel_user_id":"' . addslashes($userId) . '"%');
     }
 }

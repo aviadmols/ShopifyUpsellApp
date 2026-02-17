@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\WidgetSessionEventResource\Pages;
 use App\Models\WidgetSessionEvent;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -137,6 +138,27 @@ class WidgetSessionEventResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
+                Tables\Filters\Filter::make('zyxel_user_id')
+                    ->form([
+                        TextInput::make('zyxel_user_id')
+                            ->label('User ID (_zyxel_user_id)')
+                            ->placeholder('e.g. 5aac078c-755f-4667-abaa-32fcfe7309b0')
+                            ->maxLength(255),
+                    ])
+                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data): \Illuminate\Database\Eloquent\Builder {
+                        $value = trim((string) ($data['zyxel_user_id'] ?? ''));
+                        if ($value !== '') {
+                            $query->whereZyxelUserId($value);
+                        }
+                        return $query;
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $v = trim((string) ($data['zyxel_user_id'] ?? ''));
+                        if ($v === '') {
+                            return [];
+                        }
+                        return ['User ID: ' . $v];
+                    }),
                 Tables\Filters\SelectFilter::make('shop_id')
                     ->relationship('shop', 'shop_domain')
                     ->searchable()
