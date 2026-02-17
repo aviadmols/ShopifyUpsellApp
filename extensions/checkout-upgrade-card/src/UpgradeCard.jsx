@@ -34,7 +34,7 @@ function getSetting(settings, key) {
   return raw;
 }
 
-function sendClickLog(apiUrl, secret, { block_id, session_key, click_target }) {
+function sendClickLog(apiUrl, secret, { shop, block_id, session_key, click_target, meta }) {
   if (!apiUrl || !secret) return;
   const url = `${String(apiUrl).replace(/\/$/, '')}/api/checkout/logs`;
   fetch(url, {
@@ -42,9 +42,11 @@ function sendClickLog(apiUrl, secret, { block_id, session_key, click_target }) {
     headers: { 'X-Extension-Secret': secret, 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
       event: 'widget_click',
+      shop: shop ?? undefined,
       block_id: block_id ?? undefined,
       session_key: session_key ?? undefined,
       click_target: click_target ?? 'upgrade_cta',
+      meta: meta && typeof meta === 'object' ? meta : undefined,
     }),
   }).catch(() => {});
 }
@@ -293,13 +295,19 @@ function UpgradeCard() {
         }
       }
       setPayload((prev) => (prev ? { ...prev, enabled: false } : prev));
-      sendClickLog(apiUrl, secret, { block_id: blockId, session_key: sessionKey, click_target: 'upgrade_cta' });
+      sendClickLog(apiUrl, secret, {
+        shop,
+        block_id: blockId,
+        session_key: sessionKey,
+        click_target: 'upgrade_cta',
+        meta: { source: 'checkout_upgrade_card' },
+      });
     } catch (err) {
       setErrorMessage(err?.message || 'Update failed.');
     } finally {
       setApplying(false);
     }
-  }, [payload?.actions, cartEditable, applyCartLinesChange, apiUrl, secret, blockId, sessionKey]);
+  }, [payload?.actions, cartEditable, applyCartLinesChange, apiUrl, secret, blockId, sessionKey, shop]);
 
   if (loading) {
     return null;

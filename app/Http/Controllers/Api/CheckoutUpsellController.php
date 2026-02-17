@@ -40,22 +40,84 @@ class CheckoutUpsellController extends Controller
         }
     }
 
+    /** Max line items to store in snapshot to avoid huge payloads. */
+    private const CONTEXT_SNAPSHOT_MAX_LINE_ITEMS = 100;
+
     /**
-     * Build a safe context snapshot for session event logging (no full line_items).
+     * Build a full context snapshot for session event logging: line items (with product/variant details and properties),
+     * checkout attributes (keys + values), customer, utms, url_params, shipping_country, subtotal.
      *
      * @param  array<string, mixed>  $context
      * @return array<string, mixed>
      */
     protected function buildContextSnapshot(array $context): array
     {
-        $lineItems = $context['line_items'] ?? $context['lineItems'] ?? [];
+        $lineItemsRaw = $context['line_items'] ?? $context['lineItems'] ?? [];
+        $lineItems = is_array($lineItemsRaw) ? $lineItemsRaw : [];
         $attrs = $context['checkout_attributes'] ?? [];
-        return [
-            'subtotal' => $context['subtotal'] ?? 0,
-            'line_items_count' => is_array($lineItems) ? count($lineItems) : 0,
+        $customer = $context['customer'] ?? [];
+        $utms = $context['utms'] ?? [];
+        $urlParams = $context['url_params'] ?? [];
+
+        $snapshot = [
+            'subtotal' => $context['subtotal'] ?? $context['cart.subtotal'] ?? 0,
+            'line_items_count' => count($lineItems),
             'shipping_country' => $context['shipping_country'] ?? null,
-            'checkout_attribute_keys' => is_array($attrs) ? array_keys($attrs) : [],
+            'checkout_attributes' => is_array($attrs) ? $attrs : [],
+            'customer' => is_array($customer) ? $customer : [],
+            'utms' => is_array($utms) ? $utms : [],
+            'url_params' => is_array($urlParams) ? $urlParams : [],
         ];
+
+        $snapshot['line_items'] = $this->normalizeLineItemsForSnapshot(array_slice($lineItems, 0, self::CONTEXT_SNAPSHOT_MAX_LINE_ITEMS));
+
+        return $snapshot;
+    }
+
+    /**
+     * Normalize line items for snapshot: keep product/variant ids, titles, quantity, sku, selling_plan_id, properties.
+     *
+     * @param  array<int, mixed>  $items
+     * @return array<int, array<string, mixed>>
+     */
+    protected function normalizeLineItemsForSnapshot(array $items): array
+    {
+        $out = [];
+        $trunc = static function (?string $s, int $max = 500): ?string {
+            if ($s === null || $s === '') {
+                return $s;
+            }
+            return strlen($s) > $max ? substr($s, 0, $max) . '…' : $s;
+        };
+        foreach ($items as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $merch = $line['merchandise'] ?? $line;
+            $props = $line['properties'] ?? $line['attributes'] ?? $line['customAttributes'] ?? [];
+            if (is_array($props)) {
+                $propsOut = [];
+                foreach ($props as $k => $v) {
+                    if (is_string($k) && $k !== '' && $v !== null) {
+                        $propsOut[$k] = $trunc((string) $v, 200);
+                    }
+                }
+            } else {
+                $propsOut = [];
+            }
+            $out[] = [
+                'id' => $line['id'] ?? null,
+                'quantity' => isset($line['quantity']) ? (int) $line['quantity'] : 1,
+                'product_id' => $line['product_id'] ?? $merch['product_id'] ?? $merch['product']['id'] ?? null,
+                'variant_id' => $line['variant_id'] ?? $line['merchandiseId'] ?? $merch['id'] ?? $line['id'] ?? null,
+                'product_title' => $trunc($line['product_title'] ?? $merch['product_title'] ?? $merch['product']['title'] ?? null),
+                'variant_title' => $trunc($line['variant_title'] ?? $merch['variant_title'] ?? $merch['title'] ?? null),
+                'sku' => $trunc($line['sku'] ?? $merch['sku'] ?? null, 100),
+                'selling_plan_id' => $line['selling_plan_id'] ?? $merch['selling_plan_id'] ?? $merch['sellingPlanId'] ?? null,
+                'properties' => $propsOut,
+            ];
+        }
+        return $out;
     }
 
     /**
@@ -93,16 +155,37 @@ class CheckoutUpsellController extends Controller
         if ($isClick) {
             try {
                 $shop = $this->resolveShop($request);
+                $blockId = $payload['block_id'] ?? null;
+                $blockIdInt = null;
+                if ($blockId !== null && $blockId !== '' && is_numeric($blockId)) {
+                    $blockIdInt = (int) $blockId;
+                }
+
+                // Click logs often don't include `shop`, so fallback to resolving by block_id.
+                if (! $shop && $blockIdInt && $blockIdInt > 0) {
+                    $block = Block::find($blockIdInt);
+                    if ($block && $block->shop) {
+                        $shop = $block->shop;
+                    }
+                }
+
                 if ($shop) {
+                    $clickTarget = $payload['click_target'] ?? null;
+                    $meta = $payload['meta'] ?? null;
                     WidgetSessionEvent::create([
                         'shop_id' => $shop->id,
-                        'block_id' => isset($payload['block_id']) ? (int) $payload['block_id'] : null,
+                        'block_id' => $blockIdInt,
                         'session_key' => $payload['session_key'] ?? $request->query('session_key'),
                         'event_type' => 'click',
-                        'context_snapshot' => null,
+                        'context_snapshot' => array_filter([
+                            'ts' => $payload['ts'] ?? null,
+                            'shop' => $payload['shop'] ?? null,
+                            'click_target' => $clickTarget,
+                            'meta' => is_array($meta) ? $meta : null,
+                        ], fn ($v) => $v !== null && $v !== [] && $v !== ''),
                         'rule_passed' => null,
                         'widget_shown' => null,
-                        'click_target' => $payload['click_target'] ?? null,
+                        'click_target' => is_string($clickTarget) ? $clickTarget : null,
                     ]);
                 }
             } catch (\Throwable $e) {
@@ -139,11 +222,33 @@ class CheckoutUpsellController extends Controller
             'ui' => [],
             'block_error' => $blockError,
         ]));
+        $placementResponse = function (Shop $shop) use ($request): JsonResponse {
+            $placement = Placement::where('shop_id', $shop->id)->where('placement_type', 'checkout')->first();
+            if (! $placement) {
+                return response()->json(['offers' => [], 'display_mode' => 'stacked']);
+            }
+            $context = $this->buildContext($request);
+            $offerIds = $placement->getOfferIds();
+            $config = $placement->config ?? [];
+            $maxOffers = (int) ($config['max_offers'] ?? 3);
+            $eligible = $this->findEligibleOffers($shop, $offerIds, $context, $maxOffers);
+            $offers = $this->enrichOffersFromShopify($shop, $eligible);
+            $ui = $this->buildUiFromPlacement($placement);
+            return response()->json([
+                'offers' => $offers,
+                'display_mode' => (string) ($config['display_mode'] ?? 'stacked'),
+                'ui' => $ui,
+            ]);
+        };
 
         if ($blockId !== null && $blockId !== '') {
             $blockIdInt = (int) $blockId;
             if ($blockIdInt < 1) {
                 $this->logExt('checkout_offers_block_invalid', ['block_id' => $blockId]);
+                $shop = $this->resolveShop($request);
+                if ($shop) {
+                    return $placementResponse($shop);
+                }
                 return $emptyResponse('Widget ID must be the number from Admin → Widgets (e.g. 5 or 12). You entered: '.((string) $blockId));
             }
             $block = Block::where('surface', 'checkout')->find($blockIdInt);
@@ -159,9 +264,17 @@ class CheckoutUpsellController extends Controller
             $this->logExt('checkout_offers_block_not_found', ['block_id' => $blockIdInt]);
             $otherBlock = Block::find($blockIdInt);
             if ($otherBlock) {
+                $shop = $this->resolveShop($request);
+                if ($shop) {
+                    return $placementResponse($shop);
+                }
                 return $emptyResponse(
                     'Widget ID '.$blockIdInt.' exists but is for "'.ucfirst(str_replace('_', ' ', $otherBlock->surface)).'", not Checkout. In Admin → Widgets create a widget with Surface = Checkout (and Type = Upsell), then put its ID in this block settings.'
                 );
+            }
+            $shop = $this->resolveShop($request);
+            if ($shop) {
+                return $placementResponse($shop);
             }
             return $emptyResponse(
                 'No widget with ID '.$blockIdInt.'. In Admin → Widgets open the list, check the ID column for a Checkout Upsell widget, and enter that number in "Widget ID" here.'
@@ -171,11 +284,11 @@ class CheckoutUpsellController extends Controller
         $shop = $this->resolveShop($request);
         if (! $shop) {
             $this->logExt('checkout_offers_shop_not_found', ['block_id' => $blockId]);
-            return $emptyResponse('Shop not found. Set Shop domain in block settings to your store (e.g. mystore.myshopify.com).');
+            return response()->json(['error' => 'Shop not found'], 404);
         }
 
-        // Experience-only mode (no block_id): return empty offers without requiring Placement.
-        return $emptyResponse();
+        // Legacy placement mode (no block_id).
+        return $placementResponse($shop);
     }
 
     /**

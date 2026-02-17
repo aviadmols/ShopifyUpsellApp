@@ -63,7 +63,7 @@ class OpenRouterService
                 'HTTP-Referer' => request()->url(),
             ])->timeout(60)->post(self::BASE_URL, $body);
 
-            $durationMs = (int) round((microtime(true) - $start) * 1000);
+            $durationMs = max(1, (int) round((microtime(true) - $start) * 1000));
             $responseBody = $response->body();
 
             if (! $response->successful()) {
@@ -99,7 +99,7 @@ class OpenRouterService
             $this->logAiRequest('generate', $body, $responseBody, $result, 'ok', null, $durationMs);
             return $result;
         } catch (\Throwable $e) {
-            $durationMs = (int) round((microtime(true) - $start) * 1000);
+            $durationMs = max(1, (int) round((microtime(true) - $start) * 1000));
             $this->logAiRequest('generate', $body, null, null, 'error', $e->getMessage(), $durationMs);
             Log::error('OpenRouter request failed', ['message' => $e->getMessage()]);
             return null;
@@ -260,7 +260,7 @@ class OpenRouterService
                 'Content-Type' => 'application/json',
             ])->timeout(30)->post(self::BASE_URL, $body);
 
-            $durationMs = (int) round((microtime(true) - $start) * 1000);
+            $durationMs = max(1, (int) round((microtime(true) - $start) * 1000));
             $responseBody = $response->body();
 
             if (! $response->successful()) {
@@ -273,7 +273,7 @@ class OpenRouterService
             $this->logAiRequest('summarize', $body, $responseBody, $summary !== null ? ['summary' => $summary] : null, $summary !== null ? 'ok' : 'error', $summary !== null ? null : 'Missing content', $durationMs);
             return $summary;
         } catch (\Throwable $e) {
-            $durationMs = (int) round((microtime(true) - $start) * 1000);
+            $durationMs = max(1, (int) round((microtime(true) - $start) * 1000));
             $this->logAiRequest('summarize', $body, null, null, 'error', $e->getMessage(), $durationMs);
             Log::error('OpenRouter summarize failed', ['message' => $e->getMessage()]);
             return null;
@@ -334,7 +334,7 @@ class OpenRouterService
                 'HTTP-Referer' => request()->url(),
             ])->timeout(60)->post(self::BASE_URL, $body);
 
-            $durationMs = (int) round((microtime(true) - $start) * 1000);
+            $durationMs = max(1, (int) round((microtime(true) - $start) * 1000));
             $responseBody = $response->body();
 
             if (! $response->successful()) {
@@ -381,7 +381,7 @@ class OpenRouterService
             $this->logAiRequest('refine', $body, $responseBody, $result, 'ok', null, $durationMs);
             return $result;
         } catch (\Throwable $e) {
-            $durationMs = (int) round((microtime(true) - $start) * 1000);
+            $durationMs = max(1, (int) round((microtime(true) - $start) * 1000));
             $this->logAiRequest('refine', $body, null, null, 'error', $e->getMessage(), $durationMs);
             Log::error('OpenRouter refine failed', ['message' => $e->getMessage()]);
             return null;

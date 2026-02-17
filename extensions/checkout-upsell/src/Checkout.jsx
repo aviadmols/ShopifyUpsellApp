@@ -108,19 +108,21 @@ function sendLog(apiUrl, secret, payload) {
 }
 
 /** Send widget click event for session analytics (fire-and-forget). */
-function sendClickLog(apiUrl, secret, { block_id, session_key, click_target }) {
+function sendClickLog(apiUrl, secret, { shop, block_id, session_key, click_target, meta }) {
   if (!apiUrl || !secret) return;
   sendLog(apiUrl, secret, {
     event: 'widget_click',
+    shop: shop ?? undefined,
     block_id: block_id ?? undefined,
     session_key: session_key ?? undefined,
     click_target: click_target ?? 'add_to_cart',
+    meta: meta && typeof meta === 'object' ? meta : undefined,
   });
 }
 
 export default reactExtension('purchase.checkout.block.render', () => <CheckoutUpsell />);
 
-function UpgradeCardBlock({ config, apiUrl, secret, sessionKey, blockId }) {
+function UpgradeCardBlock({ config, apiUrl, secret, sessionKey, blockId, shop }) {
   const api = useApi();
   const applyCartLinesChange = useApplyCartLinesChange();
 
@@ -182,14 +184,20 @@ function UpgradeCardBlock({ config, apiUrl, secret, sessionKey, blockId }) {
         }
       }
       if (apiUrl && secret) {
-        sendClickLog(apiUrl, secret, { block_id: blockId, session_key: sessionKey, click_target: 'upgrade_cta' });
+        sendClickLog(apiUrl, secret, {
+          shop,
+          block_id: blockId,
+          session_key: sessionKey,
+          click_target: 'upgrade_cta',
+          meta: { source: 'checkout_upgrade_card' },
+        });
       }
     } catch (err) {
       setErrorMessage(err?.message || 'Update failed.');
     } finally {
       setApplying(false);
     }
-  }, [actions, cartEditable, applyCartLinesChange, apiUrl, secret, sessionKey, blockId]);
+  }, [actions, cartEditable, applyCartLinesChange, apiUrl, secret, sessionKey, blockId, shop]);
 
   if (!enabled || items.length === 0) return null;
 
@@ -242,7 +250,7 @@ function UpgradeCardBlock({ config, apiUrl, secret, sessionKey, blockId }) {
   );
 }
 
-function ContentBlockRender({ block }) {
+function ContentBlockRender({ block, shop }) {
   const type = block?.type || '';
   const config = block?.config || {};
   const spacing = config.spacing === 'loose' ? 'loose' : 'tight';
@@ -257,6 +265,7 @@ function ContentBlockRender({ block }) {
         secret={block?.secret}
         sessionKey={block?.sessionKey}
         blockId={block?.id}
+        shop={shop}
       />
     );
   }
@@ -566,7 +575,13 @@ function CheckoutUpsell() {
       }
       await applyCartLinesChange(line);
       setAdded((s) => new Set([...s, variantId]));
-      sendClickLog(apiUrl, secret, { block_id: blockId, session_key: sessionKey, click_target: 'add_to_cart' });
+      sendClickLog(apiUrl, secret, {
+        shop,
+        block_id: blockId,
+        session_key: sessionKey,
+        click_target: 'add_to_cart',
+        meta: { variant_id: variantId, selling_plan_id: sellingPlanId || undefined, quantity },
+      });
     } catch (_) {}
   };
 
@@ -636,6 +651,7 @@ function CheckoutUpsell() {
           <ContentBlockRender
             key={blk.id || blk.type}
             block={{ ...blk, apiUrl, secret, sessionKey, id: blk.id }}
+            shop={shop}
           />
         ))}
         {progressBar && (

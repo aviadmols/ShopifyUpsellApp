@@ -80,9 +80,35 @@ class WidgetSessionEventResource extends Resource
                     ->label('Block ID')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('session_key')
-                    ->label('Session')
+                    ->label('Session ID')
                     ->formatStateUsing(fn (?string $state): string => $state && strlen($state) > 20 ? substr($state, 0, 10) . '…' . substr($state, -6) : ($state ?? '-'))
-                    ->tooltip(fn ($record) => $record->session_key),
+                    ->tooltip(fn ($record) => $record->session_key)
+                    ->copyable()
+                    ->copyMessage('Copied')
+                    ->copyMessageDuration(1500),
+                Tables\Columns\TextColumn::make('user_identifier')
+                    ->label('User ID')
+                    ->state(function ($record): ?string {
+                        $snap = is_array($record->context_snapshot ?? null) ? $record->context_snapshot : [];
+                        $attrs = is_array($snap['checkout_attributes'] ?? null) ? $snap['checkout_attributes'] : [];
+
+                        $candidates = [
+                            '_zyxel_user_id',
+                            '_axon_client_id',
+                            'igId',
+                            '_zyxel_session_id',
+                        ];
+                        foreach ($candidates as $k) {
+                            $v = $attrs[$k] ?? null;
+                            if (is_string($v) && trim($v) !== '') {
+                                return $k . ': ' . $v;
+                            }
+                        }
+                        return null;
+                    })
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: false)
+                    ->wrap(),
                 Tables\Columns\TextColumn::make('event_type')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
