@@ -16,7 +16,6 @@ import { useEffect, useMemo, useState } from 'react';
 
 const BUILD_ID = 'zyg-surveys-checkout-20260212';
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
-const DEFAULT_SHOP = 'millsdailypacks.myshopify.com';
 
 function gidToNumeric(gid) {
   if (!gid || typeof gid !== 'string') return null;
@@ -56,9 +55,8 @@ function CheckoutSurvey() {
 
   const apiUrl = (getSetting(settings, 'api_url') || DEFAULT_API_URL || '').replace(/\/$/, '');
   const secret = (getSetting(settings, 'extension_secret') || '').trim();
-  const shopDomain = (getSetting(settings, 'shop_domain') || '').trim();
   const runtimeShop = (typeof api?.shop?.myshopifyDomain === 'string' && api.shop.myshopifyDomain) ? api.shop.myshopifyDomain : null;
-  const shop = shopDomain || runtimeShop || DEFAULT_SHOP;
+  const shop = runtimeShop || '';
   const showDebugWhenEmpty = getSetting(settings, 'show_debug_when_empty') === true;
 
   const [loading, setLoading] = useState(true);
@@ -73,7 +71,7 @@ function CheckoutSurvey() {
   const lineItemsNormalized = useMemo(() => normalizeLineItemsForApi(lineItems), [JSON.stringify(lineItems)]);
 
   useEffect(() => {
-    if (!apiUrl || !secret) {
+    if (!apiUrl || !secret || !shop) {
       setLoading(false);
       setSurvey(null);
       setStatus({ type: 'not_configured', message: 'Not configured' });

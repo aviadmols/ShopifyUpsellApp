@@ -5,6 +5,7 @@
 import {
   reactExtension,
   useSettings,
+  useApi,
   BlockStack,
   Button,
   Text,
@@ -16,23 +17,24 @@ import { useEffect, useState } from 'react';
 
 const BUILD_ID = 'zyg-thankyou-20260210';
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
-const DEFAULT_SHOP_DOMAIN = 'millsdailypacks.myshopify.com';
 
 export default reactExtension('purchase.thank-you.block.render', () => <ThankYouBlocks />);
 
 function ThankYouBlocks() {
   const settings = useSettings();
+  const api = useApi();
   const [blocks, setBlocks] = useState([]);
   const [status, setStatus] = useState('loading');
 
   const apiUrl = (settings.api_url || DEFAULT_API_URL || '').replace(/\/$/, '');
   const secret = (settings.extension_secret || '').trim();
-  const shopDomain = (settings.shop_domain || DEFAULT_SHOP_DOMAIN).trim() || DEFAULT_SHOP_DOMAIN;
+  const runtimeShop = (typeof api?.shop?.myshopifyDomain === 'string' && api.shop.myshopifyDomain) ? api.shop.myshopifyDomain : null;
+  const shopDomain = runtimeShop || '';
   const blockId = settings.block_id != null && String(settings.block_id).trim() !== '' ? String(settings.block_id).trim() : undefined;
   const showDebugWhenEmpty = settings.show_debug_when_empty === true;
 
   useEffect(() => {
-    if (!apiUrl || !secret) {
+    if (!apiUrl || !secret || !shopDomain) {
       setStatus('no_config');
       return;
     }

@@ -156,10 +156,9 @@ function UpgradeCard() {
 
   const apiUrl = (getSetting(settings, 'api_url') || DEFAULT_API_URL || '').replace(/\/$/, '');
   const secret = (getSetting(settings, 'extension_secret') || DEFAULT_EXTENSION_SECRET).trim();
-  const shopDomain = (getSetting(settings, 'shop_domain') || '').trim();
   const runtimeShop =
     typeof api?.shop?.myshopifyDomain === 'string' && api.shop.myshopifyDomain ? api.shop.myshopifyDomain : null;
-  const shop = shopDomain || runtimeShop || '';
+  const shop = runtimeShop || '';
   const blockIdRaw = getSetting(settings, 'block_id');
   const blockId =
     blockIdRaw != null && String(blockIdRaw).trim() !== '' ? String(blockIdRaw).trim() : undefined;
@@ -191,7 +190,7 @@ function UpgradeCard() {
   const cartEditable = canAdd && canRemove && canUpdate;
 
   const fetchPayload = useCallback(() => {
-    if (!apiUrl || !secret) {
+    if (!apiUrl || !secret || !shop) {
       setLoading(false);
       setPayload({ enabled: false });
       return;

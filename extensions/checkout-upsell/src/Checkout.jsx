@@ -25,7 +25,6 @@ import { useEffect, useState, useCallback } from 'react';
 
 const BUILD_ID = 'zyg-upsell-checkout-20260212-widgets';
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
-const DEFAULT_SHOP = 'millsdailypacks.myshopify.com';
 const DEFAULT_EXTENSION_SECRET = '89987874564648484';
 
 function shortenUrl(url) {
@@ -393,9 +392,8 @@ function CheckoutUpsell() {
 
   const apiUrl = (getSetting(settings, 'api_url') || DEFAULT_API_URL || '').replace(/\/$/, '');
   const secret = (getSetting(settings, 'extension_secret') || DEFAULT_EXTENSION_SECRET).trim();
-  const shopDomain = (getSetting(settings, 'shop_domain') || '').trim();
   const runtimeShop = (typeof api?.shop?.myshopifyDomain === 'string' && api.shop.myshopifyDomain) ? api.shop.myshopifyDomain : null;
-  const shop = shopDomain || runtimeShop || DEFAULT_SHOP;
+  const shop = runtimeShop || '';
   const blockIdRaw = getSetting(settings, 'block_id');
   const blockId = blockIdRaw != null && String(blockIdRaw).trim() !== '' ? String(blockIdRaw).trim() : undefined;
   const showDebugWhenEmpty = getSetting(settings, 'show_debug_when_empty') === true;
@@ -428,7 +426,7 @@ function CheckoutUpsell() {
   const lineItems = Array.isArray(cartLines) ? cartLines : (cartLines?.value ? (Array.isArray(cartLines.value) ? cartLines.value : []) : []);
 
   useEffect(() => {
-    if (!apiUrl || !secret) {
+    if (!apiUrl || !secret || !shop) {
       setLoading(false);
       setStatus({
         type: 'not_configured',
@@ -541,7 +539,7 @@ function CheckoutUpsell() {
         setContentBlocks([]);
       })
       .finally(() => setLoading(false));
-  }, [apiUrl, secret, shopDomain, blockId, sessionKey, subtotalMoney?.amount, JSON.stringify(normalizeLineItemsForApi(lineItems))]);
+  }, [apiUrl, secret, shop, blockId, sessionKey, subtotalMoney?.amount, JSON.stringify(normalizeLineItemsForApi(lineItems))]);
 
   const getQuantityForOffer = (variantId) => {
     const q = offerQuantities[variantId];
