@@ -435,6 +435,22 @@ class CreateBlock extends CreateRecord
                 'plans' => self::normalizeUpgradeCardPlans(is_array($data['upgrade_card_plans'] ?? null) ? $data['upgrade_card_plans'] : []),
                 'upgrade_mappings' => self::normalizeUpgradeMappings(is_array($data['upgrade_mappings_items'] ?? null) ? $data['upgrade_mappings_items'] : []),
             ];
+        } elseif ($surface === 'checkout' && $type === 'checkout_upgrade_all_otp') {
+            $config = [
+                'headline' => (string) ($data['upgrade_all_otp_headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE'),
+                'subtext' => (string) ($data['upgrade_all_otp_subtext'] ?? ''),
+                'product_list_label' => (string) ($data['upgrade_all_otp_product_list_label'] ?? 'Deliver every {{frequency}}:'),
+                'cta_label' => (string) ($data['upgrade_all_otp_cta_label'] ?? 'SUBSCRIBE & SAVE'),
+                'success_headline' => (string) ($data['upgrade_all_otp_success_headline'] ?? 'You saved {{saving.amount}} by upgrading products to a subscription!'),
+                'undo_link_text' => (string) ($data['upgrade_all_otp_undo_link_text'] ?? 'Undo savings'),
+                'ui' => [
+                    'title_size' => (string) ($data['upgrade_all_otp_title_size'] ?? 'medium'),
+                    'button_kind' => (string) ($data['upgrade_all_otp_button_kind'] ?? 'primary'),
+                    'spacing' => (string) ($data['upgrade_all_otp_spacing'] ?? 'tight'),
+                    'show_border' => (bool) ($data['upgrade_all_otp_show_border'] ?? true),
+                    'padding' => (string) ($data['upgrade_all_otp_padding'] ?? 'base'),
+                ],
+            ];
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {
             $config = [
                 'progress_bar_enabled' => true,

@@ -14,6 +14,7 @@ use App\Services\CartLineUpgradeMatcher;
 use App\Services\RuntimeTemplateVarsService;
 use App\Services\RuleEngine;
 use App\Services\ShopifyGraphQLService;
+use App\Services\UpgradeAllOtpPayloadBuilder;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -321,7 +322,7 @@ class CheckoutUpsellController extends Controller
             return $empty();
         }
 
-        $block = Block::where('surface', 'checkout')->where('type', 'checkout_upgrade_card')->find($blockIdInt);
+        $block = Block::where('surface', 'checkout')->whereIn('type', ['checkout_upgrade_card', 'checkout_upgrade_all_otp'])->find($blockIdInt);
         if (! $block) {
             $this->logExt('checkout_upgrade_card_block_not_found', ['block_id' => $blockIdInt]);
             return $empty();
@@ -341,6 +342,47 @@ class CheckoutUpsellController extends Controller
                 $this->logWidgetView($request, $shop, $block, $context, false, false);
                 return $empty();
             }
+        }
+
+        if ($block->type === 'checkout_upgrade_all_otp') {
+            $builder = app(UpgradeAllOtpPayloadBuilder::class);
+            $lineItems = $context['line_items'] ?? [];
+            $hasSubscription = false;
+            if (is_array($lineItems)) {
+                foreach ($lineItems as $line) {
+                    if (is_array($line) && trim((string) ($line['selling_plan_id'] ?? $line['sellingPlanId'] ?? '')) !== '') {
+                        $hasSubscription = true;
+                        break;
+                    }
+                }
+            }
+            if ($hasSubscription) {
+                $payload = $builder->buildSuccessState($block, $context);
+            } else {
+                $payload = $builder->run($block, $context);
+            }
+            $config = $block->config ?? [];
+            $vars = $this->buildTemplateVarsForUpgradeAllOtp($payload, $context, $config);
+            foreach (['headline', 'subtext', 'product_list_label', 'cta_label', 'success_headline'] as $key) {
+                if (isset($payload[$key]) && is_string($payload[$key])) {
+                    $payload[$key] = $this->interpolateValueRecursive($payload[$key], $vars);
+                }
+            }
+            if (isset($payload['headline']) && ($payload['state'] ?? '') === 'success') {
+                $payload['headline'] = $this->interpolateValueRecursive($payload['headline'], $vars);
+            }
+            if (is_array($config['ui'] ?? null)) {
+                $payload['ui'] = array_merge($payload['ui'] ?? [], $config['ui']);
+            }
+            $this->logExt('checkout_upgrade_card_response', [
+                'block_id' => $block->id,
+                'enabled' => $payload['enabled'] ?? false,
+                'items_count' => count($payload['items'] ?? []),
+                'actions_count' => count($payload['actions'] ?? []),
+                'state' => $payload['state'] ?? null,
+            ]);
+            $this->logWidgetView($request, $shop, $block, $context, true, (bool) ($payload['enabled'] ?? false));
+            return response()->json($payload);
         }
 
         $config = $block->config ?? [];
@@ -379,8 +421,36 @@ class CheckoutUpsellController extends Controller
             'actions_count' => count($payload['actions'] ?? []),
         ]);
 
-        $this->logWidgetView($request, $shop, $block, $context, true, true);
+        $this->logWidgetView($request, $shop, $block, $context, true, (bool) ($payload['enabled'] ?? false));
         return response()->json($payload);
+    }
+
+    /**
+     * Build template vars for Upgrade All OTP block (saving.amount, frequency, product.name.1, etc.).
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $context
+     * @param  array<string, mixed>  $config
+     * @return array<string, string>
+     */
+    protected function buildTemplateVarsForUpgradeAllOtp(array $payload, array $context, array $config): array
+    {
+        $vars = [];
+        $saving = $payload['saving'] ?? [];
+        if (is_array($saving)) {
+            $vars['saving.amount'] = (string) ($saving['amount_formatted'] ?? $saving['amount'] ?? '0');
+            $vars['saving.percent'] = (string) ($saving['percent'] ?? '0');
+        }
+        $vars['frequency'] = (string) ($payload['frequency'] ?? '');
+        $products = $payload['products'] ?? $payload['items'] ?? [];
+        foreach (is_array($products) ? $products : [] as $i => $p) {
+            $idx = $i + 1;
+            if (is_array($p)) {
+                $vars["product.name.{$idx}"] = (string) ($p['product_title'] ?? '');
+                $vars["variant.name.{$idx}"] = (string) ($p['variant_title'] ?? $p['variant_title'] ?? '');
+            }
+        }
+        return $vars;
     }
 
     /**

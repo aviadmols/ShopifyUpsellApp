@@ -22,6 +22,12 @@ final class WidgetRegistry
             'singleton' => false,
             'has_offers' => false,
         ],
+        'checkout_upgrade_all_otp' => [
+            'label' => 'Upgrade all to subscription (OTP cart)',
+            'surfaces' => ['checkout'],
+            'singleton' => false,
+            'has_offers' => false,
+        ],
         'progress_bar' => [
             'label' => 'Progress bar',
             'surfaces' => ['checkout'],

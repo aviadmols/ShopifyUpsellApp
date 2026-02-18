@@ -499,6 +499,19 @@ class EditBlock extends EditRecord
                     $data['upgrade_mappings_items'] = $inferred;
                 }
             }
+        } elseif ($surface === 'checkout' && $type === 'checkout_upgrade_all_otp') {
+            $data['upgrade_all_otp_headline'] = (string) ($config['headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE');
+            $data['upgrade_all_otp_subtext'] = (string) ($config['subtext'] ?? '');
+            $data['upgrade_all_otp_product_list_label'] = (string) ($config['product_list_label'] ?? 'Deliver every {{frequency}}:');
+            $data['upgrade_all_otp_cta_label'] = (string) ($config['cta_label'] ?? 'SUBSCRIBE & SAVE');
+            $data['upgrade_all_otp_success_headline'] = (string) ($config['success_headline'] ?? 'You saved {{saving.amount}} by upgrading products to a subscription!');
+            $data['upgrade_all_otp_undo_link_text'] = (string) ($config['undo_link_text'] ?? 'Undo savings');
+            $ui = is_array($config['ui'] ?? null) ? $config['ui'] : [];
+            $data['upgrade_all_otp_title_size'] = (string) ($ui['title_size'] ?? 'medium');
+            $data['upgrade_all_otp_button_kind'] = (string) ($ui['button_kind'] ?? 'primary');
+            $data['upgrade_all_otp_spacing'] = (string) ($ui['spacing'] ?? 'tight');
+            $data['upgrade_all_otp_show_border'] = (bool) ($ui['show_border'] ?? true);
+            $data['upgrade_all_otp_padding'] = (string) ($ui['padding'] ?? 'base');
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {
             $data['progress_bar_type'] = (string) ($config['progress_bar_type'] ?? 'free_shipping');
             $data['progress_bar_goal'] = (float) ($config['progress_bar_goal'] ?? 100);

@@ -116,6 +116,7 @@ class BlockResource extends Resource
 
                 self::schemaCheckoutUpsell($form),
                 self::schemaCheckoutUpgradeCard($form),
+                self::schemaCheckoutUpgradeAllOtp($form),
                 self::schemaCheckoutProgressBar($form),
                 self::schemaContentIconFeatures($form),
                 self::schemaContentBannerRichTextButton($form),
@@ -244,7 +245,7 @@ class BlockResource extends Resource
 
     protected static function schemaRuntimeVariables(Form $form): Forms\Components\Section
     {
-        $typesWithPlaceholders = ['upsell', 'checkout_upgrade_card', 'progress_bar', 'content_icon_features', 'content_banner', 'content_rich_text', 'content_button', 'content_product_card', 'post_purchase_funnel'];
+        $typesWithPlaceholders = ['upsell', 'checkout_upgrade_card', 'checkout_upgrade_all_otp', 'progress_bar', 'content_icon_features', 'content_banner', 'content_rich_text', 'content_button', 'content_product_card', 'post_purchase_funnel'];
         return Forms\Components\Section::make('Runtime variables (placeholders)')
             ->description('To replace placeholders like {dog_names_message} in your headline / section heading / description, define them here. The PHP snippet in "AI-generated widget" is reference only and is NOT executed.')
             ->schema([
@@ -857,6 +858,70 @@ class BlockResource extends Resource
             ])
             ->columns(1)
             ->visible(fn (Get $get): bool => $get('surface') === 'checkout' && $get('type') === 'checkout_upgrade_card');
+    }
+
+    protected static function schemaCheckoutUpgradeAllOtp(Form $form): Forms\Components\Section
+    {
+        $defaultSubtext = "Upgrade your items to subscription and save up to {{saving.amount}} today!\n\n- Get bigger savings\n- Automatic resupply\n- Free shipping\n- Modify or cancel anytime (no strings attached)\n- 90-day money-back guarantee";
+        return Forms\Components\Section::make('Upgrade all to subscription (OTP cart)')
+            ->description('Shown only when the cart has no subscriptions. One click converts all eligible cart items to subscription. Use the same "Zyg Upgrade Card" extension and set Widget ID to this block\'s ID. Use the optional "Block visibility rule" above to restrict when this block appears.')
+            ->schema([
+                Forms\Components\TextInput::make('upgrade_all_otp_headline')
+                    ->label('Headline')
+                    ->default('UPGRADE TO SUBSCRIPTION AND SAVE')
+                    ->maxLength(120),
+                Forms\Components\Textarea::make('upgrade_all_otp_subtext')
+                    ->label('Subtext')
+                    ->rows(6)
+                    ->default($defaultSubtext)
+                    ->helperText('Use {{saving.amount}} for total savings. Lines starting with "- " become bullets.')
+                    ->maxLength(1000),
+                Forms\Components\TextInput::make('upgrade_all_otp_product_list_label')
+                    ->label('Product list label')
+                    ->placeholder('Deliver every {{frequency}}:')
+                    ->default('Deliver every {{frequency}}:')
+                    ->maxLength(120),
+                Forms\Components\TextInput::make('upgrade_all_otp_cta_label')
+                    ->label('CTA button label')
+                    ->default('SUBSCRIBE & SAVE')
+                    ->maxLength(60),
+                Forms\Components\TextInput::make('upgrade_all_otp_success_headline')
+                    ->label('Success headline (after upgrade)')
+                    ->placeholder('You saved {{saving.amount}} by upgrading products to a subscription!')
+                    ->default('You saved {{saving.amount}} by upgrading products to a subscription!')
+                    ->maxLength(120),
+                Forms\Components\TextInput::make('upgrade_all_otp_undo_link_text')
+                    ->label('Undo link text')
+                    ->default('Undo savings')
+                    ->maxLength(60),
+                Forms\Components\Section::make('Design')
+                    ->schema([
+                        Forms\Components\Select::make('upgrade_all_otp_title_size')
+                            ->label('Headline size')
+                            ->options(['small' => 'Small', 'medium' => 'Medium', 'large' => 'Large'])
+                            ->default('medium'),
+                        Forms\Components\Select::make('upgrade_all_otp_button_kind')
+                            ->label('CTA button style')
+                            ->options(['primary' => 'Primary', 'secondary' => 'Secondary', 'plain' => 'Plain'])
+                            ->default('primary'),
+                        Forms\Components\Select::make('upgrade_all_otp_spacing')
+                            ->label('Spacing')
+                            ->options(['tight' => 'Tight', 'loose' => 'Loose'])
+                            ->default('tight'),
+                        Forms\Components\Toggle::make('upgrade_all_otp_show_border')
+                            ->label('Show card border')
+                            ->default(true),
+                        Forms\Components\Select::make('upgrade_all_otp_padding')
+                            ->label('Card padding')
+                            ->options(['none' => 'None', 'tight' => 'Tight', 'base' => 'Base', 'loose' => 'Loose'])
+                            ->default('base'),
+                    ])
+                    ->columns(2)
+                    ->collapsible()
+                    ->collapsed(),
+            ])
+            ->columns(1)
+            ->visible(fn (Get $get): bool => $get('surface') === 'checkout' && $get('type') === 'checkout_upgrade_all_otp');
     }
 
     /**

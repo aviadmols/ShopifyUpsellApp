@@ -141,6 +141,32 @@
       </div>
     @endif
 
+    @if($surface === 'checkout' && $type === 'checkout_upgrade_all_otp')
+      @php
+        $headline = (string) ($config['headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE');
+        $subtext = (string) ($config['subtext'] ?? '');
+        $productListLabel = (string) ($config['product_list_label'] ?? 'Deliver every {{frequency}}:');
+        $cta = (string) ($config['cta_label'] ?? 'SUBSCRIBE & SAVE');
+      @endphp
+      <div class="border border-gray-200 dark:border-white/10 rounded-lg p-4 space-y-3">
+        @if($headline !== '')
+          <p class="font-semibold text-gray-900 dark:text-white">{{ $headline }}</p>
+        @endif
+        @if($subtext !== '')
+          <p class="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-line">{{ Str::limit($subtext, 200) }}</p>
+        @endif
+        @if($productListLabel !== '')
+          <p class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ str_replace('{{frequency}}', '30 days', $productListLabel) }}</p>
+        @endif
+        <button type="button" class="w-full text-sm px-3 py-2 rounded bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900">
+          {{ $cta }}
+        </button>
+        <p class="text-xs text-gray-500 dark:text-gray-400">
+          Preview only. Shown in Checkout when cart has no subscriptions; one click converts all eligible items to subscription.
+        </p>
+      </div>
+    @endif
+
     @if($surface === 'checkout' && $type === 'progress_bar')
       @php
         $goal = (float)($config['progress_bar_goal'] ?? 100);
