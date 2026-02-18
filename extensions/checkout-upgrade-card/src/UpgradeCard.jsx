@@ -272,16 +272,40 @@ function UpgradeCard() {
     setApplying(true);
     setErrorMessage('');
 
+    const getCurrentLines = () => {
+      const raw = typeof api?.lines?.current === 'function' ? api.lines.current() : api?.lines?.value ?? api?.lines ?? [];
+      return Array.isArray(raw) ? raw : [];
+    };
+
+    const resolveLineIdForUpdate = (action) => {
+      const currentLines = getCurrentLines();
+      const norm = (id) => (id == null ? '' : String(id).trim().replace(/\D/g, ''));
+      const lineIdNorm = norm(action?.lineId);
+      const merchIdNorm = norm(action?.merchandiseId);
+      for (const line of currentLines) {
+        const lid = line?.id ?? line?.merchandise?.id;
+        if (lineIdNorm && norm(lid) === lineIdNorm) return line.id;
+        if (merchIdNorm && norm(line?.merchandise?.id ?? line?.variant_id) === merchIdNorm) {
+          const hasPlan = line?.merchandise?.sellingPlan?.id ?? line?.sellingPlanAllocation?.sellingPlan?.id ?? line?.selling_plan_id;
+          if (!hasPlan) return line.id;
+        }
+      }
+      return action?.lineId;
+    };
+
     try {
       for (let i = 0; i < actions.length; i++) {
         const action = actions[i];
         const type = action?.type;
-        if (type === 'updateCartLine' && action?.lineId && action?.sellingPlanId) {
-          await applyCartLinesChange({
-            type: 'updateCartLine',
-            id: action.lineId,
-            sellingPlanId: action.sellingPlanId,
-          });
+        if (type === 'updateCartLine' && action?.sellingPlanId) {
+          const lineId = resolveLineIdForUpdate(action);
+          if (lineId) {
+            await applyCartLinesChange({
+              type: 'updateCartLine',
+              id: lineId,
+              sellingPlanId: action.sellingPlanId,
+            });
+          }
         } else if (type === 'removeCartLine' && action?.lineId) {
           await applyCartLinesChange({
             type: 'removeCartLine',
@@ -312,7 +336,7 @@ function UpgradeCard() {
     } finally {
       setApplying(false);
     }
-  }, [payload?.actions, cartEditable, applyCartLinesChange, apiUrl, secret, blockId, sessionKey, shop]);
+  }, [payload?.actions, cartEditable, applyCartLinesChange, api, apiUrl, secret, blockId, sessionKey, shop]);
 
   if (loading) {
     return null;
