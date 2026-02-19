@@ -62,7 +62,7 @@
                                 @endif
                             </div>
                             <div class="p-4">
-                                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Selling Plans (Recharge / Shopify)</h4>
+                                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Selling Plans</h4>
                                 @if(empty($product['selling_plans']))
                                     <p class="text-xs text-gray-500">No selling plans</p>
                                 @else
@@ -70,11 +70,6 @@
                                         @foreach($product['selling_plans'] as $sp)
                                             <li class="flex flex-wrap items-center gap-2">
                                                 <span class="text-gray-700 dark:text-gray-300">{{ $sp['name'] }}</span>
-                                                @if(isset($sp['discount_percent']) && $sp['discount_percent'] !== null)
-                                                    <span class="text-green-600 dark:text-green-400 font-medium" title="Discount % (from Recharge/Shopify)">{{ number_format((float) $sp['discount_percent'], 1) }}% off</span>
-                                                @else
-                                                    <span class="text-gray-400 dark:text-gray-500 text-xs">—</span>
-                                                @endif
                                                 <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded break-all" title="Copy">{{ $sp['id'] }}</code>
                                             </li>
                                         @endforeach

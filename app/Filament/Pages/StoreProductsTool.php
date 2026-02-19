@@ -23,7 +23,7 @@ class StoreProductsTool extends Page
 
     public ?int $shop_id = null;
 
-    /** @var array<int, array{id: string, title: string, image_url: string|null, variants: array, selling_plans: array<int, array{id: string, name: string, discount_percent: float|null}>}> */
+    /** @var array<int, array{id: string, title: string, image_url: string|null, variants: array, selling_plans: array}> */
     public array $products = [];
 
     public string $loadError = '';
