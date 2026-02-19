@@ -524,7 +524,9 @@ class CartLineUpgradeMatcher
             $mapping = $entry['mapping'];
             $lineTotal = $this->lineTotalFromLine($line, $subtotal, $allLines);
             $discountPercent = (float) ($mapping['discount_percent'] ?? 0);
-            $lineSaving = $lineTotal * ($discountPercent / 100);
+            // Line total here is post-discount (subscription price); saving = lineTotal * discountPercent / (100 - discountPercent)
+            $denom = 100 - $discountPercent;
+            $lineSaving = $denom > 0 ? $lineTotal * $discountPercent / $denom : 0.0;
             $savingAmount += $lineSaving;
             $actions[] = [
                 'type' => 'updateCartLine',

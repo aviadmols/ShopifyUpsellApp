@@ -190,6 +190,7 @@ function UpgradeCard() {
   const [errorMessage, setErrorMessage] = useState('');
   const fetchPayloadRef = useRef(() => {});
   const fetchTimeoutRef = useRef(null);
+  const applyingRef = useRef(false);
 
   const instructions = api?.instructions ?? {};
   const linesInstructions = instructions?.lines ?? {};
@@ -262,6 +263,7 @@ function UpgradeCard() {
 
   fetchPayloadRef.current = fetchPayload;
   useEffect(() => {
+    if (applyingRef.current) return;
     if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
     fetchTimeoutRef.current = setTimeout(() => {
       fetchPayloadRef.current?.();
@@ -278,6 +280,7 @@ function UpgradeCard() {
   const runActions = useCallback(async () => {
     const actions = payload?.actions;
     if (!Array.isArray(actions) || actions.length === 0 || !cartEditable) return;
+    applyingRef.current = true;
     setApplying(true);
     setErrorMessage('');
 
@@ -360,7 +363,6 @@ function UpgradeCard() {
           await applyCartLinesChange(change);
         }
       }
-      setPayload((prev) => (prev ? { ...prev, enabled: false } : prev));
       sendClickLog(apiUrl, secret, {
         shop,
         block_id: blockId,
@@ -368,10 +370,11 @@ function UpgradeCard() {
         click_target: 'upgrade_cta',
         meta: { source: 'checkout_upgrade_card' },
       });
-      fetchPayloadRef.current?.();
+      setTimeout(() => fetchPayloadRef.current?.(), 350);
     } catch (err) {
       setErrorMessage(err?.message || 'Update failed.');
     } finally {
+      applyingRef.current = false;
       setApplying(false);
     }
   }, [payload?.actions, cartEditable, applyCartLinesChange, api, apiUrl, secret, blockId, sessionKey, shop]);
