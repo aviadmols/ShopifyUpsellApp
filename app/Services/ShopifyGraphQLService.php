@@ -166,29 +166,6 @@ class ShopifyGraphQLService
     }
 
     /**
-     * Get selling plans for a product variant with optional pricing (percentage off).
-     * Used by Upgrade All OTP block to compute saving.amount / saving.percent.
-     * Returns id, name, percentage (null if not available), frequency (from plan name or options).
-     *
-     * @return array<int, array{id: string, name: string, percentage: float|null, frequency: string}>
-     */
-    public function getSellingPlansWithPricingForVariant(Shop $shop, string $variantGid): array
-    {
-        $basic = $this->getSellingPlansForVariant($shop, $variantGid);
-        $out = [];
-        foreach ($basic as $p) {
-            $name = (string) ($p['name'] ?? '');
-            $out[] = [
-                'id' => (string) ($p['id'] ?? ''),
-                'name' => $name,
-                'percentage' => null,
-                'frequency' => $name,
-            ];
-        }
-        return $out;
-    }
-
-    /**
      * Search product variants for admin picker.
      *
      * @return array<int, array{id: string, label: string, product_title: string, variant_title: string, image_url: string|null, price: string|null}>

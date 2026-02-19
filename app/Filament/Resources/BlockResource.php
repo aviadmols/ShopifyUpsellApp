@@ -490,7 +490,8 @@ class BlockResource extends Resource
                             ->label('')
                             ->content(function (Get $get): \Illuminate\Support\HtmlString {
                                 $items = $get('upgrade_mappings_items');
-                                if (! is_array($items) || $items === []) {
+                                $items = is_array($items) ? array_values($items) : [];
+                                if ($items === []) {
                                     return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500">Add mappings below to see the flow.</p>');
                                 }
                                 $steps = [];
@@ -524,8 +525,9 @@ class BlockResource extends Resource
                                     $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
                                     $offer = (string) ($m['target_variant_id'] ?? '');
                                     $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
-                                    $plans = $m['plans'] ?? [];
-                                    if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
+                                    $plansRaw = $m['plans'] ?? [];
+                                    $plans = is_array($plansRaw) ? array_values($plansRaw) : [];
+                                    if (isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
                                         $offerStr .= ' · '.e((string) $plans[0]['label']);
                                     }
                                     $stepNum = $idx + 1;

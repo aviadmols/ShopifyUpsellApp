@@ -559,6 +559,16 @@ class EditBlock extends EditRecord
             $data['quantity_max'] = max(1, (int) ($config['quantity_max'] ?? 10));
         }
 
+        // Ensure Repeater fields are always arrays so no "Undefined array key 0" when section is hidden.
+        if (($surface ?? '') === 'checkout') {
+            if (! isset($data['upgrade_mappings_items']) || ! is_array($data['upgrade_mappings_items'])) {
+                $data['upgrade_mappings_items'] = [];
+            }
+            if (! isset($data['subscription_save_mappings']) || ! is_array($data['subscription_save_mappings'])) {
+                $data['subscription_save_mappings'] = [];
+            }
+        }
+
         $reserved = [
             'offer_ids', 'max_offers', 'display_mode', 'require_expanded',
             'section_heading', 'title_size', 'title_appearance', 'show_price', 'show_description',
