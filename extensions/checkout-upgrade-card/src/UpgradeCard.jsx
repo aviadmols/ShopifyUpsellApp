@@ -130,7 +130,9 @@ function normalizeLineItemsForApi(lines) {
     const properties = toPropertiesObject(
       line?.properties ?? line?.attributes ?? line?.customAttributes ?? merch?.customAttributes ?? merch?.attributes
     );
-    return {
+    const cost = line?.cost ?? merch?.cost;
+    const lineTotal = cost?.totalAmount?.amount ?? cost?.amount;
+    const out = {
       id: line?.id,
       quantity: line?.quantity ?? 1,
       merchandiseId: variantId,
@@ -142,6 +144,10 @@ function normalizeLineItemsForApi(lines) {
       selling_plan_id: sellingPlanId || undefined,
       properties,
     };
+    if (typeof lineTotal === 'number' && !Number.isNaN(lineTotal)) {
+      out.cost = lineTotal;
+    }
+    return out;
   });
 }
 
@@ -211,6 +217,7 @@ function UpgradeCard() {
       block_id: blockId,
       session_key: sessionKey || undefined,
       subtotal: subtotalMoney?.amount ?? 0,
+      currency: subtotalMoney?.currencyCode ?? 'USD',
       line_items: lineItemsNormalized,
       ...(Object.keys(attributesForRequest).length > 0 && { attributes: attributesForRequest }),
       ...contextPayload,
@@ -323,8 +330,8 @@ function UpgradeCard() {
           await applyCartLinesChange(change);
         }
       }
-      if (payload?.state !== 'success') {
-        fetchPayloadRef.current?.();
+      if (payload?.mode === 'subscription_save') {
+        setTimeout(() => fetchPayloadRef.current?.(), 600);
       } else {
         setPayload((prev) => (prev ? { ...prev, enabled: false } : prev));
       }
@@ -333,64 +340,58 @@ function UpgradeCard() {
         block_id: blockId,
         session_key: sessionKey,
         click_target: 'upgrade_cta',
-        meta: { source: 'checkout_upgrade_card' },
+        meta: { source: payload?.mode === 'subscription_save' ? 'checkout_subscription_save' : 'checkout_upgrade_card' },
       });
     } catch (err) {
       setErrorMessage(err?.message || 'Update failed.');
     } finally {
       setApplying(false);
     }
-  }, [payload?.actions, payload?.state, cartEditable, applyCartLinesChange, api, apiUrl, secret, blockId, sessionKey, shop]);
+  }, [payload?.actions, payload?.mode, cartEditable, applyCartLinesChange, api, apiUrl, secret, blockId, sessionKey, shop]);
 
-  const runActionsUndo = useCallback(async () => {
-    const actions = payload?.actions_undo;
-    if (!Array.isArray(actions) || actions.length === 0 || !cartEditable) return;
+  const runUndo = useCallback(async () => {
+    const ids = payload?.upgraded_line_ids;
+    if (!Array.isArray(ids) || ids.length === 0 || !cartEditable) return;
     setApplying(true);
     setErrorMessage('');
     const getCurrentLines = () => {
       const raw = typeof api?.lines?.current === 'function' ? api.lines.current() : api?.lines?.value ?? api?.lines ?? [];
       return Array.isArray(raw) ? raw : [];
     };
-    const resolveLineId = (action) => {
-      const currentLines = getCurrentLines();
-      const norm = (id) => (id == null ? '' : String(id).trim().replace(/\D/g, ''));
-      const lineIdNorm = norm(action?.lineId);
-      for (const line of currentLines) {
-        const lid = line?.id ?? line?.merchandise?.id;
-        if (lineIdNorm && norm(lid) === lineIdNorm) return line.id;
-      }
-      return action?.lineId;
-    };
+    const norm = (id) => (id == null ? '' : String(id).trim().replace(/\D/g, ''));
     try {
-      for (const action of actions) {
-        if (action?.type === 'updateCartLine' && action?.sellingPlanId === null) {
-          const lineId = resolveLineId(action);
-          if (lineId) {
-            await applyCartLinesChange({ type: 'updateCartLine', id: lineId, sellingPlanId: null });
-          }
+      const currentLines = getCurrentLines();
+      for (const lineId of ids) {
+        const lineIdNorm = norm(lineId);
+        const line = currentLines.find((l) => norm(l?.id) === lineIdNorm);
+        if (line?.id) {
+          await applyCartLinesChange({ type: 'updateCartLine', id: line.id, sellingPlanId: null });
         }
       }
-      fetchPayloadRef.current?.();
+      setTimeout(() => fetchPayloadRef.current?.(), 500);
     } catch (err) {
       setErrorMessage(err?.message || 'Undo failed.');
     } finally {
       setApplying(false);
     }
-  }, [payload?.actions_undo, cartEditable, applyCartLinesChange, api]);
+  }, [payload?.upgraded_line_ids, cartEditable, applyCartLinesChange, api]);
 
   if (loading) {
     return null;
   }
 
   const enabled = payload?.enabled === true;
-  const stateSuccess = payload?.state === 'success';
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const plans = Array.isArray(payload?.plans) ? payload.plans : [];
   const headline = payload?.headline ?? '';
   const description = payload?.description ?? '';
-  const subtext = payload?.subtext ?? '';
-  const productListLabel = payload?.product_list_label ?? '';
   const ctaLabel = payload?.cta_label ?? 'Upgrade';
+  const mode = payload?.mode ?? '';
+  const upgraded = payload?.upgraded === true;
+  const subtext = payload?.subtext ?? '';
+  const productList = Array.isArray(payload?.product_list) ? payload.product_list : [];
+  const savingFormatted = payload?.saving?.formatted ?? payload?.saving?.amount ?? '';
+  const frequency = String(payload?.frequency ?? '');
   const undoLinkText = payload?.undo_link_text ?? 'Undo savings';
   const ui = payload?.ui && typeof payload.ui === 'object' ? payload.ui : {};
   const headlineSize = ['small', 'medium', 'large'].includes(String(ui.title_size)) ? String(ui.title_size) : 'medium';
@@ -404,34 +405,11 @@ function UpgradeCard() {
   const itemsMaxVisibleRaw = Number(ui.items_max_visible ?? MAX_ITEMS_VISIBLE);
   const itemsMaxVisible = Number.isFinite(itemsMaxVisibleRaw) ? Math.max(1, Math.min(10, Math.floor(itemsMaxVisibleRaw))) : MAX_ITEMS_VISIBLE;
 
-  if (!enabled) {
-    return null;
-  }
-  if (stateSuccess) {
-    return (
-      <View padding={padding} border={showBorder ? 'base' : undefined} borderRadius={borderRadius}>
-        <BlockStack spacing={spacing}>
-          {headline ? (
-            <Text size={headlineSize} emphasis="bold">
-              {headline}
-            </Text>
-          ) : null}
-          {!cartEditable ? null : (
-            <Button kind="plain" onPress={runActionsUndo} disabled={applying}>
-              {undoLinkText}
-            </Button>
-          )}
-          {errorMessage ? (
-            <Text size="small" appearance="critical">
-              {errorMessage}
-            </Text>
-          ) : null}
-        </BlockStack>
-      </View>
-    );
-  }
+  const showUpgraded = mode === 'subscription_save' && upgraded;
+  const showSubscriptionSave = mode === 'subscription_save' && enabled && items.length > 0;
+  const showUpgradeCard = !showUpgraded && !showSubscriptionSave && enabled && items.length > 0;
 
-  if (items.length === 0) {
+  if (!showUpgraded && !showSubscriptionSave && !showUpgradeCard) {
     return null;
   }
 
@@ -446,7 +424,87 @@ function UpgradeCard() {
   const visibleItems = items.slice(0, itemsMaxVisible);
   const extraCount = items.length - itemsMaxVisible;
   const ctaDisabled = !cartEditable || applying;
-  const isAllOtpLayout = Boolean(subtext || productListLabel);
+
+  if (showUpgraded) {
+    return (
+      <View padding={padding} border={showBorder ? 'base' : undefined} borderRadius={borderRadius}>
+        <BlockStack spacing={spacing}>
+          {headline ? (
+            <Text size="medium" emphasis="bold">
+              {headline}
+            </Text>
+          ) : null}
+          {cartEditable ? (
+            <Button kind="plain" onPress={runUndo} loading={applying} disabled={applying} accessibilityLabel={undoLinkText}>
+              {undoLinkText}
+            </Button>
+          ) : null}
+          {errorMessage ? (
+            <Text size="small" appearance="critical">
+              {errorMessage}
+            </Text>
+          ) : null}
+        </BlockStack>
+      </View>
+    );
+  }
+
+  if (showSubscriptionSave) {
+    const subtextLines = subtext.split(/\n/).map((s) => s.trim()).filter(Boolean);
+    return (
+      <View padding={padding} border={showBorder ? 'base' : undefined} borderRadius={borderRadius}>
+        <BlockStack spacing={spacing}>
+          {headline ? (
+            <Text size="medium" emphasis="bold">
+              {headline}
+            </Text>
+          ) : null}
+          {subtextLines.length > 0 ? (
+            <BlockStack spacing="extraTight">
+              {subtextLines.map((line, idx) => (
+                <Text key={idx} size="small" appearance="subdued">
+                  {line.startsWith('-') ? line : `- ${line}`}
+                </Text>
+              ))}
+            </BlockStack>
+          ) : null}
+          {productList.length > 0 ? (
+            <BlockStack spacing="extraTight">
+              {frequency ? (
+                <Text size="small" emphasis="bold">
+                  Deliver every {frequency}:
+                </Text>
+              ) : null}
+              {productList.map((row, idx) => (
+                <Text key={idx} size="small" appearance="subdued">
+                  - {row.product_title ?? 'Item'}{row.variant_title ? ` - ${row.variant_title}` : ''}
+                </Text>
+              ))}
+            </BlockStack>
+          ) : null}
+          {!cartEditable ? (
+            <Text size="small" appearance="subdued">
+              Cart cannot be changed in this checkout (e.g. express checkout).
+            </Text>
+          ) : null}
+          {errorMessage ? (
+            <Text size="small" appearance="critical">
+              {errorMessage}
+            </Text>
+          ) : null}
+          <Button
+            kind={buttonKind}
+            onPress={runActions}
+            loading={applying}
+            disabled={ctaDisabled}
+            accessibilityLabel={ctaLabel}
+          >
+            {ctaLabel}
+          </Button>
+        </BlockStack>
+      </View>
+    );
+  }
 
   return (
     <View padding={padding} border={showBorder ? 'base' : undefined} borderRadius={borderRadius}>
@@ -459,39 +517,12 @@ function UpgradeCard() {
             {headline}
           </Text>
         ) : null}
-        {!imageMode && isAllOtpLayout && subtext ? (
-          <BlockStack spacing="extraTight">
-            {subtext.split(/\r?\n/).filter(Boolean).map((line, idx) => (
-              <Text key={idx} appearance="subdued" size="small">
-                {line.trimStart().startsWith('- ') ? line.trimStart() : line}
-              </Text>
-            ))}
-          </BlockStack>
-        ) : null}
-        {!imageMode && !isAllOtpLayout && description ? (
+        {!imageMode && description ? (
           <Text appearance="subdued" size="small">
             {description}
           </Text>
         ) : null}
-        {!imageMode && productListLabel ? (
-          <BlockStack spacing="extraTight">
-            <Text size="small" emphasis="bold">
-              {productListLabel}
-            </Text>
-            {visibleItems.map((item, idx) => (
-              <Text key={item.line_id ?? idx} size="small" appearance="subdued">
-                - {item.product_title ?? item.title ?? 'Item'}
-                {item.variant_title ? ` — ${item.variant_title}` : ''}
-              </Text>
-            ))}
-            {extraCount > 0 ? (
-              <Text size="small" appearance="subdued">
-                See {extraCount} more item{extraCount !== 1 ? 's' : ''}
-              </Text>
-            ) : null}
-          </BlockStack>
-        ) : null}
-        {!imageMode && showItems && !productListLabel ? (
+        {!imageMode && showItems ? (
           <BlockStack spacing="extraTight">
             {visibleItems.map((item, idx) => (
               <Text key={item.line_id ?? idx} size="small" appearance="subdued">

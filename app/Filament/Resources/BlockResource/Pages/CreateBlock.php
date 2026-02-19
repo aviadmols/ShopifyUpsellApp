@@ -381,6 +381,36 @@ class CreateBlock extends CreateRecord
     }
 
     /**
+     * Normalize subscription save mappings (variant_id, selling_plan_id, discount_percent) for config.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array{variant_id: string, selling_plan_id: string, discount_percent: float}>
+     */
+    public static function normalizeSubscriptionSaveMappings(array $items): array
+    {
+        $out = [];
+        $items = is_array($items) ? $items : [];
+        foreach ($items as $m) {
+            if (! is_array($m)) {
+                continue;
+            }
+            $variantId = trim((string) ($m['variant_id'] ?? ''));
+            $sellingPlanId = trim((string) ($m['selling_plan_id'] ?? ''));
+            if ($variantId === '' || $sellingPlanId === '') {
+                continue;
+            }
+            $percent = isset($m['discount_percent']) ? (float) $m['discount_percent'] : 0;
+            $percent = max(0, min(100, $percent));
+            $out[] = [
+                'variant_id' => $variantId,
+                'selling_plan_id' => $sellingPlanId,
+                'discount_percent' => $percent,
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -412,6 +442,18 @@ class CreateBlock extends CreateRecord
                 'divider_between_cards' => (bool) ($data['divider_between_cards'] ?? false),
                 'show_quantity' => (bool) ($data['show_quantity'] ?? true),
             ];
+        } elseif ($surface === 'checkout' && $type === 'checkout_subscription_save') {
+            $mappings = is_array($data['subscription_save_mappings'] ?? null) ? $data['subscription_save_mappings'] : [];
+            $config = [
+                'mode' => 'subscription_save',
+                'headline' => (string) ($data['subscription_save_headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE'),
+                'subtext' => (string) ($data['subscription_save_subtext'] ?? ''),
+                'frequency' => (string) ($data['subscription_save_frequency'] ?? ''),
+                'cta_label' => (string) ($data['subscription_save_cta'] ?? 'SUBSCRIBE & SAVE'),
+                'after_headline' => (string) ($data['subscription_save_after_headline'] ?? 'You saved {{saving.amount}} by upgrading products to a subscription!'),
+                'undo_link_text' => (string) ($data['subscription_save_undo_text'] ?? 'Undo savings'),
+                'savings_mappings' => self::normalizeSubscriptionSaveMappings($mappings),
+            ];
         } elseif ($surface === 'checkout' && $type === 'checkout_upgrade_card') {
             $config = [
                 'headline' => (string) ($data['upgrade_card_headline'] ?? ''),
@@ -434,22 +476,6 @@ class CreateBlock extends CreateRecord
                 'cart_items_count_min' => isset($data['upgrade_card_cart_items_count_min']) && $data['upgrade_card_cart_items_count_min'] !== '' ? (int) $data['upgrade_card_cart_items_count_min'] : null,
                 'plans' => self::normalizeUpgradeCardPlans(is_array($data['upgrade_card_plans'] ?? null) ? $data['upgrade_card_plans'] : []),
                 'upgrade_mappings' => self::normalizeUpgradeMappings(is_array($data['upgrade_mappings_items'] ?? null) ? $data['upgrade_mappings_items'] : []),
-            ];
-        } elseif ($surface === 'checkout' && $type === 'checkout_upgrade_all_otp') {
-            $config = [
-                'headline' => (string) ($data['upgrade_all_otp_headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE'),
-                'subtext' => (string) ($data['upgrade_all_otp_subtext'] ?? ''),
-                'product_list_label' => (string) ($data['upgrade_all_otp_product_list_label'] ?? 'Deliver every {{frequency}}:'),
-                'cta_label' => (string) ($data['upgrade_all_otp_cta_label'] ?? 'SUBSCRIBE & SAVE'),
-                'success_headline' => (string) ($data['upgrade_all_otp_success_headline'] ?? 'You saved {{saving.amount}} by upgrading products to a subscription!'),
-                'undo_link_text' => (string) ($data['upgrade_all_otp_undo_link_text'] ?? 'Undo savings'),
-                'ui' => [
-                    'title_size' => (string) ($data['upgrade_all_otp_title_size'] ?? 'medium'),
-                    'button_kind' => (string) ($data['upgrade_all_otp_button_kind'] ?? 'primary'),
-                    'spacing' => (string) ($data['upgrade_all_otp_spacing'] ?? 'tight'),
-                    'show_border' => (bool) ($data['upgrade_all_otp_show_border'] ?? true),
-                    'padding' => (string) ($data['upgrade_all_otp_padding'] ?? 'base'),
-                ],
             ];
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {
             $config = [
@@ -628,6 +654,8 @@ class CreateBlock extends CreateRecord
             'upgrade_card_cart_subtotal_min', 'upgrade_card_cart_items_count_min',
             'upgrade_card_display_mode', 'upgrade_card_image_url', 'upgrade_card_title_size', 'upgrade_card_button_kind', 'upgrade_card_spacing', 'upgrade_card_show_border',
             'upgrade_mappings_items', 'upgrade_card_plans',
+            'subscription_save_headline', 'subscription_save_subtext', 'subscription_save_frequency', 'subscription_save_cta',
+            'subscription_save_after_headline', 'subscription_save_undo_text', 'subscription_save_mappings',
             'runtime_variables_json',
             'progress_bar_type', 'progress_bar_goal', 'progress_bar_message_below', 'progress_bar_message_achieved',
             'progress_bar_discount_type', 'progress_bar_discount_value',
@@ -660,9 +688,8 @@ class CreateBlock extends CreateRecord
             'upgrade_card_cart_subtotal_min', 'upgrade_card_cart_items_count_min',
             'upgrade_card_display_mode', 'upgrade_card_image_url', 'upgrade_card_title_size', 'upgrade_card_button_kind', 'upgrade_card_spacing', 'upgrade_card_show_border',
             'upgrade_mappings_items', 'upgrade_card_plans',
-            'upgrade_all_otp_headline', 'upgrade_all_otp_subtext', 'upgrade_all_otp_product_list_label', 'upgrade_all_otp_cta_label',
-            'upgrade_all_otp_success_headline', 'upgrade_all_otp_undo_link_text',
-            'upgrade_all_otp_title_size', 'upgrade_all_otp_button_kind', 'upgrade_all_otp_spacing', 'upgrade_all_otp_show_border', 'upgrade_all_otp_padding',
+            'subscription_save_headline', 'subscription_save_subtext', 'subscription_save_frequency', 'subscription_save_cta',
+            'subscription_save_after_headline', 'subscription_save_undo_text', 'subscription_save_mappings',
             'runtime_variables_json',
             'progress_bar_type', 'progress_bar_goal', 'progress_bar_message_below', 'progress_bar_message_achieved',
             'progress_bar_discount_type', 'progress_bar_discount_value',

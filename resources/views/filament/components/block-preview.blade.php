@@ -141,29 +141,23 @@
       </div>
     @endif
 
-    @if($surface === 'checkout' && $type === 'checkout_upgrade_all_otp')
+    @if($surface === 'checkout' && $type === 'checkout_subscription_save')
       @php
-        $headline = (string) ($config['headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE');
-        $subtext = (string) ($config['subtext'] ?? '');
-        $productListLabel = (string) ($config['product_list_label'] ?? 'Deliver every {{frequency}}:');
-        $cta = (string) ($config['cta_label'] ?? 'SUBSCRIBE & SAVE');
+        $subHeadline = (string) ($config['headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE');
+        $subCta = (string) ($config['cta_label'] ?? 'SUBSCRIBE & SAVE');
+        $subMappings = is_array($config['savings_mappings'] ?? null) ? $config['savings_mappings'] : [];
       @endphp
       <div class="border border-gray-200 dark:border-white/10 rounded-lg p-4 space-y-3">
-        @if($headline !== '')
-          <p class="font-semibold text-gray-900 dark:text-white">{{ $headline }}</p>
-        @endif
-        @if($subtext !== '')
-          <p class="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-line">{{ Str::limit($subtext, 200) }}</p>
-        @endif
-        @if($productListLabel !== '')
-          <p class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ str_replace('{{frequency}}', '30 days', $productListLabel) }}</p>
+        <p class="font-semibold text-gray-900 dark:text-white">{{ $subHeadline }}</p>
+        <p class="text-sm text-gray-600 dark:text-gray-300">Upgrade your items to subscription and save up to {{ '{{' }}saving.amount{{ '}}' }} today! (Shown only when cart has no subscriptions.)</p>
+        @if(count($subMappings) > 0)
+          <p class="text-xs text-gray-600 dark:text-gray-300">{{ count($subMappings) }} variant(s) with discount % → savings calculated at checkout.</p>
+        @else
+          <p class="text-xs text-amber-600 dark:text-amber-400">Add variant + discount % mappings to enable.</p>
         @endif
         <button type="button" class="w-full text-sm px-3 py-2 rounded bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900">
-          {{ $cta }}
+          {{ $subCta }}
         </button>
-        <p class="text-xs text-gray-500 dark:text-gray-400">
-          Preview only. Shown in Checkout when cart has no subscriptions; one click converts all eligible items to subscription.
-        </p>
       </div>
     @endif
 

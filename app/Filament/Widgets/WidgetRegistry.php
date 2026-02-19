@@ -22,8 +22,8 @@ final class WidgetRegistry
             'singleton' => false,
             'has_offers' => false,
         ],
-        'checkout_upgrade_all_otp' => [
-            'label' => 'Upgrade all to subscription (OTP cart)',
+        'checkout_subscription_save' => [
+            'label' => 'Subscribe & Save (cart-wide, OTP only)',
             'surfaces' => ['checkout'],
             'singleton' => false,
             'has_offers' => false,

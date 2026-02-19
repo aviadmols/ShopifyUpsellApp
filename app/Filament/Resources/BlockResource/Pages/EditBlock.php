@@ -431,25 +431,6 @@ class EditBlock extends EditRecord
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        try {
-            return $this->mutateFormDataBeforeFillInternal($data);
-        } catch (\Throwable $e) {
-            $id = $this->record?->getKey() ?? '?';
-            $type = (string) ($data['type'] ?? $this->record?->type ?? '?');
-            throw new \RuntimeException(
-                sprintf('EditBlock fill failed (block #%s, type=%s): %s', $id, $type, $e->getMessage()),
-                0,
-                $e
-            );
-        }
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
-     */
-    protected function mutateFormDataBeforeFillInternal(array $data): array
-    {
         $this->record->load('blockOffers.offer.rule');
         $data['runtime_rule_conditions_json'] = $this->record->rule?->conditions
             ? (string) json_encode($this->record->rule->conditions, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
@@ -499,8 +480,8 @@ class EditBlock extends EditRecord
             $data['upgrade_card_show_items'] = (bool) ($ui['show_items'] ?? true);
             $data['upgrade_card_plan_label'] = (string) ($ui['plan_label'] ?? 'Plan');
             $data['upgrade_card_items_max_visible'] = (string) ($ui['items_max_visible'] ?? 3);
-            $data['upgrade_card_plans'] = is_array($config['plans'] ?? null) ? $config['plans'] : [];
-            $data['upgrade_mappings_items'] = self::upgradeMappingsToFormItems(is_array($config['upgrade_mappings'] ?? null) ? $config['upgrade_mappings'] : []);
+            $data['upgrade_card_plans'] = $config['plans'] ?? [];
+            $data['upgrade_mappings_items'] = self::upgradeMappingsToFormItems($config['upgrade_mappings'] ?? []);
 
             // Backfill older AI-created widgets that saved empty config.
             if (trim((string) ($data['upgrade_card_headline'] ?? '')) === '' && $this->record?->ai_generated_name) {
@@ -518,19 +499,14 @@ class EditBlock extends EditRecord
                     $data['upgrade_mappings_items'] = $inferred;
                 }
             }
-        } elseif ($surface === 'checkout' && $type === 'checkout_upgrade_all_otp') {
-            $data['upgrade_all_otp_headline'] = (string) ($config['headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE');
-            $data['upgrade_all_otp_subtext'] = (string) ($config['subtext'] ?? '');
-            $data['upgrade_all_otp_product_list_label'] = (string) ($config['product_list_label'] ?? 'Deliver every {{frequency}}:');
-            $data['upgrade_all_otp_cta_label'] = (string) ($config['cta_label'] ?? 'SUBSCRIBE & SAVE');
-            $data['upgrade_all_otp_success_headline'] = (string) ($config['success_headline'] ?? 'You saved {{saving.amount}} by upgrading products to a subscription!');
-            $data['upgrade_all_otp_undo_link_text'] = (string) ($config['undo_link_text'] ?? 'Undo savings');
-            $ui = is_array($config['ui'] ?? null) ? $config['ui'] : [];
-            $data['upgrade_all_otp_title_size'] = (string) ($ui['title_size'] ?? 'medium');
-            $data['upgrade_all_otp_button_kind'] = (string) ($ui['button_kind'] ?? 'primary');
-            $data['upgrade_all_otp_spacing'] = (string) ($ui['spacing'] ?? 'tight');
-            $data['upgrade_all_otp_show_border'] = (bool) ($ui['show_border'] ?? true);
-            $data['upgrade_all_otp_padding'] = (string) ($ui['padding'] ?? 'base');
+        } elseif ($surface === 'checkout' && $type === 'checkout_subscription_save') {
+            $data['subscription_save_headline'] = (string) ($config['headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE');
+            $data['subscription_save_subtext'] = (string) ($config['subtext'] ?? '');
+            $data['subscription_save_frequency'] = (string) ($config['frequency'] ?? '');
+            $data['subscription_save_cta'] = (string) ($config['cta_label'] ?? 'SUBSCRIBE & SAVE');
+            $data['subscription_save_after_headline'] = (string) ($config['after_headline'] ?? 'You saved {{saving.amount}} by upgrading products to a subscription!');
+            $data['subscription_save_undo_text'] = (string) ($config['undo_link_text'] ?? 'Undo savings');
+            $data['subscription_save_mappings'] = $config['savings_mappings'] ?? [];
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {
             $data['progress_bar_type'] = (string) ($config['progress_bar_type'] ?? 'free_shipping');
             $data['progress_bar_goal'] = (float) ($config['progress_bar_goal'] ?? 100);
@@ -590,6 +566,7 @@ class EditBlock extends EditRecord
             'card_spacing', 'divider_between_cards',
             'headline', 'description', 'cta_label', 'upgrade_mappings', 'plans', 'cart_subtotal_min', 'cart_items_count_min',
             'ui',
+            'mode', 'subtext', 'frequency', 'after_headline', 'undo_link_text', 'savings_mappings',
             'runtime_variables', 'runtimeVariables',
             'progress_bar_enabled', 'progress_bar_type', 'progress_bar_goal', 'progress_bar_message_below',
             'progress_bar_message_achieved', 'progress_bar_discount_type', 'progress_bar_discount_value',
@@ -705,8 +682,7 @@ class EditBlock extends EditRecord
             if (! is_array($m)) {
                 continue;
             }
-            $match = is_array($m['match'] ?? null) ? $m['match'] : [];
-            $ui = is_array($m['ui'] ?? null) ? $m['ui'] : [];
+            $match = $m['match'] ?? [];
             $plansList = is_array($m['plans'] ?? null) ? $m['plans'] : [];
             $firstPlanSellingPlanId = isset($plansList[0]) && is_array($plansList[0])
                 ? (string) ($plansList[0]['selling_plan_id'] ?? '')
@@ -732,15 +708,15 @@ class EditBlock extends EditRecord
                 'mapping_cta_label' => (string) ($m['cta_label'] ?? ''),
                 'mapping_display_mode' => (string) ($m['display_mode'] ?? 'text'),
                 'mapping_image_url' => (string) ($m['image_url'] ?? ''),
-                'mapping_title_size' => (string) ($ui['title_size'] ?? ''),
-                'mapping_button_kind' => (string) ($ui['button_kind'] ?? ''),
-                'mapping_spacing' => (string) ($ui['spacing'] ?? ''),
-                'mapping_show_border' => array_key_exists('show_border', $ui) ? (bool) ($ui['show_border'] ?? false) : null,
-                'mapping_border_radius' => (string) ($ui['border_radius'] ?? ''),
-                'mapping_padding' => (string) ($ui['padding'] ?? ''),
-                'mapping_show_items' => array_key_exists('show_items', $ui) ? (bool) ($ui['show_items'] ?? false) : null,
-                'mapping_plan_label' => (string) ($ui['plan_label'] ?? ''),
-                'mapping_items_max_visible' => array_key_exists('items_max_visible', $ui) ? (int) ($ui['items_max_visible'] ?? 0) : null,
+                'mapping_title_size' => (string) (($m['ui'] ?? [])['title_size'] ?? ''),
+                'mapping_button_kind' => (string) (($m['ui'] ?? [])['button_kind'] ?? ''),
+                'mapping_spacing' => (string) (($m['ui'] ?? [])['spacing'] ?? ''),
+                'mapping_show_border' => array_key_exists('show_border', (array) ($m['ui'] ?? [])) ? (bool) ($m['ui']['show_border']) : null,
+                'mapping_border_radius' => (string) (($m['ui'] ?? [])['border_radius'] ?? ''),
+                'mapping_padding' => (string) (($m['ui'] ?? [])['padding'] ?? ''),
+                'mapping_show_items' => array_key_exists('show_items', (array) ($m['ui'] ?? [])) ? (bool) ($m['ui']['show_items']) : null,
+                'mapping_plan_label' => (string) (($m['ui'] ?? [])['plan_label'] ?? ''),
+                'mapping_items_max_visible' => isset(($m['ui'] ?? [])['items_max_visible']) ? (int) ($m['ui']['items_max_visible']) : null,
                 'quantity' => (int) ($m['quantity'] ?? 1),
                 'plans' => $plansList,
             ];
