@@ -366,8 +366,7 @@ class CheckoutUpsellController extends Controller
         if (in_array($mode, ['cart_wide_offer', 'cart_wide_success'], true)) {
             $saving = $payload['saving'] ?? [];
             if (is_array($saving)) {
-                $amountStr = (string) ($saving['amount_formatted'] ?? $saving['amount'] ?? '0');
-                $vars['savingamount'] = $amountStr;
+                $vars['savingamount'] = (string) (int) round((float) ($saving['amount'] ?? 0));
             }
             if (isset($payload['frequency']) && (string) $payload['frequency'] !== '') {
                 $vars['frequency'] = (string) $payload['frequency'];
@@ -537,8 +536,7 @@ class CheckoutUpsellController extends Controller
             if (in_array($mode, ['cart_wide_offer', 'cart_wide_success'], true)) {
                 $saving = $payload['saving'] ?? [];
                 if (is_array($saving)) {
-                    $amountStr = (string) ($saving['amount_formatted'] ?? $saving['amount'] ?? '0');
-                    $vars['savingamount'] = $amountStr;
+                    $vars['savingamount'] = (string) (int) round((float) ($saving['amount'] ?? 0));
                 }
                 if (isset($payload['frequency']) && (string) $payload['frequency'] !== '') {
                     $vars['frequency'] = (string) $payload['frequency'];

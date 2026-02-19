@@ -463,11 +463,14 @@ function UpgradeCard() {
           ) : null}
           {subtextLines.length > 0 ? (
             <BlockStack spacing="extraTight">
-              {subtextLines.map((line, idx) => (
-                <Text key={idx} size="small" appearance="subdued">
-                  {line.replace(/^[\s\-•]+\s?/, '')}
-                </Text>
-              ))}
+              {subtextLines.map((line, idx) => {
+                const trimmed = line.replace(/^[\s\-•]+\s?/, '').trim();
+                return (
+                  <Text key={idx} size="small" appearance="subdued">
+                    • {trimmed}
+                  </Text>
+                );
+              })}
             </BlockStack>
           ) : null}
           {items.length > 0 ? (
