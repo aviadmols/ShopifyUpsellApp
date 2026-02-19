@@ -451,6 +451,14 @@ class BlockResource extends Resource
                             ->label('Undo link label')
                             ->placeholder('Undo savings')
                             ->maxLength(60),
+                        Forms\Components\Select::make('upgrade_card_cart_wide_undo_style')
+                            ->label('Undo button style')
+                            ->options([
+                                'plain' => 'Link style (plain)',
+                                'secondary' => 'Button – secondary',
+                                'primary' => 'Button – primary',
+                            ])
+                            ->default('plain'),
                         Forms\Components\TextInput::make('upgrade_card_cart_wide_cta_label')
                             ->label('CTA button (offer)')
                             ->placeholder('SUBSCRIBE & SAVE')

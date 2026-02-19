@@ -488,6 +488,7 @@ class EditBlock extends EditRecord
             $data['upgrade_card_cart_wide_frequency'] = (string) ($config['cart_wide_frequency'] ?? '');
             $data['upgrade_card_cart_wide_success_headline'] = (string) ($config['cart_wide_success_headline'] ?? '');
             $data['upgrade_card_cart_wide_undo_label'] = (string) ($config['cart_wide_undo_label'] ?? '');
+            $data['upgrade_card_cart_wide_undo_style'] = (string) ($config['cart_wide_undo_style'] ?? 'plain');
             $data['upgrade_card_cart_wide_cta_label'] = (string) ($config['cart_wide_cta_label'] ?? '');
             $data['upgrade_card_cart_wide_required_attributes'] = self::cartWideRequiredAttributesToFormItems(self::ensureArray($config['cart_wide_required_attributes'] ?? []));
             $data['upgrade_card_cart_wide_mappings'] = self::cartWideMappingsToFormItems(self::ensureArray($config['cart_wide_mappings'] ?? []));

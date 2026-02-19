@@ -347,6 +347,17 @@ class CheckoutUpsellController extends Controller
         $matcher = app(CartLineUpgradeMatcher::class);
         $payload = $matcher->run($config, $context);
 
+        // Show cart_wide_success only when the client just applied the upgrade (not when entering checkout with existing subscription).
+        $mode = $payload['mode'] ?? null;
+        if ($mode === 'cart_wide_success' && ! $request->boolean('upgrade_just_applied')) {
+            $payload = [
+                'enabled' => false,
+                'items' => [],
+                'plans' => [],
+                'actions' => [],
+            ];
+        }
+
         // Pass UI design settings through to the extension renderer (upgrade-card extension).
         if (is_array($config) && isset($config['ui']) && is_array($config['ui'])) {
             $payload['ui'] = $this->interpolateTemplateData($config['ui'], $context, (array) $config);

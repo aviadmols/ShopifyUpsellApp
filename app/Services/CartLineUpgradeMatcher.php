@@ -450,7 +450,7 @@ class CartLineUpgradeMatcher
         }
 
         if ($hasAnySubscription) {
-            return $this->cartWideSuccessPayload($config, $subscriptionLines);
+            return $this->cartWideSuccessPayload($config, $subscriptionLines, $subtotal, $lineItems);
         }
 
         // Do not show upgrade offer if any line in cart has a selling plan (cart must be fully OTP).
@@ -464,9 +464,10 @@ class CartLineUpgradeMatcher
     /**
      * @param  array<string, mixed>  $config
      * @param  array<int, array{line: array, mapping: array}>  $subscriptionLines
+     * @param  array<int, array<string, mixed>>  $allLines
      * @return array{enabled: bool, items: array, plans: array, actions: array, mode: string, headline?: string, undo_label?: string}
      */
-    private function cartWideSuccessPayload(array $config, array $subscriptionLines): array
+    private function cartWideSuccessPayload(array $config, array $subscriptionLines, float $subtotal, array $allLines): array
     {
         $savingAmount = 0.0;
         $actions = [];
@@ -474,7 +475,7 @@ class CartLineUpgradeMatcher
         foreach ($subscriptionLines as $entry) {
             $line = $entry['line'];
             $mapping = $entry['mapping'];
-            $lineTotal = $this->lineTotalFromLine($line, 0, []);
+            $lineTotal = $this->lineTotalFromLine($line, $subtotal, $allLines);
             $discountPercent = (float) ($mapping['discount_percent'] ?? 0);
             $savingAmount += $lineTotal * ($discountPercent / 100);
             $actions[] = [
@@ -491,6 +492,10 @@ class CartLineUpgradeMatcher
         }
         $headline = (string) ($config['cart_wide_success_headline'] ?? 'You saved {{saving.amount}} by upgrading products to a subscription!');
         $undoLabel = (string) ($config['cart_wide_undo_label'] ?? 'Undo savings');
+        $undoStyle = (string) ($config['cart_wide_undo_style'] ?? 'plain');
+        if (! in_array($undoStyle, ['plain', 'secondary', 'primary'], true)) {
+            $undoStyle = 'plain';
+        }
         return [
             'enabled' => true,
             'items' => $items,
@@ -499,6 +504,7 @@ class CartLineUpgradeMatcher
             'mode' => 'cart_wide_success',
             'headline' => $headline,
             'undo_label' => $undoLabel,
+            'undo_style' => $undoStyle,
             'saving' => ['amount' => $savingAmount, 'amount_formatted' => $this->formatMoney($savingAmount)],
         ];
     }

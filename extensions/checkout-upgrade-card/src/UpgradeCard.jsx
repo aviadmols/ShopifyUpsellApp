@@ -187,6 +187,7 @@ function UpgradeCard() {
   const [errorMessage, setErrorMessage] = useState('');
   const fetchPayloadRef = useRef(() => {});
   const fetchTimeoutRef = useRef(null);
+  const upgradeJustAppliedRef = useRef(false);
 
   const instructions = api?.instructions ?? {};
   const linesInstructions = instructions?.lines ?? {};
@@ -220,6 +221,7 @@ function UpgradeCard() {
       line_items: lineItemsNormalized,
       ...(Object.keys(attributesForRequest).length > 0 && { attributes: attributesForRequest }),
       ...contextPayload,
+      ...(upgradeJustAppliedRef.current && { upgrade_just_applied: true }),
     };
 
     fetch(`${apiUrl}/api/checkout/upgrade-card`, {
@@ -240,6 +242,9 @@ function UpgradeCard() {
       })
       .then((data) => {
         if (data && typeof data === 'object') {
+          if (data.mode === 'cart_wide_success') {
+            upgradeJustAppliedRef.current = false;
+          }
           setPayload(data);
           const plans = data.plans;
           if (Array.isArray(plans) && plans.length > 0 && !selectedPlanId) {
@@ -330,6 +335,7 @@ function UpgradeCard() {
           await applyCartLinesChange(change);
         }
       }
+      upgradeJustAppliedRef.current = true;
       setPayload((prev) => (prev ? { ...prev, enabled: false } : prev));
       sendClickLog(apiUrl, secret, {
         shop,
@@ -338,6 +344,7 @@ function UpgradeCard() {
         click_target: 'upgrade_cta',
         meta: { source: 'checkout_upgrade_card' },
       });
+      fetchPayloadRef.current?.();
     } catch (err) {
       setErrorMessage(err?.message || 'Update failed.');
     } finally {
@@ -359,6 +366,8 @@ function UpgradeCard() {
   const ctaLabel = payload?.cta_label ?? 'Upgrade';
   const frequency = payload?.frequency ?? '';
   const undoLabel = payload?.undo_label ?? 'Undo savings';
+  const undoStyleRaw = payload?.undo_style ?? 'plain';
+  const undoKind = ['plain', 'secondary', 'primary'].includes(String(undoStyleRaw)) ? String(undoStyleRaw) : 'plain';
   const ui = payload?.ui && typeof payload.ui === 'object' ? payload.ui : {};
   const headlineSize = ['small', 'medium', 'large'].includes(String(ui.title_size)) ? String(ui.title_size) : 'medium';
   const buttonKind = ['primary', 'secondary', 'plain'].includes(String(ui.button_kind)) ? String(ui.button_kind) : 'secondary';
@@ -401,7 +410,7 @@ function UpgradeCard() {
             </Text>
           ) : null}
           {!cartEditable ? null : (
-            <Button kind="plain" onPress={runActions} loading={applying} disabled={applying} accessibilityLabel={undoLabel}>
+            <Button kind={undoKind} onPress={runActions} loading={applying} disabled={applying} accessibilityLabel={undoLabel}>
               {undoLabel}
             </Button>
           )}
