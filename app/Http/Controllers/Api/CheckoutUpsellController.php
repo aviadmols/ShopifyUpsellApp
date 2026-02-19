@@ -402,7 +402,8 @@ class CheckoutUpsellController extends Controller
             'actions_count' => count($payload['actions'] ?? []),
         ]);
 
-        $this->logWidgetView($request, $shop, $block, $context, true, true);
+        $hasContent = (bool) ($payload['enabled'] ?? false);
+        $this->logWidgetView($request, $shop, $block, $context, $hasContent, $hasContent);
         return response()->json($payload);
     }
 
@@ -444,7 +445,8 @@ class CheckoutUpsellController extends Controller
                     'block_error' => $payload['block_error'] ?? null,
                 ]);
 
-                $this->logWidgetView($request, $shop, $block, $context, true, true);
+                $hasOffers = count($payload['offers'] ?? []) > 0;
+                $this->logWidgetView($request, $shop, $block, $context, $hasOffers, $hasOffers);
                 return response()->json($payload);
             } catch (\Throwable $e) {
                 $this->logExt('checkout_offers_block_upsell_error', [
@@ -572,7 +574,8 @@ class CheckoutUpsellController extends Controller
                 'actions_count' => count($payload['actions'] ?? []),
             ]);
 
-            $this->logWidgetView($request, $shop, $block, $context, true, true);
+            $hasContent = (bool) ($payload['enabled'] ?? false);
+            $this->logWidgetView($request, $shop, $block, $context, $hasContent, $hasContent);
             return response()->json([
                 'offers' => [],
                 'blocks' => [
