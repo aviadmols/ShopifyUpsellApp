@@ -82,7 +82,14 @@ class CartLineUpgradeMatcher
         $sku = trim((string) ($line['sku'] ?? ''));
         if (isset($match['sku_regex']) && (string) $match['sku_regex'] !== '') {
             $regex = (string) $match['sku_regex'];
-            if ($sku === '' || @preg_match($regex, $sku) !== 1) {
+            $matched = $sku !== '' && @preg_match($regex, $sku) === 1;
+            if (! $matched) {
+                if (preg_last_error() !== PREG_NO_ERROR) {
+                    Log::channel('checkout_extension')->warning('cart_line_match_sku_regex_error', [
+                        'sku_regex' => $regex,
+                        'preg_error' => preg_last_error(),
+                    ]);
+                }
                 return false;
             }
         }
@@ -188,7 +195,8 @@ class CartLineUpgradeMatcher
 
         $items = [];
         $actions = [];
-        $usedLineIds = [];
+        /** @var array{matched_quantity: string, matched_variant_id: string, matched_product_id: string, matched_is_subscription: string, matched_selling_plan_id: string, matched_product_title: string, matched_variant_title: string}|null $matched */
+        $matched = null;
         /** @var array{headline: string, description: string, cta_label: string}|null $firstOverrides */
         $firstOverrides = null;
         /** @var array<string, mixed>|null $firstMatchedMapping */
@@ -232,13 +240,13 @@ class CartLineUpgradeMatcher
 
                 $items[] = [
                     'line_id' => $lineId,
-                    'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
+                    'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? $line['variant_title'] ?? $line['variantTitle'] ?? '',
                     'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
                 ];
 
                 // Capture first-match context for template placeholders (matched_quantity, matched_variant_id, etc.).
-                if (! isset($out['matched'])) {
-                    $out['matched'] = [
+                if ($matched === null) {
+                    $matched = [
                         'matched_quantity' => (string) $lineQty,
                         'matched_variant_id' => $lineVariantId,
                         'matched_product_id' => $lineProductId,
@@ -306,7 +314,6 @@ class CartLineUpgradeMatcher
                     $firstMatchedMapping = $mapping;
                 }
 
-                $usedLineIds[$lineId] = true;
                 break;
             }
         }
@@ -344,6 +351,9 @@ class CartLineUpgradeMatcher
             'plans' => $plansPayload,
             'actions' => $actions,
         ];
+        if ($matched !== null) {
+            $out['matched'] = $matched;
+        }
         $headline = (string) ($config['headline'] ?? '');
         $description = (string) ($config['description'] ?? '');
         $cta = (string) ($config['cta_label'] ?? '');
@@ -524,7 +534,7 @@ class CartLineUpgradeMatcher
             ];
             $items[] = [
                 'line_id' => $line['id'],
-                'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
+                'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? $line['variant_title'] ?? $line['variantTitle'] ?? '',
                 'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
                 'frequency' => (string) ($mapping['frequency'] ?? $defaultFrequency),
                 'line_saving' => $lineSaving,
@@ -584,7 +594,7 @@ class CartLineUpgradeMatcher
             $itemFrequency = (string) ($mapping['frequency'] ?? $defaultFrequency);
             $items[] = [
                 'line_id' => $line['id'],
-                'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
+                'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? $line['variant_title'] ?? $line['variantTitle'] ?? '',
                 'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
                 'frequency' => $itemFrequency,
                 'line_saving' => $lineSaving,
@@ -617,7 +627,7 @@ class CartLineUpgradeMatcher
     }
 
     /**
-     * Get line total (cost) for one line. Uses cost.totalAmount / line_total if present, else proportional subtotal.
+     * Get line total (cost) for one line. Uses cost.totalAmount (number or Money.amount) / line_total if present, else proportional subtotal.
      *
      * @param  array<string, mixed>  $line
      * @param  array<int, array<string, mixed>>  $allLines
@@ -625,8 +635,14 @@ class CartLineUpgradeMatcher
     private function lineTotalFromLine(array $line, float $subtotal, array $allLines): float
     {
         $cost = $line['cost'] ?? null;
-        if (is_array($cost) && isset($cost['totalAmount'])) {
-            return (float) $cost['totalAmount'];
+        if (is_array($cost) && array_key_exists('totalAmount', $cost)) {
+            $ta = $cost['totalAmount'];
+            if (is_array($ta) && isset($ta['amount']) && is_numeric($ta['amount'])) {
+                return (float) $ta['amount'];
+            }
+            if (is_numeric($ta)) {
+                return (float) $ta;
+            }
         }
         if (isset($line['line_total']) && is_numeric($line['line_total'])) {
             return (float) $line['line_total'];
@@ -795,6 +811,9 @@ class CartLineUpgradeMatcher
     }
 
     /**
+     * Extract line item properties/attributes to a flat key=>value map. Supports both associative arrays
+     * and list-of-kv (Checkout UI: [{key, value}]). Keeps keys even when value is empty (for property_exists checks).
+     *
      * @param  array<string, mixed>  $line
      * @return array<string, string>
      */
@@ -810,11 +829,25 @@ class CartLineUpgradeMatcher
                 continue;
             }
             $out = [];
-            foreach ($candidate as $k => $v) {
-                $key = trim((string) $k);
-                $value = trim((string) $v);
-                if ($key !== '' && $value !== '') {
-                    $out[$key] = $value;
+            $isAssoc = array_keys($candidate) !== range(0, count($candidate) - 1);
+            if ($isAssoc) {
+                foreach ($candidate as $k => $v) {
+                    $key = trim((string) $k);
+                    $value = is_scalar($v) ? trim((string) $v) : '';
+                    if ($key !== '') {
+                        $out[$key] = $value;
+                    }
+                }
+            } else {
+                foreach ($candidate as $row) {
+                    if (! is_array($row)) {
+                        continue;
+                    }
+                    $key = trim((string) ($row['key'] ?? $row['name'] ?? ''));
+                    $value = trim((string) ($row['value'] ?? ''));
+                    if ($key !== '') {
+                        $out[$key] = $value;
+                    }
                 }
             }
             if ($out !== []) {

@@ -17,7 +17,7 @@ import {
   View,
   Image,
 } from '@shopify/ui-extensions-react/checkout';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 
 const BUILD_ID = 'zyg-upgrade-card-20260215';
 const DEFAULT_API_URL = 'https://shopifyupsellapp-production.up.railway.app';
@@ -408,6 +408,21 @@ function UpgradeCard() {
   const isCartWideSuccess = mode === 'cart_wide_success';
   const showCard = enabled && (items.length > 0 || isCartWideOffer || isCartWideSuccess);
 
+  const mergedItems = useMemo(() => {
+    const normalized = normalizeLineItemsForApi(lineItems);
+    const byLineId = {};
+    normalized.forEach((l) => {
+      if (l.id != null) byLineId[String(l.id)] = l;
+    });
+    return items.map((item) => {
+      const fromCart = byLineId[String(item.line_id)];
+      const pt = (fromCart?.product_title ?? item.product_title ?? item.title ?? '').trim();
+      const vt = (fromCart?.variant_title ?? item.variant_title ?? '').trim();
+      const displayName = (pt && pt !== 'Item' ? pt : vt) || vt;
+      return { ...item, product_title: displayName, variant_title: vt };
+    });
+  }, [items, lineItems]);
+
   if (!showCard) {
     return null;
   }
@@ -420,8 +435,8 @@ function UpgradeCard() {
     value: String(p.id ?? p.value ?? ''),
     label: p.label ?? p.name ?? String(p.id ?? p.value ?? ''),
   }));
-  const visibleItems = items.slice(0, itemsMaxVisible);
-  const extraCount = items.length - itemsMaxVisible;
+  const visibleItems = mergedItems.slice(0, itemsMaxVisible);
+  const extraCount = mergedItems.length - itemsMaxVisible;
   const ctaDisabled = !cartEditable || applying;
 
   if (isCartWideSuccess) {
@@ -467,13 +482,15 @@ function UpgradeCard() {
               ))}
             </BlockStack>
           ) : null}
-          {items.length > 0 ? (
+          {mergedItems.length > 0 ? (
             <BlockStack spacing="extraTight">
-              {items.map((item, idx) => (
+              <Text size="small" emphasis="bold">
+                Items:
+              </Text>
+              {mergedItems.map((item, idx) => (
                 <Text key={item.line_id ?? idx} size="small" appearance="subdued">
-                  {item.product_title ?? item.title ?? 'Item'}
-                  {item.variant_title ? ` — ${item.variant_title}` : ''}
-                  {item.frequency ? ` · Every ${item.frequency}` : ''}
+                  {item.product_title}
+                  {item.frequency ? ` - ${item.frequency}` : ''}
                 </Text>
               ))}
             </BlockStack>
@@ -520,12 +537,19 @@ function UpgradeCard() {
         ) : null}
         {!imageMode && showItems ? (
           <BlockStack spacing="extraTight">
-            {visibleItems.map((item, idx) => (
-              <Text key={item.line_id ?? idx} size="small" appearance="subdued">
-                {item.product_title ?? item.title ?? 'Item'}
-                {item.variant_title ? ` — ${item.variant_title}` : ''}
-              </Text>
-            ))}
+            <Text size="small" emphasis="bold">
+              Items:
+            </Text>
+            {visibleItems.map((item, idx) => {
+              const productName = (item.product_title ?? item.title ?? '').trim();
+              const variantName = (item.variant_title ?? '').trim();
+              const display = productName ? (variantName ? `${productName} - ${variantName}` : productName) : variantName;
+              return (
+                <Text key={item.line_id ?? idx} size="small" appearance="subdued">
+                  {display || ''}
+                </Text>
+              );
+            })}
             {extraCount > 0 ? (
               <Text size="small" appearance="subdued">
                 See {extraCount} more item{extraCount !== 1 ? 's' : ''}
