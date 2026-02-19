@@ -83,7 +83,8 @@ class BlockResource extends Resource
                     ->schema([
                         Forms\Components\Placeholder::make('preview_live')
                             ->label('')
-                            ->content(function (Get $get): \Illuminate\Support\HtmlString {
+                            ->content(function (Get $get) {
+                                $result = null;
                                 try {
                                     $state = CreateBlock::getStateFromGet($get);
                                     $surface = (string) ($state['surface'] ?? '');
@@ -102,13 +103,20 @@ class BlockResource extends Resource
                                         'preview_offers' => $previewOffers,
                                     ])->render();
 
-                                    return new \Illuminate\Support\HtmlString($html);
+                                    $result = new \Illuminate\Support\HtmlString(is_string($html) ? $html : '');
                                 } catch (\Throwable $e) {
-                                    return new \Illuminate\Support\HtmlString(
+                                    $result = new \Illuminate\Support\HtmlString(
                                         '<div class="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-400">'
                                         . '<p class="font-medium">Preview error</p><p class="mt-1">' . e($e->getMessage()) . '</p></div>'
                                     );
                                 }
+                                // Never return an array — causes "Undefined array key 0" in Illuminate\View\Concerns\ManagesComponents.
+                                if (is_array($result)) {
+                                    return new \Illuminate\Support\HtmlString('');
+                                }
+                                return $result instanceof \Illuminate\Contracts\Support\Htmlable
+                                    ? $result
+                                    : new \Illuminate\Support\HtmlString(is_string($result) ? $result : '');
                             }),
                     ])
                     ->collapsible()
@@ -488,7 +496,7 @@ class BlockResource extends Resource
                     ->schema([
                         Forms\Components\Placeholder::make('upgrade_flow_view')
                             ->label('')
-                            ->content(function (Get $get): \Illuminate\Support\HtmlString {
+                            ->content(function (Get $get) {
                                 $items = $get('upgrade_mappings_items');
                                 $items = is_array($items) ? array_values($items) : [];
                                 if ($items === []) {
@@ -534,16 +542,21 @@ class BlockResource extends Resource
                                     $next = isset($itemsArr[$idx + 1]) ? 'Step '.($idx + 2) : 'End';
                                     $steps[] = '<div class="border border-gray-200 rounded p-2 mb-2 text-sm"><strong>Step '.$stepNum.':</strong> When cart: '.e($whenStr).' → Offer: '.e($offerStr).'<br><span class="text-gray-500">Next: '.e($next).'</span></div>';
                                 }
-                                return new \Illuminate\Support\HtmlString('<div class="space-y-1">'.implode('', $steps).'</div>');
+                                $result = new \Illuminate\Support\HtmlString('<div class="space-y-1">'.implode('', $steps).'</div>');
+                                return is_array($result) ? new \Illuminate\Support\HtmlString('') : $result;
                             }),
                     ])
                     ->collapsible()
                     ->collapsed(),
                 Forms\Components\Repeater::make('upgrade_mappings_items')
                     ->label('Upgrade mappings')
+                    ->default([])
                     ->collapsible()
                     ->collapsed()
                     ->itemLabel(function (array $state): string {
+                                if (! is_array($state)) {
+                                    return 'Item';
+                                }
                                 $when = [];
                                 if (! empty($state['match_product_id'])) {
                                     $when[] = 'Product '.preg_replace('/\D/', '', (string) $state['match_product_id']) ?: $state['match_product_id'];
@@ -569,8 +582,9 @@ class BlockResource extends Resource
                                 $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
                                 $offer = (string) ($state['target_variant_id'] ?? '');
                                 $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
-                                $plans = $state['plans'] ?? [];
-                                if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
+                                $plansRaw = $state['plans'] ?? [];
+                                $plans = is_array($plansRaw) ? array_values($plansRaw) : [];
+                                if (isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
                                     $offerStr .= ' · '.e((string) $plans[0]['label']);
                                 }
                                 return 'When: '.$whenStr.' → Offer: '.$offerStr;
@@ -609,17 +623,16 @@ class BlockResource extends Resource
                                 $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
                                 $offer = (string) $get('target_variant_id');
                                 $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
-                                $plans = $get('plans');
-                                $firstPlanLabel = null;
-                                if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
-                                    $firstPlanLabel = (string) $plans[0]['label'];
-                                }
+                                $plansRaw = $get('plans');
+                                $plans = is_array($plansRaw) ? array_values($plansRaw) : [];
+                                $firstPlanLabel = isset($plans[0]['label']) && (string) $plans[0]['label'] !== '' ? (string) $plans[0]['label'] : null;
                                 if ($firstPlanLabel !== null) {
                                     $offerStr .= ' · '.$firstPlanLabel;
                                 }
-                                return new \Illuminate\Support\HtmlString(
+                                $result = new \Illuminate\Support\HtmlString(
                                     '<div class="text-sm"><strong>When:</strong> '.e($whenStr).'</div><div class="text-sm mt-1"><strong>Offer:</strong> '.e($offerStr).'</div>'
                                 );
+                                return is_array($result) ? new \Illuminate\Support\HtmlString('') : $result;
                             }),
                         Forms\Components\Section::make('Match (when to show this upgrade)')
                             ->schema([
@@ -896,6 +909,7 @@ class BlockResource extends Resource
                     ->maxLength(60),
                 Forms\Components\Repeater::make('subscription_save_mappings')
                     ->label('Variant → discount (for savings calculation)')
+                    ->default([])
                     ->helperText('Each row: variant that has a subscription option and the discount % the customer gets. Used to compute and show total savings.')
                     ->schema([
                         Forms\Components\TextInput::make('variant_id')
