@@ -162,8 +162,8 @@ class CartLineUpgradeMatcher
         }
 
         $cartWideEnabled = ! empty($config['cart_wide_enabled']);
-        $cartWideMappings = $config['cart_wide_mappings'] ?? [];
-        if ($cartWideEnabled && is_array($cartWideMappings) && $cartWideMappings !== []) {
+        $cartWideMappings = $this->ensureArrayFromConfig($config['cart_wide_mappings'] ?? []);
+        if ($cartWideEnabled && $cartWideMappings !== []) {
             return $this->runCartWide($config, $context, $lineItems, $subtotal);
         }
 
@@ -363,7 +363,11 @@ class CartLineUpgradeMatcher
     }
 
     /**
-     * Cart-wide subscription: show only when cart has no subscriptions; offer to upgrade all matching lines. After upgrade, show success + undo.
+     * Cart-wide subscription (OTP only):
+     * 1) Run when zone loads: require that every line item has selling_plan_id null (no product with a subscription in cart).
+     * 2) Match cart variants to cart_wide_mappings; collect matching one-time lines.
+     * 3) If any cart line has a plan → do not show offer (success or empty only).
+     * 4) Otherwise show offer: total discount for all matched lines, one "Upgrade" click turns them all to subscription.
      *
      * @param  array<string, mixed>  $config
      * @param  array<string, mixed>  $context
@@ -371,7 +375,7 @@ class CartLineUpgradeMatcher
      */
     private function runCartWide(array $config, array $context, array $lineItems, float $subtotal): array
     {
-        $rawMappings = $config['cart_wide_mappings'] ?? [];
+        $rawMappings = $this->ensureArrayFromConfig($config['cart_wide_mappings'] ?? []);
         $variantToMapping = [];
         $defaultFrequency = (string) ($config['cart_wide_frequency'] ?? '');
         foreach ($rawMappings as $m) {
@@ -399,9 +403,18 @@ class CartLineUpgradeMatcher
             return $this->emptyPayload($config);
         }
 
-        $requiredAttrs = $config['cart_wide_required_attributes'] ?? [];
-        if (is_array($requiredAttrs) && $requiredAttrs !== [] && ! $this->cartWideCheckoutAttributesMatch($context, $requiredAttrs)) {
+        $requiredAttrs = $this->ensureArrayFromConfig($config['cart_wide_required_attributes'] ?? []);
+        if ($requiredAttrs !== [] && ! $this->cartWideCheckoutAttributesMatch($context, $requiredAttrs)) {
             return $this->emptyPayload($config);
+        }
+
+        // 1) Check: show offer only when ALL line items have selling_plan_id null (entire cart is one-time).
+        $anyCartLineHasPlan = false;
+        foreach ($lineItems as $line) {
+            if (is_array($line) && $this->lineHasSellingPlan($line)) {
+                $anyCartLineHasPlan = true;
+                break;
+            }
         }
 
         $hasAnySubscription = false;
@@ -440,7 +453,8 @@ class CartLineUpgradeMatcher
             return $this->cartWideSuccessPayload($config, $subscriptionLines);
         }
 
-        if ($oneTimeMatchingLines === []) {
+        // Do not show upgrade offer if any line in cart has a selling plan (cart must be fully OTP).
+        if ($anyCartLineHasPlan || $oneTimeMatchingLines === []) {
             return $this->emptyPayload($config);
         }
 
@@ -621,6 +635,24 @@ class CartLineUpgradeMatcher
             return $m ? $m[0] : $id;
         }
         return preg_replace('/\D/', '', $id) ?: $id;
+    }
+
+    /**
+     * Ensure config value is an array (may be stored as JSON string in DB).
+     *
+     * @param  mixed  $value
+     * @return array<int, mixed>
+     */
+    private function ensureArrayFromConfig(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return [];
     }
 
     /**
