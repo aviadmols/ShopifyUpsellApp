@@ -480,8 +480,8 @@ class EditBlock extends EditRecord
             $data['upgrade_card_show_items'] = (bool) ($ui['show_items'] ?? true);
             $data['upgrade_card_plan_label'] = (string) ($ui['plan_label'] ?? 'Plan');
             $data['upgrade_card_items_max_visible'] = (string) ($ui['items_max_visible'] ?? 3);
-            $data['upgrade_card_plans'] = $config['plans'] ?? [];
-            $data['upgrade_mappings_items'] = self::upgradeMappingsToFormItems($config['upgrade_mappings'] ?? []);
+            $data['upgrade_card_plans'] = is_array($config['plans'] ?? null) ? $config['plans'] : [];
+            $data['upgrade_mappings_items'] = self::upgradeMappingsToFormItems(is_array($config['upgrade_mappings'] ?? null) ? $config['upgrade_mappings'] : []);
 
             // Backfill older AI-created widgets that saved empty config.
             if (trim((string) ($data['upgrade_card_headline'] ?? '')) === '' && $this->record?->ai_generated_name) {
@@ -686,7 +686,8 @@ class EditBlock extends EditRecord
             if (! is_array($m)) {
                 continue;
             }
-            $match = $m['match'] ?? [];
+            $match = is_array($m['match'] ?? null) ? $m['match'] : [];
+            $ui = is_array($m['ui'] ?? null) ? $m['ui'] : [];
             $plansList = is_array($m['plans'] ?? null) ? $m['plans'] : [];
             $firstPlanSellingPlanId = isset($plansList[0]) && is_array($plansList[0])
                 ? (string) ($plansList[0]['selling_plan_id'] ?? '')
@@ -712,15 +713,15 @@ class EditBlock extends EditRecord
                 'mapping_cta_label' => (string) ($m['cta_label'] ?? ''),
                 'mapping_display_mode' => (string) ($m['display_mode'] ?? 'text'),
                 'mapping_image_url' => (string) ($m['image_url'] ?? ''),
-                'mapping_title_size' => (string) (($m['ui'] ?? [])['title_size'] ?? ''),
-                'mapping_button_kind' => (string) (($m['ui'] ?? [])['button_kind'] ?? ''),
-                'mapping_spacing' => (string) (($m['ui'] ?? [])['spacing'] ?? ''),
-                'mapping_show_border' => array_key_exists('show_border', (array) ($m['ui'] ?? [])) ? (bool) ($m['ui']['show_border']) : null,
-                'mapping_border_radius' => (string) (($m['ui'] ?? [])['border_radius'] ?? ''),
-                'mapping_padding' => (string) (($m['ui'] ?? [])['padding'] ?? ''),
-                'mapping_show_items' => array_key_exists('show_items', (array) ($m['ui'] ?? [])) ? (bool) ($m['ui']['show_items']) : null,
-                'mapping_plan_label' => (string) (($m['ui'] ?? [])['plan_label'] ?? ''),
-                'mapping_items_max_visible' => isset(($m['ui'] ?? [])['items_max_visible']) ? (int) ($m['ui']['items_max_visible']) : null,
+                'mapping_title_size' => (string) ($ui['title_size'] ?? ''),
+                'mapping_button_kind' => (string) ($ui['button_kind'] ?? ''),
+                'mapping_spacing' => (string) ($ui['spacing'] ?? ''),
+                'mapping_show_border' => array_key_exists('show_border', $ui) ? (bool) ($ui['show_border'] ?? false) : null,
+                'mapping_border_radius' => (string) ($ui['border_radius'] ?? ''),
+                'mapping_padding' => (string) ($ui['padding'] ?? ''),
+                'mapping_show_items' => array_key_exists('show_items', $ui) ? (bool) ($ui['show_items'] ?? false) : null,
+                'mapping_plan_label' => (string) ($ui['plan_label'] ?? ''),
+                'mapping_items_max_visible' => array_key_exists('items_max_visible', $ui) ? (int) ($ui['items_max_visible'] ?? 0) : null,
                 'quantity' => (int) ($m['quantity'] ?? 1),
                 'plans' => $plansList,
             ];
