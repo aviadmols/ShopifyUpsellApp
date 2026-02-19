@@ -172,6 +172,27 @@ class BlockResource extends Resource
                         }
                         return $out;
                     }),
+
+                Forms\Components\Section::make('Debug: full block config (JSON)')
+                    ->description('Full JSON of all settings: config (upgrade_mappings with match.subscription OTP/subscription, cart_wide_mappings with selling_plan_id), rule_id, and all block attributes.')
+                    ->collapsible()
+                    ->collapsed()
+                    ->visible(fn (?Block $record): bool => $record !== null)
+                    ->schema([
+                        Forms\Components\Placeholder::make('block_full_json')
+                            ->label('')
+                            ->content(function (?Block $record): \Illuminate\Support\HtmlString {
+                                if ($record === null) {
+                                    return new \Illuminate\Support\HtmlString('');
+                                }
+                                $full = $record->toArray();
+                                $json = json_encode($full, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+                                return new \Illuminate\Support\HtmlString(
+                                    '<pre class="p-4 bg-gray-100 dark:bg-gray-800 rounded overflow-auto text-xs font-mono" style="max-height:420px">' . e($json) . '</pre>'
+                                );
+                            }),
+                    ])
+                    ->columnSpanFull(),
             ]);
     }
 
