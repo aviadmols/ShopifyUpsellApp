@@ -431,6 +431,25 @@ class EditBlock extends EditRecord
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
+        try {
+            return $this->mutateFormDataBeforeFillInternal($data);
+        } catch (\Throwable $e) {
+            $id = $this->record?->getKey() ?? '?';
+            $type = (string) ($data['type'] ?? $this->record?->type ?? '?');
+            throw new \RuntimeException(
+                sprintf('EditBlock fill failed (block #%s, type=%s): %s', $id, $type, $e->getMessage()),
+                0,
+                $e
+            );
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeFillInternal(array $data): array
+    {
         $this->record->load('blockOffers.offer.rule');
         $data['runtime_rule_conditions_json'] = $this->record->rule?->conditions
             ? (string) json_encode($this->record->rule->conditions, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
