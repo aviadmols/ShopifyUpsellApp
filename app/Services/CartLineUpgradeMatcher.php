@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Log;
+
 /**
  * Matches cart lines to upgrade mappings (subscription / bundle_swap) and builds
  * items list + actions for the upgrade card API.
@@ -12,6 +14,9 @@ namespace App\Services;
  */
 class CartLineUpgradeMatcher
 {
+    /** Line item property key set by the extension when the user upgrades via the cart-wide module. */
+    private const LINE_ATTR_UPGRADED_BY_APP = '_zyg_upgraded_subscription';
+
     /**
      * Normalize variant ID to Shopify GID for applyCartLinesChange (merchandiseId).
      */
@@ -155,9 +160,11 @@ class CartLineUpgradeMatcher
         $subtotalMin = isset($config['cart_subtotal_min']) ? (float) $config['cart_subtotal_min'] : null;
         $itemsCountMin = isset($config['cart_items_count_min']) ? (int) $config['cart_items_count_min'] : null;
         if ($subtotalMin !== null && $subtotal < $subtotalMin) {
+            Log::channel('checkout_extension')->info('cart_wide_empty_reason', ['reason' => 'subtotal_min', 'subtotal' => $subtotal, 'min' => $subtotalMin]);
             return $this->emptyPayload($config);
         }
         if ($itemsCountMin !== null && count($lineItems) < $itemsCountMin) {
+            Log::channel('checkout_extension')->info('cart_wide_empty_reason', ['reason' => 'items_count_min', 'count' => count($lineItems), 'min' => $itemsCountMin]);
             return $this->emptyPayload($config);
         }
 
@@ -167,8 +174,15 @@ class CartLineUpgradeMatcher
             return $this->runCartWide($config, $context, $lineItems, $subtotal);
         }
 
+        if ($cartWideEnabled && $cartWideMappings === []) {
+            Log::channel('checkout_extension')->info('cart_wide_empty_reason', ['reason' => 'cart_wide_mappings_empty_after_decode', 'line_items_count' => count($lineItems)]);
+        } elseif (! $cartWideEnabled) {
+            Log::channel('checkout_extension')->info('cart_wide_empty_reason', ['reason' => 'cart_wide_disabled']);
+        }
+
         $mappings = $config['upgrade_mappings'] ?? [];
         if (! is_array($mappings) || $mappings === []) {
+            Log::channel('checkout_extension')->info('cart_wide_empty_reason', ['reason' => 'no_upgrade_mappings', 'cart_wide_enabled' => $cartWideEnabled]);
             return $this->emptyPayload($config);
         }
 
@@ -400,11 +414,13 @@ class CartLineUpgradeMatcher
             ];
         }
         if ($variantToMapping === []) {
+            Log::channel('checkout_extension')->info('cart_wide_empty_reason', ['reason' => 'variant_to_mapping_empty', 'raw_mappings_count' => count($rawMappings)]);
             return $this->emptyPayload($config);
         }
 
         $requiredAttrs = $this->ensureArrayFromConfig($config['cart_wide_required_attributes'] ?? []);
         if ($requiredAttrs !== [] && ! $this->cartWideCheckoutAttributesMatch($context, $requiredAttrs)) {
+            Log::channel('checkout_extension')->info('cart_wide_empty_reason', ['reason' => 'required_attributes_no_match']);
             return $this->emptyPayload($config);
         }
 
@@ -450,11 +466,31 @@ class CartLineUpgradeMatcher
         }
 
         if ($hasAnySubscription) {
+            $hasUpgradedByUs = false;
+            foreach ($subscriptionLines as $entry) {
+                if ($this->lineHasUpgradedByUs($entry['line'])) {
+                    $hasUpgradedByUs = true;
+                    break;
+                }
+            }
+            if (! $hasUpgradedByUs) {
+                return $this->emptyPayload($config);
+            }
             return $this->cartWideSuccessPayload($config, $subscriptionLines, $subtotal, $lineItems);
         }
 
         // Do not show upgrade offer if any line in cart has a selling plan (cart must be fully OTP).
         if ($anyCartLineHasPlan || $oneTimeMatchingLines === []) {
+            $lineVariantIds = array_map(function ($line) {
+                return $this->normalizeId((string) ($line['variant_id'] ?? $line['merchandiseId'] ?? ''));
+            }, array_values(array_filter($lineItems, 'is_array')));
+            Log::channel('checkout_extension')->info('cart_wide_empty_reason', [
+                'reason' => 'no_offer_show',
+                'any_cart_line_has_plan' => $anyCartLineHasPlan,
+                'one_time_matching_count' => count($oneTimeMatchingLines),
+                'mapping_variant_ids' => array_keys($variantToMapping),
+                'line_variant_ids_normalized' => $lineVariantIds,
+            ]);
             return $this->emptyPayload($config);
         }
 
@@ -472,12 +508,14 @@ class CartLineUpgradeMatcher
         $savingAmount = 0.0;
         $actions = [];
         $items = [];
+        $defaultFrequency = (string) ($config['cart_wide_frequency'] ?? '');
         foreach ($subscriptionLines as $entry) {
             $line = $entry['line'];
             $mapping = $entry['mapping'];
             $lineTotal = $this->lineTotalFromLine($line, $subtotal, $allLines);
             $discountPercent = (float) ($mapping['discount_percent'] ?? 0);
-            $savingAmount += $lineTotal * ($discountPercent / 100);
+            $lineSaving = $lineTotal * ($discountPercent / 100);
+            $savingAmount += $lineSaving;
             $actions[] = [
                 'type' => 'updateCartLine',
                 'lineId' => $line['id'],
@@ -488,6 +526,9 @@ class CartLineUpgradeMatcher
                 'line_id' => $line['id'],
                 'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
                 'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
+                'frequency' => (string) ($mapping['frequency'] ?? $defaultFrequency),
+                'line_saving' => $lineSaving,
+                'line_saving_formatted' => $this->formatMoney($lineSaving),
             ];
         }
         $headline = (string) ($config['cart_wide_success_headline'] ?? 'You saved {{saving.amount}} by upgrading products to a subscription!');
@@ -526,22 +567,28 @@ class CartLineUpgradeMatcher
         }
         $items = [];
         $actions = [];
-        $frequency = (string) ($config['cart_wide_frequency'] ?? '');
+        $defaultFrequency = (string) ($config['cart_wide_frequency'] ?? '');
+        $frequency = $defaultFrequency;
         foreach ($matchingLines as $entry) {
             $line = $entry['line'];
             $mapping = $entry['mapping'];
             $lineTotal = $this->lineTotalFromLine($line, $subtotal, $allLines);
             $discountPercent = (float) ($mapping['discount_percent'] ?? 0);
-            $savingAmount += $lineTotal * ($discountPercent / 100);
+            $lineSaving = $lineTotal * ($discountPercent / 100);
+            $savingAmount += $lineSaving;
             if ($frequency === '' && isset($mapping['frequency'])) {
                 $frequency = (string) $mapping['frequency'];
             }
             $sellingPlanId = (string) ($mapping['selling_plan_id'] ?? '');
             $variantGid = (string) ($mapping['variant_id_gid'] ?? self::variantToGid((string) ($line['variant_id'] ?? $line['merchandiseId'] ?? '')));
+            $itemFrequency = (string) ($mapping['frequency'] ?? $defaultFrequency);
             $items[] = [
                 'line_id' => $line['id'],
                 'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
                 'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
+                'frequency' => $itemFrequency,
+                'line_saving' => $lineSaving,
+                'line_saving_formatted' => $this->formatMoney($lineSaving),
             ];
             if ($sellingPlanId !== '') {
                 $actions[] = [
@@ -703,6 +750,29 @@ class CartLineUpgradeMatcher
             }
         }
         return true;
+    }
+
+    /**
+     * True when the line has the property set by the extension after upgrading via the cart-wide module.
+     *
+     * @param  array<string, mixed>  $line
+     */
+    private function lineHasUpgradedByUs(array $line): bool
+    {
+        $props = $line['properties'] ?? [];
+        if (! is_array($props)) {
+            return false;
+        }
+        $val = $props[self::LINE_ATTR_UPGRADED_BY_APP] ?? null;
+        if ($val === null && isset($line['attributes']) && is_array($line['attributes'])) {
+            foreach ($line['attributes'] as $attr) {
+                if (is_array($attr) && ($attr['key'] ?? '') === self::LINE_ATTR_UPGRADED_BY_APP) {
+                    $val = $attr['value'] ?? null;
+                    break;
+                }
+            }
+        }
+        return $val !== null && trim((string) $val) !== '';
     }
 
     /**

@@ -25,6 +25,9 @@ const DEFAULT_EXTENSION_SECRET = '89987874564648484';
 const MAX_ITEMS_VISIBLE = 3;
 /** Debounce ms before fetching upgrade payload after cart/context change so we don't get conflicting responses. */
 const FETCH_DEBOUNCE_MS = 280;
+/** Line attribute set when the user upgrades via this app so the server can show success/undo only for that case. */
+const UPGRADED_BY_APP_KEY = '_zyg_upgraded_subscription';
+const UPGRADED_BY_APP_VALUE = '1';
 
 function getSetting(settings, key) {
   if (!settings || typeof settings !== 'object') return undefined;
@@ -187,7 +190,6 @@ function UpgradeCard() {
   const [errorMessage, setErrorMessage] = useState('');
   const fetchPayloadRef = useRef(() => {});
   const fetchTimeoutRef = useRef(null);
-  const upgradeJustAppliedRef = useRef(false);
 
   const instructions = api?.instructions ?? {};
   const linesInstructions = instructions?.lines ?? {};
@@ -221,7 +223,6 @@ function UpgradeCard() {
       line_items: lineItemsNormalized,
       ...(Object.keys(attributesForRequest).length > 0 && { attributes: attributesForRequest }),
       ...contextPayload,
-      ...(upgradeJustAppliedRef.current && { upgrade_just_applied: true }),
     };
 
     fetch(`${apiUrl}/api/checkout/upgrade-card`, {
@@ -242,9 +243,6 @@ function UpgradeCard() {
       })
       .then((data) => {
         if (data && typeof data === 'object') {
-          if (data.mode === 'cart_wide_success') {
-            upgradeJustAppliedRef.current = false;
-          }
           setPayload(data);
           const plans = data.plans;
           if (Array.isArray(plans) && plans.length > 0 && !selectedPlanId) {
@@ -305,6 +303,26 @@ function UpgradeCard() {
       return action?.lineId;
     };
 
+    const buildAttributesWithUpgradeMarker = (line) => {
+      const attrs = [];
+      const raw = line?.attributes ?? line?.properties;
+      if (Array.isArray(raw)) {
+        raw.forEach((item) => {
+          if (item && typeof item === 'object' && item.key != null && item.key !== UPGRADED_BY_APP_KEY) {
+            attrs.push({ key: String(item.key), value: String(item.value ?? '') });
+          }
+        });
+      } else if (raw && typeof raw === 'object') {
+        Object.entries(raw).forEach(([k, v]) => {
+          if (k !== UPGRADED_BY_APP_KEY && k != null && String(k).trim() !== '') {
+            attrs.push({ key: String(k), value: v != null ? String(v) : '' });
+          }
+        });
+      }
+      attrs.push({ key: UPGRADED_BY_APP_KEY, value: UPGRADED_BY_APP_VALUE });
+      return attrs;
+    };
+
     try {
       for (let i = 0; i < actions.length; i++) {
         const action = actions[i];
@@ -315,6 +333,13 @@ function UpgradeCard() {
             const change = { type: 'updateCartLine', id: lineId };
             if (action && 'sellingPlanId' in action) {
               change.sellingPlanId = action.sellingPlanId;
+              if (action.sellingPlanId != null) {
+                const currentLines = getCurrentLines();
+                const line = currentLines.find((l) => (l?.id ?? l?.merchandise?.id) === lineId);
+                if (line) {
+                  change.attributes = buildAttributesWithUpgradeMarker(line);
+                }
+              }
             }
             await applyCartLinesChange(change);
           }
@@ -335,7 +360,6 @@ function UpgradeCard() {
           await applyCartLinesChange(change);
         }
       }
-      upgradeJustAppliedRef.current = true;
       setPayload((prev) => (prev ? { ...prev, enabled: false } : prev));
       sendClickLog(apiUrl, secret, {
         shop,
@@ -443,17 +467,13 @@ function UpgradeCard() {
               ))}
             </BlockStack>
           ) : null}
-          {frequency ? (
-            <Text size="small" emphasis="bold">
-              Deliver every {frequency}:
-            </Text>
-          ) : null}
           {items.length > 0 ? (
             <BlockStack spacing="extraTight">
               {items.map((item, idx) => (
                 <Text key={item.line_id ?? idx} size="small" appearance="subdued">
                   {item.product_title ?? item.title ?? 'Item'}
                   {item.variant_title ? ` — ${item.variant_title}` : ''}
+                  {item.frequency ? ` · Every ${item.frequency}` : ''}
                 </Text>
               ))}
             </BlockStack>
