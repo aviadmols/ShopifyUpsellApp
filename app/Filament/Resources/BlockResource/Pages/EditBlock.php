@@ -489,8 +489,8 @@ class EditBlock extends EditRecord
             $data['upgrade_card_cart_wide_success_headline'] = (string) ($config['cart_wide_success_headline'] ?? '');
             $data['upgrade_card_cart_wide_undo_label'] = (string) ($config['cart_wide_undo_label'] ?? '');
             $data['upgrade_card_cart_wide_cta_label'] = (string) ($config['cart_wide_cta_label'] ?? '');
-            $data['upgrade_card_cart_wide_required_attributes'] = self::cartWideRequiredAttributesToFormItems($config['cart_wide_required_attributes'] ?? []);
-            $data['upgrade_card_cart_wide_mappings'] = self::cartWideMappingsToFormItems($config['cart_wide_mappings'] ?? []);
+            $data['upgrade_card_cart_wide_required_attributes'] = self::cartWideRequiredAttributesToFormItems(self::ensureArray($config['cart_wide_required_attributes'] ?? []));
+            $data['upgrade_card_cart_wide_mappings'] = self::cartWideMappingsToFormItems(self::ensureArray($config['cart_wide_mappings'] ?? []));
 
             // Backfill older AI-created widgets that saved empty config.
             if (trim((string) ($data['upgrade_card_headline'] ?? '')) === '' && $this->record?->ai_generated_name) {
@@ -667,6 +667,24 @@ class EditBlock extends EditRecord
             $block->blockOffers()->delete();
             CreateBlock::syncWidgetOffers($block, $this->widgetOffersData);
         }
+    }
+
+    /**
+     * Ensure value is an array (config may come as JSON string from DB).
+     *
+     * @param  mixed  $value
+     * @return array<int, mixed>
+     */
+    protected static function ensureArray(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return [];
     }
 
     /**
