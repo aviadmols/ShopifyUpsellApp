@@ -22,12 +22,6 @@ final class WidgetRegistry
             'singleton' => false,
             'has_offers' => false,
         ],
-        'checkout_subscription_save' => [
-            'label' => 'Subscribe & Save (cart-wide, OTP only)',
-            'surfaces' => ['checkout'],
-            'singleton' => false,
-            'has_offers' => false,
-        ],
         'progress_bar' => [
             'label' => 'Progress bar',
             'surfaces' => ['checkout'],

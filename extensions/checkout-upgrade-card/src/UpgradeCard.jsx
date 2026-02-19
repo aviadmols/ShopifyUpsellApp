@@ -131,8 +131,11 @@ function normalizeLineItemsForApi(lines) {
       line?.properties ?? line?.attributes ?? line?.customAttributes ?? merch?.customAttributes ?? merch?.attributes
     );
     const cost = line?.cost ?? merch?.cost;
-    const lineTotal = cost?.totalAmount?.amount ?? cost?.amount;
-    const out = {
+    const lineTotal =
+      cost != null && typeof cost === 'object' && typeof cost.totalAmount === 'number'
+        ? cost.totalAmount
+        : undefined;
+    return {
       id: line?.id,
       quantity: line?.quantity ?? 1,
       merchandiseId: variantId,
@@ -143,11 +146,8 @@ function normalizeLineItemsForApi(lines) {
       sku,
       selling_plan_id: sellingPlanId || undefined,
       properties,
+      ...(lineTotal !== undefined && { cost: { totalAmount: lineTotal } }),
     };
-    if (typeof lineTotal === 'number' && !Number.isNaN(lineTotal)) {
-      out.cost = lineTotal;
-    }
-    return out;
   });
 }
 
@@ -217,7 +217,6 @@ function UpgradeCard() {
       block_id: blockId,
       session_key: sessionKey || undefined,
       subtotal: subtotalMoney?.amount ?? 0,
-      currency: subtotalMoney?.currencyCode ?? 'USD',
       line_items: lineItemsNormalized,
       ...(Object.keys(attributesForRequest).length > 0 && { attributes: attributesForRequest }),
       ...contextPayload,
@@ -289,12 +288,13 @@ function UpgradeCard() {
       const norm = (id) => (id == null ? '' : String(id).trim().replace(/\D/g, ''));
       const lineIdNorm = norm(action?.lineId);
       const merchIdNorm = norm(action?.merchandiseId);
+      const isUndo = action && 'sellingPlanId' in action && action.sellingPlanId == null;
       for (const line of currentLines) {
         const lid = line?.id ?? line?.merchandise?.id;
         if (lineIdNorm && norm(lid) === lineIdNorm) return line.id;
         if (merchIdNorm && norm(line?.merchandise?.id ?? line?.variant_id) === merchIdNorm) {
           const hasPlan = line?.merchandise?.sellingPlan?.id ?? line?.sellingPlanAllocation?.sellingPlan?.id ?? line?.selling_plan_id;
-          if (!hasPlan) return line.id;
+          if (isUndo ? hasPlan : !hasPlan) return line.id;
         }
       }
       return action?.lineId;
@@ -304,14 +304,14 @@ function UpgradeCard() {
       for (let i = 0; i < actions.length; i++) {
         const action = actions[i];
         const type = action?.type;
-        if (type === 'updateCartLine' && action?.sellingPlanId) {
-          const lineId = resolveLineIdForUpdate(action);
+        if (type === 'updateCartLine') {
+          const lineId = resolveLineIdForUpdate(action) || action?.lineId;
           if (lineId) {
-            await applyCartLinesChange({
-              type: 'updateCartLine',
-              id: lineId,
-              sellingPlanId: action.sellingPlanId,
-            });
+            const change = { type: 'updateCartLine', id: lineId };
+            if (action && 'sellingPlanId' in action) {
+              change.sellingPlanId = action.sellingPlanId;
+            }
+            await applyCartLinesChange(change);
           }
         } else if (type === 'removeCartLine' && action?.lineId) {
           await applyCartLinesChange({
@@ -330,69 +330,35 @@ function UpgradeCard() {
           await applyCartLinesChange(change);
         }
       }
-      if (payload?.mode === 'subscription_save') {
-        setTimeout(() => fetchPayloadRef.current?.(), 600);
-      } else {
-        setPayload((prev) => (prev ? { ...prev, enabled: false } : prev));
-      }
+      setPayload((prev) => (prev ? { ...prev, enabled: false } : prev));
       sendClickLog(apiUrl, secret, {
         shop,
         block_id: blockId,
         session_key: sessionKey,
         click_target: 'upgrade_cta',
-        meta: { source: payload?.mode === 'subscription_save' ? 'checkout_subscription_save' : 'checkout_upgrade_card' },
+        meta: { source: 'checkout_upgrade_card' },
       });
     } catch (err) {
       setErrorMessage(err?.message || 'Update failed.');
     } finally {
       setApplying(false);
     }
-  }, [payload?.actions, payload?.mode, cartEditable, applyCartLinesChange, api, apiUrl, secret, blockId, sessionKey, shop]);
-
-  const runUndo = useCallback(async () => {
-    const ids = payload?.upgraded_line_ids;
-    if (!Array.isArray(ids) || ids.length === 0 || !cartEditable) return;
-    setApplying(true);
-    setErrorMessage('');
-    const getCurrentLines = () => {
-      const raw = typeof api?.lines?.current === 'function' ? api.lines.current() : api?.lines?.value ?? api?.lines ?? [];
-      return Array.isArray(raw) ? raw : [];
-    };
-    const norm = (id) => (id == null ? '' : String(id).trim().replace(/\D/g, ''));
-    try {
-      const currentLines = getCurrentLines();
-      for (const lineId of ids) {
-        const lineIdNorm = norm(lineId);
-        const line = currentLines.find((l) => norm(l?.id) === lineIdNorm);
-        if (line?.id) {
-          await applyCartLinesChange({ type: 'updateCartLine', id: line.id, sellingPlanId: null });
-        }
-      }
-      setTimeout(() => fetchPayloadRef.current?.(), 500);
-    } catch (err) {
-      setErrorMessage(err?.message || 'Undo failed.');
-    } finally {
-      setApplying(false);
-    }
-  }, [payload?.upgraded_line_ids, cartEditable, applyCartLinesChange, api]);
+  }, [payload?.actions, cartEditable, applyCartLinesChange, api, apiUrl, secret, blockId, sessionKey, shop]);
 
   if (loading) {
     return null;
   }
 
+  const mode = payload?.mode;
   const enabled = payload?.enabled === true;
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const plans = Array.isArray(payload?.plans) ? payload.plans : [];
   const headline = payload?.headline ?? '';
   const description = payload?.description ?? '';
-  const ctaLabel = payload?.cta_label ?? 'Upgrade';
-  const mode = payload?.mode ?? '';
-  const upgraded = payload?.upgraded === true;
   const subtext = payload?.subtext ?? '';
-  const productList = Array.isArray(payload?.product_list) ? payload.product_list : [];
-  const savingFormatted = payload?.saving?.formatted ?? payload?.saving?.amount ?? '';
-  const frequency = String(payload?.frequency ?? '');
-  const undoLinkText = payload?.undo_link_text ?? 'Undo savings';
+  const ctaLabel = payload?.cta_label ?? 'Upgrade';
+  const frequency = payload?.frequency ?? '';
+  const undoLabel = payload?.undo_label ?? 'Undo savings';
   const ui = payload?.ui && typeof payload.ui === 'object' ? payload.ui : {};
   const headlineSize = ['small', 'medium', 'large'].includes(String(ui.title_size)) ? String(ui.title_size) : 'medium';
   const buttonKind = ['primary', 'secondary', 'plain'].includes(String(ui.button_kind)) ? String(ui.button_kind) : 'secondary';
@@ -405,11 +371,11 @@ function UpgradeCard() {
   const itemsMaxVisibleRaw = Number(ui.items_max_visible ?? MAX_ITEMS_VISIBLE);
   const itemsMaxVisible = Number.isFinite(itemsMaxVisibleRaw) ? Math.max(1, Math.min(10, Math.floor(itemsMaxVisibleRaw))) : MAX_ITEMS_VISIBLE;
 
-  const showUpgraded = mode === 'subscription_save' && upgraded;
-  const showSubscriptionSave = mode === 'subscription_save' && enabled && items.length > 0;
-  const showUpgradeCard = !showUpgraded && !showSubscriptionSave && enabled && items.length > 0;
+  const isCartWideOffer = mode === 'cart_wide_offer';
+  const isCartWideSuccess = mode === 'cart_wide_success';
+  const showCard = enabled && (items.length > 0 || isCartWideOffer || isCartWideSuccess);
 
-  if (!showUpgraded && !showSubscriptionSave && !showUpgradeCard) {
+  if (!showCard) {
     return null;
   }
 
@@ -425,20 +391,20 @@ function UpgradeCard() {
   const extraCount = items.length - itemsMaxVisible;
   const ctaDisabled = !cartEditable || applying;
 
-  if (showUpgraded) {
+  if (isCartWideSuccess) {
     return (
       <View padding={padding} border={showBorder ? 'base' : undefined} borderRadius={borderRadius}>
         <BlockStack spacing={spacing}>
           {headline ? (
-            <Text size="medium" emphasis="bold">
+            <Text size={headlineSize} emphasis="bold">
               {headline}
             </Text>
           ) : null}
-          {cartEditable ? (
-            <Button kind="plain" onPress={runUndo} loading={applying} disabled={applying} accessibilityLabel={undoLinkText}>
-              {undoLinkText}
+          {!cartEditable ? null : (
+            <Button kind="plain" onPress={runActions} loading={applying} disabled={applying} accessibilityLabel={undoLabel}>
+              {undoLabel}
             </Button>
-          ) : null}
+          )}
           {errorMessage ? (
             <Text size="small" appearance="critical">
               {errorMessage}
@@ -449,13 +415,13 @@ function UpgradeCard() {
     );
   }
 
-  if (showSubscriptionSave) {
-    const subtextLines = subtext.split(/\n/).map((s) => s.trim()).filter(Boolean);
+  if (isCartWideOffer) {
+    const subtextLines = subtext ? subtext.split(/\r?\n/).filter((s) => s.trim() !== '') : [];
     return (
       <View padding={padding} border={showBorder ? 'base' : undefined} borderRadius={borderRadius}>
         <BlockStack spacing={spacing}>
           {headline ? (
-            <Text size="medium" emphasis="bold">
+            <Text size={headlineSize} emphasis="bold">
               {headline}
             </Text>
           ) : null}
@@ -463,28 +429,29 @@ function UpgradeCard() {
             <BlockStack spacing="extraTight">
               {subtextLines.map((line, idx) => (
                 <Text key={idx} size="small" appearance="subdued">
-                  {line.startsWith('-') ? line : `- ${line}`}
+                  {line.replace(/^[\s\-•]+\s?/, '')}
                 </Text>
               ))}
             </BlockStack>
           ) : null}
-          {productList.length > 0 ? (
+          {frequency ? (
+            <Text size="small" emphasis="bold">
+              Deliver every {frequency}:
+            </Text>
+          ) : null}
+          {items.length > 0 ? (
             <BlockStack spacing="extraTight">
-              {frequency ? (
-                <Text size="small" emphasis="bold">
-                  Deliver every {frequency}:
-                </Text>
-              ) : null}
-              {productList.map((row, idx) => (
-                <Text key={idx} size="small" appearance="subdued">
-                  - {row.product_title ?? 'Item'}{row.variant_title ? ` - ${row.variant_title}` : ''}
+              {items.map((item, idx) => (
+                <Text key={item.line_id ?? idx} size="small" appearance="subdued">
+                  {item.product_title ?? item.title ?? 'Item'}
+                  {item.variant_title ? ` — ${item.variant_title}` : ''}
                 </Text>
               ))}
             </BlockStack>
           ) : null}
           {!cartEditable ? (
             <Text size="small" appearance="subdued">
-              Cart cannot be changed in this checkout (e.g. express checkout).
+              Cart cannot be changed in this checkout.
             </Text>
           ) : null}
           {errorMessage ? (

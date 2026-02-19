@@ -141,26 +141,6 @@
       </div>
     @endif
 
-    @if($surface === 'checkout' && $type === 'checkout_subscription_save')
-      @php
-        $subHeadline = (string) ($config['headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE');
-        $subCta = (string) ($config['cta_label'] ?? 'SUBSCRIBE & SAVE');
-        $subMappings = is_array($config['savings_mappings'] ?? null) ? $config['savings_mappings'] : [];
-      @endphp
-      <div class="border border-gray-200 dark:border-white/10 rounded-lg p-4 space-y-3">
-        <p class="font-semibold text-gray-900 dark:text-white">{{ $subHeadline }}</p>
-        <p class="text-sm text-gray-600 dark:text-gray-300">Upgrade your items to subscription and save up to {{ '{{' }}saving.amount{{ '}}' }} today! (Shown only when cart has no subscriptions.)</p>
-        @if(count($subMappings) > 0)
-          <p class="text-xs text-gray-600 dark:text-gray-300">{{ count($subMappings) }} variant(s) with discount % → savings calculated at checkout.</p>
-        @else
-          <p class="text-xs text-amber-600 dark:text-amber-400">Add variant + discount % mappings to enable.</p>
-        @endif
-        <button type="button" class="w-full text-sm px-3 py-2 rounded bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900">
-          {{ $subCta }}
-        </button>
-      </div>
-    @endif
-
     @if($surface === 'checkout' && $type === 'progress_bar')
       @php
         $goal = (float)($config['progress_bar_goal'] ?? 100);
