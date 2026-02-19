@@ -281,7 +281,7 @@ class ShopifyGraphQLService
     /**
      * List active products with variants and selling plans for admin tools.
      *
-     * @return array<int, array{id: string, title: string, image_url: string|null, variants: array<int, array{id: string, title: string, price: string|null}>, selling_plans: array<int, array{id: string, name: string}>}>
+     * @return array<int, array{id: string, title: string, image_url: string|null, variants: array<int, array{id: string, title: string, price: string|null}>, selling_plans: array<int, array{id: string, name: string, discount_percent: float|null}>}>
      */
     public function listProductsWithVariantsAndSellingPlans(Shop $shop, int $first = 50): array
     {
@@ -307,6 +307,24 @@ class ShopifyGraphQLService
                                     nodes {
                                         id
                                         name
+                                        pricingPolicies {
+                                            ... on SellingPlanFixedPricingPolicy {
+                                                adjustmentType
+                                                adjustmentValue {
+                                                    ... on SellingPlanPricingPolicyPercentageValue {
+                                                        percentage
+                                                    }
+                                                }
+                                            }
+                                            ... on SellingPlanRecurringPricingPolicy {
+                                                adjustmentType
+                                                adjustmentValue {
+                                                    ... on SellingPlanPricingPolicyPercentageValue {
+                                                        percentage
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -341,8 +359,20 @@ class ShopifyGraphQLService
                 foreach (($group['sellingPlans']['nodes'] ?? []) as $plan) {
                     $id = (string) ($plan['id'] ?? '');
                     $name = (string) ($plan['name'] ?? $group['name'] ?? '');
+                    $discountPercent = null;
+                    foreach (($plan['pricingPolicies'] ?? []) as $policy) {
+                        $val = $policy['adjustmentValue'] ?? null;
+                        if (is_array($val) && isset($val['percentage']) && is_numeric($val['percentage'])) {
+                            $discountPercent = (float) $val['percentage'];
+                            break;
+                        }
+                    }
                     if ($id !== '') {
-                        $sellingPlans[] = ['id' => $id, 'name' => $name];
+                        $sellingPlans[] = [
+                            'id' => $id,
+                            'name' => $name,
+                            'discount_percent' => $discountPercent,
+                        ];
                     }
                 }
             }

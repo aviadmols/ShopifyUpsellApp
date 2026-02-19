@@ -629,26 +629,14 @@ class CartLineUpgradeMatcher
     }
 
     /**
-     * Get line total (cost) for one line. Uses cost.totalAmount (number or Money.amount) / line_total if present, else proportional subtotal.
+     * Get line total for one line: proportional share of cart subtotal (product prices only, no tax).
+     * Always uses context subtotal (from useSubtotalAmount in the extension) so offer and success show the same saving.
      *
      * @param  array<string, mixed>  $line
      * @param  array<int, array<string, mixed>>  $allLines
      */
     private function lineTotalFromLine(array $line, float $subtotal, array $allLines): float
     {
-        $cost = $line['cost'] ?? null;
-        if (is_array($cost) && array_key_exists('totalAmount', $cost)) {
-            $ta = $cost['totalAmount'];
-            if (is_array($ta) && isset($ta['amount']) && is_numeric($ta['amount'])) {
-                return (float) $ta['amount'];
-            }
-            if (is_numeric($ta)) {
-                return (float) $ta;
-            }
-        }
-        if (isset($line['line_total']) && is_numeric($line['line_total'])) {
-            return (float) $line['line_total'];
-        }
         $qty = (int) ($line['quantity'] ?? 1);
         if ($qty < 1) {
             return 0.0;
