@@ -115,8 +115,8 @@ class CartLineUpgradeMatcher
             return false;
         }
 
+        $lineHasSubscription = $this->lineHasSellingPlan($line);
         $lineSellingPlanId = trim((string) ($line['selling_plan_id'] ?? $line['sellingPlanId'] ?? ''));
-        $lineHasSubscription = $lineSellingPlanId !== '';
 
         $subscriptionRule = (string) ($match['subscription'] ?? 'any');
         if ($subscriptionRule === 'must_be_subscription' && ! $lineHasSubscription) {
@@ -159,6 +159,12 @@ class CartLineUpgradeMatcher
         }
         if ($itemsCountMin !== null && count($lineItems) < $itemsCountMin) {
             return $this->emptyPayload($config);
+        }
+
+        $cartWideEnabled = ! empty($config['cart_wide_enabled']);
+        $cartWideMappings = $config['cart_wide_mappings'] ?? [];
+        if ($cartWideEnabled && is_array($cartWideMappings) && $cartWideMappings !== []) {
+            return $this->runCartWide($config, $context, $lineItems, $subtotal);
         }
 
         $mappings = $config['upgrade_mappings'] ?? [];
@@ -357,6 +363,229 @@ class CartLineUpgradeMatcher
     }
 
     /**
+     * Cart-wide subscription: show only when cart has no subscriptions; offer to upgrade all matching lines. After upgrade, show success + undo.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $context
+     * @param  array<int, array<string, mixed>>  $lineItems
+     */
+    private function runCartWide(array $config, array $context, array $lineItems, float $subtotal): array
+    {
+        $rawMappings = $config['cart_wide_mappings'] ?? [];
+        $variantToMapping = [];
+        $defaultFrequency = (string) ($config['cart_wide_frequency'] ?? '');
+        foreach ($rawMappings as $m) {
+            if (! is_array($m)) {
+                continue;
+            }
+            $variantId = $m['variant_id'] ?? $m['variantId'] ?? '';
+            if ((string) $variantId === '') {
+                continue;
+            }
+            $norm = $this->normalizeId((string) $variantId);
+            if ($norm === '') {
+                continue;
+            }
+            $sellingPlanId = self::sellingPlanToGid((string) ($m['selling_plan_id'] ?? $m['sellingPlanId'] ?? ''));
+            $discountPercent = isset($m['discount_percent']) ? (float) $m['discount_percent'] : 0;
+            $variantToMapping[$norm] = [
+                'selling_plan_id' => $sellingPlanId,
+                'discount_percent' => $discountPercent,
+                'variant_id_gid' => self::variantToGid((string) $variantId),
+                'frequency' => (string) ($m['frequency'] ?? $defaultFrequency),
+            ];
+        }
+        if ($variantToMapping === []) {
+            return $this->emptyPayload($config);
+        }
+
+        $requiredAttrs = $config['cart_wide_required_attributes'] ?? [];
+        if (is_array($requiredAttrs) && $requiredAttrs !== [] && ! $this->cartWideCheckoutAttributesMatch($context, $requiredAttrs)) {
+            return $this->emptyPayload($config);
+        }
+
+        $hasAnySubscription = false;
+        $subscriptionLines = [];
+        $oneTimeMatchingLines = [];
+        foreach ($lineItems as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $lineId = $line['id'] ?? null;
+            if ($lineId === null) {
+                continue;
+            }
+            $lineVariantId = (string) ($line['variant_id'] ?? $line['merchandiseId'] ?? '');
+            $lineNorm = $this->normalizeId($lineVariantId);
+            $mapping = $variantToMapping[$lineNorm] ?? null;
+            if ($mapping === null) {
+                continue;
+            }
+            $hasPlan = $this->lineHasSellingPlan($line);
+            if ($hasPlan) {
+                $hasAnySubscription = true;
+                $subscriptionLines[] = [
+                    'line' => $line,
+                    'mapping' => $mapping,
+                ];
+            } else {
+                $oneTimeMatchingLines[] = [
+                    'line' => $line,
+                    'mapping' => $mapping,
+                ];
+            }
+        }
+
+        if ($hasAnySubscription) {
+            return $this->cartWideSuccessPayload($config, $subscriptionLines);
+        }
+
+        if ($oneTimeMatchingLines === []) {
+            return $this->emptyPayload($config);
+        }
+
+        return $this->cartWideOfferPayload($config, $oneTimeMatchingLines, $subtotal, $lineItems);
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array<int, array{line: array, mapping: array}>  $subscriptionLines
+     * @return array{enabled: bool, items: array, plans: array, actions: array, mode: string, headline?: string, undo_label?: string}
+     */
+    private function cartWideSuccessPayload(array $config, array $subscriptionLines): array
+    {
+        $savingAmount = 0.0;
+        $actions = [];
+        $items = [];
+        foreach ($subscriptionLines as $entry) {
+            $line = $entry['line'];
+            $mapping = $entry['mapping'];
+            $lineTotal = $this->lineTotalFromLine($line, 0, []);
+            $discountPercent = (float) ($mapping['discount_percent'] ?? 0);
+            $savingAmount += $lineTotal * ($discountPercent / 100);
+            $actions[] = [
+                'type' => 'updateCartLine',
+                'lineId' => $line['id'],
+                'merchandiseId' => $mapping['variant_id_gid'] ?? self::variantToGid((string) ($line['variant_id'] ?? $line['merchandiseId'] ?? '')),
+                'sellingPlanId' => null,
+            ];
+            $items[] = [
+                'line_id' => $line['id'],
+                'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
+                'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
+            ];
+        }
+        $headline = (string) ($config['cart_wide_success_headline'] ?? 'You saved {{saving.amount}} by upgrading products to a subscription!');
+        $undoLabel = (string) ($config['cart_wide_undo_label'] ?? 'Undo savings');
+        return [
+            'enabled' => true,
+            'items' => $items,
+            'plans' => [],
+            'actions' => $actions,
+            'mode' => 'cart_wide_success',
+            'headline' => $headline,
+            'undo_label' => $undoLabel,
+            'saving' => ['amount' => $savingAmount, 'amount_formatted' => $this->formatMoney($savingAmount)],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array<int, array{line: array, mapping: array}>  $matchingLines
+     * @param  array<int, array<string, mixed>>  $allLines
+     * @return array{enabled: bool, items: array, plans: array, actions: array, mode: string, headline?: string, subtext?: string, cta_label?: string, frequency?: string, saving?: array}
+     */
+    private function cartWideOfferPayload(array $config, array $matchingLines, float $subtotal, array $allLines): array
+    {
+        $savingAmount = 0.0;
+        $totalQuantity = 0;
+        foreach ($allLines as $line) {
+            if (is_array($line) && isset($line['quantity'])) {
+                $totalQuantity += (int) $line['quantity'];
+            }
+        }
+        $items = [];
+        $actions = [];
+        $frequency = (string) ($config['cart_wide_frequency'] ?? '');
+        foreach ($matchingLines as $entry) {
+            $line = $entry['line'];
+            $mapping = $entry['mapping'];
+            $lineTotal = $this->lineTotalFromLine($line, $subtotal, $allLines);
+            $discountPercent = (float) ($mapping['discount_percent'] ?? 0);
+            $savingAmount += $lineTotal * ($discountPercent / 100);
+            if ($frequency === '' && isset($mapping['frequency'])) {
+                $frequency = (string) $mapping['frequency'];
+            }
+            $sellingPlanId = (string) ($mapping['selling_plan_id'] ?? '');
+            $variantGid = (string) ($mapping['variant_id_gid'] ?? self::variantToGid((string) ($line['variant_id'] ?? $line['merchandiseId'] ?? '')));
+            $items[] = [
+                'line_id' => $line['id'],
+                'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
+                'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
+            ];
+            if ($sellingPlanId !== '') {
+                $actions[] = [
+                    'type' => 'updateCartLine',
+                    'lineId' => $line['id'],
+                    'merchandiseId' => $variantGid,
+                    'sellingPlanId' => $sellingPlanId,
+                ];
+            }
+        }
+        $headline = (string) ($config['cart_wide_headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE');
+        $subtext = (string) ($config['cart_wide_subtext'] ?? 'Upgrade your items to subscription and save up to {{saving.amount}} today!');
+        $ctaLabel = (string) ($config['cart_wide_cta_label'] ?? 'SUBSCRIBE & SAVE');
+        return [
+            'enabled' => true,
+            'items' => $items,
+            'plans' => [],
+            'actions' => $actions,
+            'mode' => 'cart_wide_offer',
+            'headline' => $headline,
+            'subtext' => $subtext,
+            'cta_label' => $ctaLabel,
+            'frequency' => $frequency,
+            'saving' => ['amount' => $savingAmount, 'amount_formatted' => $this->formatMoney($savingAmount)],
+        ];
+    }
+
+    /**
+     * Get line total (cost) for one line. Uses cost.totalAmount / line_total if present, else proportional subtotal.
+     *
+     * @param  array<string, mixed>  $line
+     * @param  array<int, array<string, mixed>>  $allLines
+     */
+    private function lineTotalFromLine(array $line, float $subtotal, array $allLines): float
+    {
+        $cost = $line['cost'] ?? null;
+        if (is_array($cost) && isset($cost['totalAmount'])) {
+            return (float) $cost['totalAmount'];
+        }
+        if (isset($line['line_total']) && is_numeric($line['line_total'])) {
+            return (float) $line['line_total'];
+        }
+        $qty = (int) ($line['quantity'] ?? 1);
+        if ($qty < 1) {
+            return 0.0;
+        }
+        $totalQty = 0;
+        foreach ($allLines as $l) {
+            if (is_array($l) && isset($l['quantity'])) {
+                $totalQty += (int) $l['quantity'];
+            }
+        }
+        if ($totalQty <= 0 || $subtotal <= 0) {
+            return 0.0;
+        }
+        return $subtotal * ($qty / $totalQty);
+    }
+
+    private function formatMoney(float $amount): string
+    {
+        return number_format((float) round($amount, 2), 2);
+    }
+
+    /**
      * @param  array<string, mixed>  $config
      * @return array{enabled: false, items: array, plans: array, actions: array, headline?: string, description?: string, cta_label?: string}
      */
@@ -392,6 +621,69 @@ class CartLineUpgradeMatcher
             return $m ? $m[0] : $id;
         }
         return preg_replace('/\D/', '', $id) ?: $id;
+    }
+
+    /**
+     * Check that checkout (order) attributes match the required key/value(s). Required list: [ ['key' => 'x', 'value' => 'a,b'] ].
+     * Value can be comma-separated = order attribute must be one of these. Empty value = key must exist and be non-empty.
+     *
+     * @param  array<string, mixed>  $context
+     * @param  array<int, array<string, string>>  $requiredAttrs
+     */
+    private function cartWideCheckoutAttributesMatch(array $context, array $requiredAttrs): bool
+    {
+        $attrs = $context['checkout_attributes'] ?? [];
+        if (! is_array($attrs)) {
+            $attrs = [];
+        }
+        foreach ($requiredAttrs as $req) {
+            if (! is_array($req)) {
+                continue;
+            }
+            $key = trim((string) ($req['key'] ?? ''));
+            if ($key === '') {
+                continue;
+            }
+            $orderValue = isset($attrs[$key]) ? trim((string) $attrs[$key]) : '';
+            $allowed = trim((string) ($req['value'] ?? ''));
+            if ($allowed === '') {
+                if ($orderValue === '') {
+                    return false;
+                }
+                continue;
+            }
+            $allowedList = array_map('trim', explode(',', $allowed));
+            $allowedList = array_filter($allowedList, fn ($v) => $v !== '');
+            if ($allowedList === []) {
+                if ($orderValue === '') {
+                    return false;
+                }
+                continue;
+            }
+            if (! in_array($orderValue, $allowedList, true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * True only when the line has a real selling plan (not null, not empty, not the literal string "null").
+     * Ensures lines with selling_plan_id: null or missing are treated as one-time.
+     *
+     * @param  array<string, mixed>  $line
+     */
+    private function lineHasSellingPlan(array $line): bool
+    {
+        $raw = $line['selling_plan_id'] ?? $line['sellingPlanId'] ?? null;
+        if ($raw === null) {
+            return false;
+        }
+        $s = trim((string) $raw);
+        if ($s === '' || strtolower($s) === 'null') {
+            return false;
+        }
+        return true;
     }
 
     /**

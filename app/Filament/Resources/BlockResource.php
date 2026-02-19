@@ -83,8 +83,7 @@ class BlockResource extends Resource
                     ->schema([
                         Forms\Components\Placeholder::make('preview_live')
                             ->label('')
-                            ->content(function (Get $get) {
-                                $result = null;
+                            ->content(function (Get $get): \Illuminate\Support\HtmlString {
                                 try {
                                     $state = CreateBlock::getStateFromGet($get);
                                     $surface = (string) ($state['surface'] ?? '');
@@ -103,20 +102,13 @@ class BlockResource extends Resource
                                         'preview_offers' => $previewOffers,
                                     ])->render();
 
-                                    $result = new \Illuminate\Support\HtmlString(is_string($html) ? $html : '');
+                                    return new \Illuminate\Support\HtmlString($html);
                                 } catch (\Throwable $e) {
-                                    $result = new \Illuminate\Support\HtmlString(
+                                    return new \Illuminate\Support\HtmlString(
                                         '<div class="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-400">'
                                         . '<p class="font-medium">Preview error</p><p class="mt-1">' . e($e->getMessage()) . '</p></div>'
                                     );
                                 }
-                                // Never return an array — causes "Undefined array key 0" in Illuminate\View\Concerns\ManagesComponents.
-                                if (is_array($result)) {
-                                    return new \Illuminate\Support\HtmlString('');
-                                }
-                                return $result instanceof \Illuminate\Contracts\Support\Htmlable
-                                    ? $result
-                                    : new \Illuminate\Support\HtmlString(is_string($result) ? $result : '');
                             }),
                     ])
                     ->collapsible()
@@ -124,7 +116,6 @@ class BlockResource extends Resource
 
                 self::schemaCheckoutUpsell($form),
                 self::schemaCheckoutUpgradeCard($form),
-                self::schemaCheckoutSubscriptionSave($form),
                 self::schemaCheckoutProgressBar($form),
                 self::schemaContentIconFeatures($form),
                 self::schemaContentBannerRichTextButton($form),
@@ -253,7 +244,7 @@ class BlockResource extends Resource
 
     protected static function schemaRuntimeVariables(Form $form): Forms\Components\Section
     {
-        $typesWithPlaceholders = ['upsell', 'checkout_upgrade_card', 'checkout_subscription_save', 'progress_bar', 'content_icon_features', 'content_banner', 'content_rich_text', 'content_button', 'content_product_card', 'post_purchase_funnel'];
+        $typesWithPlaceholders = ['upsell', 'checkout_upgrade_card', 'progress_bar', 'content_icon_features', 'content_banner', 'content_rich_text', 'content_button', 'content_product_card', 'post_purchase_funnel'];
         return Forms\Components\Section::make('Runtime variables (placeholders)')
             ->description('To replace placeholders like {dog_names_message} in your headline / section heading / description, define them here. The PHP snippet in "AI-generated widget" is reference only and is NOT executed.')
             ->schema([
@@ -409,6 +400,93 @@ class BlockResource extends Resource
                     ->minValue(0)
                     ->integer()
                     ->placeholder('0'),
+                Forms\Components\Toggle::make('upgrade_card_cart_wide_enabled')
+                    ->label('Cart-wide subscription upgrade (OTP only)')
+                    ->helperText('When on: block shows only when cart has no subscriptions; offers to upgrade all matching items to subscription in one click. Uses the mapping list below (variant → selling plan + discount %).')
+                    ->default(false)
+                    ->live(),
+                Forms\Components\Section::make('Cart-wide subscription (optional)')
+                    ->description('Shown only when cart has no subscriptions. Placeholders: {saving.amount}, {frequency}, {productname1}, {variantname1}, …')
+                    ->schema([
+                        Forms\Components\TextInput::make('upgrade_card_cart_wide_headline')
+                            ->label('Headline (offer)')
+                            ->placeholder('UPGRADE TO SUBSCRIPTION AND SAVE')
+                            ->maxLength(200),
+                        Forms\Components\Textarea::make('upgrade_card_cart_wide_subtext')
+                            ->label('Subtext (offer)')
+                            ->rows(6)
+                            ->placeholder("Upgrade your items to subscription and save up to {saving.amount} today!\n\n- Get bigger savings\n- Automatic resupply\n- Free shipping\n- Modify or cancel anytime\n- 90-day money-back guarantee")
+                            ->helperText('Use {saving.amount} for the total savings amount.')
+                            ->maxLength(2000),
+                        Forms\Components\TextInput::make('upgrade_card_cart_wide_frequency')
+                            ->label('Delivery frequency (e.g. "1 month")')
+                            ->placeholder('1 month')
+                            ->maxLength(60),
+                        Forms\Components\TextInput::make('upgrade_card_cart_wide_success_headline')
+                            ->label('Headline (after upgrade)')
+                            ->placeholder('You saved {saving.amount} by upgrading products to a subscription!')
+                            ->maxLength(200),
+                        Forms\Components\TextInput::make('upgrade_card_cart_wide_undo_label')
+                            ->label('Undo link label')
+                            ->placeholder('Undo savings')
+                            ->maxLength(60),
+                        Forms\Components\TextInput::make('upgrade_card_cart_wide_cta_label')
+                            ->label('CTA button (offer)')
+                            ->placeholder('SUBSCRIBE & SAVE')
+                            ->maxLength(60),
+                        Forms\Components\Repeater::make('upgrade_card_cart_wide_required_attributes')
+                            ->label('Show only when checkout has attributes (optional)')
+                            ->helperText('Order-level attributes (checkout attributes). Add key + value; value can be comma-separated for "any of these" (e.g. source, campaign,sale). If empty, block shows regardless of attributes.')
+                            ->schema([
+                                Forms\Components\TextInput::make('key')
+                                    ->label('Attribute key')
+                                    ->placeholder('e.g. source')
+                                    ->required()
+                                    ->maxLength(255),
+                                Forms\Components\TextInput::make('value')
+                                    ->label('Value(s)')
+                                    ->placeholder('e.g. campaign or campaign,sale')
+                                    ->helperText('Comma-separated = any of these values')
+                                    ->maxLength(500),
+                            ])
+                            ->columns(2)
+                            ->defaultItems(0)
+                            ->addActionLabel('Add condition')
+                            ->columnSpanFull(),
+                        Forms\Components\Repeater::make('upgrade_card_cart_wide_mappings')
+                            ->label('Variant → selling plan & discount %')
+                            ->helperText('Each row: variant (GID or numeric), selling plan ID, discount percent. Used to match cart lines and compute savings.')
+                            ->schema([
+                                Forms\Components\TextInput::make('variant_id')
+                                    ->label('Variant ID')
+                                    ->placeholder('GID or numeric')
+                                    ->required()
+                                    ->maxLength(255),
+                                Forms\Components\TextInput::make('selling_plan_id')
+                                    ->label('Selling plan ID')
+                                    ->placeholder('GID or numeric')
+                                    ->required()
+                                    ->maxLength(255),
+                                Forms\Components\TextInput::make('discount_percent')
+                                    ->label('Discount %')
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->maxValue(100)
+                                    ->default(0)
+                                    ->required(),
+                                Forms\Components\TextInput::make('frequency')
+                                    ->label('Frequency (optional, per variant)')
+                                    ->placeholder('e.g. 1 month')
+                                    ->maxLength(60),
+                            ])
+                            ->columns(2)
+                            ->defaultItems(0)
+                            ->addActionLabel('Add mapping')
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(1)
+                    ->collapsible()
+                    ->visible(fn (Get $get): bool => (bool) $get('upgrade_card_cart_wide_enabled')),
                 Forms\Components\Section::make('Default design')
                     ->description('Used when an offer does not define its own design. Each offer can override these in "Design for this offer" inside the mapping.')
                     ->schema([
@@ -496,10 +574,9 @@ class BlockResource extends Resource
                     ->schema([
                         Forms\Components\Placeholder::make('upgrade_flow_view')
                             ->label('')
-                            ->content(function (Get $get) {
+                            ->content(function (Get $get): \Illuminate\Support\HtmlString {
                                 $items = $get('upgrade_mappings_items');
-                                $items = is_array($items) ? array_values($items) : [];
-                                if ($items === []) {
+                                if (! is_array($items) || $items === []) {
                                     return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500">Add mappings below to see the flow.</p>');
                                 }
                                 $steps = [];
@@ -533,30 +610,24 @@ class BlockResource extends Resource
                                     $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
                                     $offer = (string) ($m['target_variant_id'] ?? '');
                                     $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
-                                    $plansRaw = $m['plans'] ?? [];
-                                    $plans = is_array($plansRaw) ? array_values($plansRaw) : [];
-                                    if (isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
+                                    $plans = $m['plans'] ?? [];
+                                    if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
                                         $offerStr .= ' · '.e((string) $plans[0]['label']);
                                     }
                                     $stepNum = $idx + 1;
                                     $next = isset($itemsArr[$idx + 1]) ? 'Step '.($idx + 2) : 'End';
                                     $steps[] = '<div class="border border-gray-200 rounded p-2 mb-2 text-sm"><strong>Step '.$stepNum.':</strong> When cart: '.e($whenStr).' → Offer: '.e($offerStr).'<br><span class="text-gray-500">Next: '.e($next).'</span></div>';
                                 }
-                                $result = new \Illuminate\Support\HtmlString('<div class="space-y-1">'.implode('', $steps).'</div>');
-                                return is_array($result) ? new \Illuminate\Support\HtmlString('') : $result;
+                                return new \Illuminate\Support\HtmlString('<div class="space-y-1">'.implode('', $steps).'</div>');
                             }),
                     ])
                     ->collapsible()
                     ->collapsed(),
                 Forms\Components\Repeater::make('upgrade_mappings_items')
                     ->label('Upgrade mappings')
-                    ->default([])
                     ->collapsible()
                     ->collapsed()
                     ->itemLabel(function (array $state): string {
-                                if (! is_array($state)) {
-                                    return 'Item';
-                                }
                                 $when = [];
                                 if (! empty($state['match_product_id'])) {
                                     $when[] = 'Product '.preg_replace('/\D/', '', (string) $state['match_product_id']) ?: $state['match_product_id'];
@@ -582,9 +653,8 @@ class BlockResource extends Resource
                                 $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
                                 $offer = (string) ($state['target_variant_id'] ?? '');
                                 $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
-                                $plansRaw = $state['plans'] ?? [];
-                                $plans = is_array($plansRaw) ? array_values($plansRaw) : [];
-                                if (isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
+                                $plans = $state['plans'] ?? [];
+                                if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
                                     $offerStr .= ' · '.e((string) $plans[0]['label']);
                                 }
                                 return 'When: '.$whenStr.' → Offer: '.$offerStr;
@@ -623,16 +693,17 @@ class BlockResource extends Resource
                                 $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
                                 $offer = (string) $get('target_variant_id');
                                 $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
-                                $plansRaw = $get('plans');
-                                $plans = is_array($plansRaw) ? array_values($plansRaw) : [];
-                                $firstPlanLabel = isset($plans[0]['label']) && (string) $plans[0]['label'] !== '' ? (string) $plans[0]['label'] : null;
+                                $plans = $get('plans');
+                                $firstPlanLabel = null;
+                                if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
+                                    $firstPlanLabel = (string) $plans[0]['label'];
+                                }
                                 if ($firstPlanLabel !== null) {
                                     $offerStr .= ' · '.$firstPlanLabel;
                                 }
-                                $result = new \Illuminate\Support\HtmlString(
+                                return new \Illuminate\Support\HtmlString(
                                     '<div class="text-sm"><strong>When:</strong> '.e($whenStr).'</div><div class="text-sm mt-1"><strong>Offer:</strong> '.e($offerStr).'</div>'
                                 );
-                                return is_array($result) ? new \Illuminate\Support\HtmlString('') : $result;
                             }),
                         Forms\Components\Section::make('Match (when to show this upgrade)')
                             ->schema([
@@ -873,67 +944,6 @@ class BlockResource extends Resource
             ])
             ->columns(1)
             ->visible(fn (Get $get): bool => $get('surface') === 'checkout' && $get('type') === 'checkout_upgrade_card');
-    }
-
-    protected static function schemaCheckoutSubscriptionSave(Form $form): Forms\Components\Section
-    {
-        return Forms\Components\Section::make('Subscribe & Save (cart-wide, OTP only)')
-            ->description('Shown only when the cart has no subscriptions. One click converts all mappable items to subscription. Use the same Widget ID in Checkout as for Upgrade card (same app block).')
-            ->schema([
-                Forms\Components\TextInput::make('subscription_save_headline')
-                    ->label('Headline')
-                    ->default('UPGRADE TO SUBSCRIPTION AND SAVE')
-                    ->maxLength(120),
-                Forms\Components\Textarea::make('subscription_save_subtext')
-                    ->label('Subtext (use {{saving.amount}} for discount)')
-                    ->rows(6)
-                    ->default("Upgrade your items to subscription and save up to {{saving.amount}} today!\n\n- Get bigger savings\n- Automatic resupply\n- Free shipping\n- Modify or cancel anytime (no strings attached)\n- 90-day money-back guarantee")
-                    ->maxLength(1500)
-                    ->helperText('Placeholders: {{saving.amount}}, {{frequency}}. Product list is added automatically.'),
-                Forms\Components\TextInput::make('subscription_save_frequency')
-                    ->label('Frequency label (e.g. "1 month")')
-                    ->placeholder('e.g. 1 month')
-                    ->maxLength(60)
-                    ->helperText('Used in "Deliver every {{frequency}}".'),
-                Forms\Components\TextInput::make('subscription_save_cta')
-                    ->label('CTA button label')
-                    ->default('SUBSCRIBE & SAVE')
-                    ->maxLength(60),
-                Forms\Components\TextInput::make('subscription_save_after_headline')
-                    ->label('After upgrade headline (use {{saving.amount}})')
-                    ->default('You saved {{saving.amount}} by upgrading products to a subscription!')
-                    ->maxLength(120),
-                Forms\Components\TextInput::make('subscription_save_undo_text')
-                    ->label('Undo link text')
-                    ->default('Undo savings')
-                    ->maxLength(60),
-                Forms\Components\Repeater::make('subscription_save_mappings')
-                    ->label('Variant → discount (for savings calculation)')
-                    ->default([])
-                    ->helperText('Each row: variant that has a subscription option and the discount % the customer gets. Used to compute and show total savings.')
-                    ->schema([
-                        Forms\Components\TextInput::make('variant_id')
-                            ->label('Variant ID (GID or numeric)')
-                            ->required()
-                            ->maxLength(255),
-                        Forms\Components\TextInput::make('selling_plan_id')
-                            ->label('Selling plan ID')
-                            ->required()
-                            ->maxLength(255),
-                        Forms\Components\TextInput::make('discount_percent')
-                            ->label('Discount %')
-                            ->numeric()
-                            ->minValue(0)
-                            ->maxValue(100)
-                            ->required()
-                            ->default(10),
-                    ])
-                    ->columns(3)
-                    ->defaultItems(0)
-                    ->addActionLabel('Add mapping'),
-            ])
-            ->columns(1)
-            ->visible(fn (Get $get): bool => $get('surface') === 'checkout' && $get('type') === 'checkout_subscription_save');
     }
 
     /**

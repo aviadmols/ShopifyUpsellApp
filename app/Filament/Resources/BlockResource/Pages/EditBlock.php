@@ -482,6 +482,15 @@ class EditBlock extends EditRecord
             $data['upgrade_card_items_max_visible'] = (string) ($ui['items_max_visible'] ?? 3);
             $data['upgrade_card_plans'] = $config['plans'] ?? [];
             $data['upgrade_mappings_items'] = self::upgradeMappingsToFormItems($config['upgrade_mappings'] ?? []);
+            $data['upgrade_card_cart_wide_enabled'] = ! empty($config['cart_wide_enabled']);
+            $data['upgrade_card_cart_wide_headline'] = (string) ($config['cart_wide_headline'] ?? '');
+            $data['upgrade_card_cart_wide_subtext'] = (string) ($config['cart_wide_subtext'] ?? '');
+            $data['upgrade_card_cart_wide_frequency'] = (string) ($config['cart_wide_frequency'] ?? '');
+            $data['upgrade_card_cart_wide_success_headline'] = (string) ($config['cart_wide_success_headline'] ?? '');
+            $data['upgrade_card_cart_wide_undo_label'] = (string) ($config['cart_wide_undo_label'] ?? '');
+            $data['upgrade_card_cart_wide_cta_label'] = (string) ($config['cart_wide_cta_label'] ?? '');
+            $data['upgrade_card_cart_wide_required_attributes'] = self::cartWideRequiredAttributesToFormItems($config['cart_wide_required_attributes'] ?? []);
+            $data['upgrade_card_cart_wide_mappings'] = self::cartWideMappingsToFormItems($config['cart_wide_mappings'] ?? []);
 
             // Backfill older AI-created widgets that saved empty config.
             if (trim((string) ($data['upgrade_card_headline'] ?? '')) === '' && $this->record?->ai_generated_name) {
@@ -499,14 +508,6 @@ class EditBlock extends EditRecord
                     $data['upgrade_mappings_items'] = $inferred;
                 }
             }
-        } elseif ($surface === 'checkout' && $type === 'checkout_subscription_save') {
-            $data['subscription_save_headline'] = (string) ($config['headline'] ?? 'UPGRADE TO SUBSCRIPTION AND SAVE');
-            $data['subscription_save_subtext'] = (string) ($config['subtext'] ?? '');
-            $data['subscription_save_frequency'] = (string) ($config['frequency'] ?? '');
-            $data['subscription_save_cta'] = (string) ($config['cta_label'] ?? 'SUBSCRIBE & SAVE');
-            $data['subscription_save_after_headline'] = (string) ($config['after_headline'] ?? 'You saved {{saving.amount}} by upgrading products to a subscription!');
-            $data['subscription_save_undo_text'] = (string) ($config['undo_link_text'] ?? 'Undo savings');
-            $data['subscription_save_mappings'] = $config['savings_mappings'] ?? [];
         } elseif ($surface === 'checkout' && $type === 'progress_bar') {
             $data['progress_bar_type'] = (string) ($config['progress_bar_type'] ?? 'free_shipping');
             $data['progress_bar_goal'] = (float) ($config['progress_bar_goal'] ?? 100);
@@ -559,16 +560,6 @@ class EditBlock extends EditRecord
             $data['quantity_max'] = max(1, (int) ($config['quantity_max'] ?? 10));
         }
 
-        // Ensure Repeater fields are always arrays so no "Undefined array key 0" when section is hidden.
-        if (($surface ?? '') === 'checkout') {
-            if (! isset($data['upgrade_mappings_items']) || ! is_array($data['upgrade_mappings_items'])) {
-                $data['upgrade_mappings_items'] = [];
-            }
-            if (! isset($data['subscription_save_mappings']) || ! is_array($data['subscription_save_mappings'])) {
-                $data['subscription_save_mappings'] = [];
-            }
-        }
-
         $reserved = [
             'offer_ids', 'max_offers', 'display_mode', 'require_expanded',
             'section_heading', 'title_size', 'title_appearance', 'show_price', 'show_description',
@@ -576,7 +567,6 @@ class EditBlock extends EditRecord
             'card_spacing', 'divider_between_cards',
             'headline', 'description', 'cta_label', 'upgrade_mappings', 'plans', 'cart_subtotal_min', 'cart_items_count_min',
             'ui',
-            'mode', 'subtext', 'frequency', 'after_headline', 'undo_link_text', 'savings_mappings',
             'runtime_variables', 'runtimeVariables',
             'progress_bar_enabled', 'progress_bar_type', 'progress_bar_goal', 'progress_bar_message_below',
             'progress_bar_message_achieved', 'progress_bar_discount_type', 'progress_bar_discount_value',
@@ -677,6 +667,50 @@ class EditBlock extends EditRecord
             $block->blockOffers()->delete();
             CreateBlock::syncWidgetOffers($block, $this->widgetOffersData);
         }
+    }
+
+    /**
+     * Convert stored cart_wide_required_attributes config to form repeater items.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function cartWideRequiredAttributesToFormItems(array $items): array
+    {
+        $out = [];
+        foreach ($items as $r) {
+            if (! is_array($r)) {
+                continue;
+            }
+            $out[] = [
+                'key' => (string) ($r['key'] ?? ''),
+                'value' => (string) ($r['value'] ?? ''),
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Convert stored cart_wide_mappings config to form repeater items.
+     *
+     * @param  array<int, array<string, mixed>>  $mappings
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function cartWideMappingsToFormItems(array $mappings): array
+    {
+        $out = [];
+        foreach ($mappings as $m) {
+            if (! is_array($m)) {
+                continue;
+            }
+            $out[] = [
+                'variant_id' => (string) ($m['variant_id'] ?? ''),
+                'selling_plan_id' => (string) ($m['selling_plan_id'] ?? ''),
+                'discount_percent' => isset($m['discount_percent']) ? (float) $m['discount_percent'] : 0,
+                'frequency' => (string) ($m['frequency'] ?? ''),
+            ];
+        }
+        return $out;
     }
 
     /**
