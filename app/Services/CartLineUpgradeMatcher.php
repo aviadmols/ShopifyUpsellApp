@@ -240,7 +240,7 @@ class CartLineUpgradeMatcher
 
                 $items[] = [
                     'line_id' => $lineId,
-                    'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? $line['variant_title'] ?? $line['variantTitle'] ?? '',
+                    'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
                     'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
                 ];
 
@@ -534,7 +534,7 @@ class CartLineUpgradeMatcher
             ];
             $items[] = [
                 'line_id' => $line['id'],
-                'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? $line['variant_title'] ?? $line['variantTitle'] ?? '',
+                'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
                 'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
                 'frequency' => (string) ($mapping['frequency'] ?? $defaultFrequency),
                 'line_saving' => $lineSaving,
@@ -594,7 +594,7 @@ class CartLineUpgradeMatcher
             $itemFrequency = (string) ($mapping['frequency'] ?? $defaultFrequency);
             $items[] = [
                 'line_id' => $line['id'],
-                'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? $line['variant_title'] ?? $line['variantTitle'] ?? '',
+                'product_title' => $line['product_title'] ?? $line['productTitle'] ?? $line['title'] ?? 'Item',
                 'variant_title' => $line['variant_title'] ?? $line['variantTitle'] ?? null,
                 'frequency' => $itemFrequency,
                 'line_saving' => $lineSaving,
