@@ -11,6 +11,12 @@ class ListBlocks extends ListRecords
 {
     protected static string $resource = BlockResource::class;
 
+    public function mount(): void
+    {
+        set_time_limit(120);
+        parent::mount();
+    }
+
     protected function getHeaderActions(): array
     {
         return [

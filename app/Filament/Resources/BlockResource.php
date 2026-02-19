@@ -342,36 +342,40 @@ class BlockResource extends Resource
                         Forms\Components\Placeholder::make('upgrade_card_rule_summary')
                             ->label('')
                             ->content(function (Get $get): string {
-                                $ruleId = $get('rule_id');
-                                if (! $ruleId) {
-                                    return '';
-                                }
-                                $rule = Rule::find($ruleId);
-                                if (! $rule) {
-                                    return '';
-                                }
-                                $conditions = $rule->conditions ?? [];
-                                if (! is_array($conditions) || $conditions === []) {
-                                    return 'Rule: '.$rule->name.' (no conditions).';
-                                }
-                                $parts = [];
-                                $group = isset($conditions['or']) ? 'or' : 'and';
-                                $rows = $conditions[$group] ?? [];
-                                foreach (is_array($rows) ? $rows : [] as $c) {
-                                    if (! is_array($c)) {
-                                        continue;
+                                try {
+                                    $ruleId = $get('rule_id');
+                                    if (! $ruleId) {
+                                        return '';
                                     }
-                                    foreach ($c as $field => $value) {
-                                        if ($value === null) {
+                                    $rule = Rule::find($ruleId);
+                                    if (! $rule) {
+                                        return '';
+                                    }
+                                    $conditions = $rule->conditions ?? [];
+                                    if (! is_array($conditions) || $conditions === []) {
+                                        return 'Rule: '.$rule->name.' (no conditions).';
+                                    }
+                                    $parts = [];
+                                    $group = isset($conditions['or']) ? 'or' : 'and';
+                                    $rows = $conditions[$group] ?? [];
+                                    foreach (is_array($rows) ? $rows : [] as $c) {
+                                        if (! is_array($c)) {
                                             continue;
                                         }
-                                        $valueStr = is_array($value) ? implode(', ', $value) : (string) $value;
-                                        if ($valueStr !== '') {
-                                            $parts[] = $field.': '.$valueStr;
+                                        foreach ($c as $field => $value) {
+                                            if ($value === null) {
+                                                continue;
+                                            }
+                                            $valueStr = is_array($value) ? implode(', ', $value) : (string) $value;
+                                            if ($valueStr !== '') {
+                                                $parts[] = $field.': '.$valueStr;
+                                            }
                                         }
                                     }
+                                    return $parts === [] ? 'Rule: '.$rule->name : 'Rule: '.$rule->name.' — '.implode(' '.$group.' ', $parts);
+                                } catch (\Throwable) {
+                                    return '';
                                 }
-                                return $parts === [] ? 'Rule: '.$rule->name : 'Rule: '.$rule->name.' — '.implode(' '.$group.' ', $parts);
                             })
                             ->visible(fn (Get $get): bool => (bool) $get('rule_id')),
                     ])
@@ -489,50 +493,54 @@ class BlockResource extends Resource
                         Forms\Components\Placeholder::make('upgrade_flow_view')
                             ->label('')
                             ->content(function (Get $get): \Illuminate\Support\HtmlString {
-                                $items = $get('upgrade_mappings_items');
-                                if (! is_array($items) || $items === []) {
-                                    return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500">Add mappings below to see the flow.</p>');
+                                try {
+                                    $items = $get('upgrade_mappings_items');
+                                    if (! is_array($items) || $items === []) {
+                                        return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500">Add mappings below to see the flow.</p>');
+                                    }
+                                    $steps = [];
+                                    $itemsArr = array_values($items);
+                                    foreach ($itemsArr as $idx => $m) {
+                                        if (! is_array($m)) {
+                                            continue;
+                                        }
+                                        $when = [];
+                                        if (! empty($m['match_product_id'])) {
+                                            $when[] = 'Product '.preg_replace('/\D/', '', (string) $m['match_product_id']) ?: $m['match_product_id'];
+                                        }
+                                        if (! empty($m['match_variant_id'])) {
+                                            $when[] = 'Variant '.preg_replace('/\D/', '', (string) $m['match_variant_id']) ?: $m['match_variant_id'];
+                                        }
+                                        if (! empty($m['match_sku_segment'])) {
+                                            $when[] = 'SKU contains «'.e((string) $m['match_sku_segment']).'»';
+                                        }
+                                        if (! empty($m['match_quantity_min'])) {
+                                            $when[] = 'Qty ≥ '.$m['match_quantity_min'];
+                                        }
+                                        if (! empty($m['match_quantity_max'])) {
+                                            $when[] = 'Qty ≤ '.$m['match_quantity_max'];
+                                        }
+                                        $sub = (string) ($m['match_subscription'] ?? 'any');
+                                        if ($sub === 'must_be_subscription') {
+                                            $when[] = 'Subscription only';
+                                        } elseif ($sub === 'must_be_one_time') {
+                                            $when[] = 'One-time only';
+                                        }
+                                        $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
+                                        $offer = (string) ($m['target_variant_id'] ?? '');
+                                        $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
+                                        $plans = $m['plans'] ?? [];
+                                        if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
+                                            $offerStr .= ' · '.e((string) $plans[0]['label']);
+                                        }
+                                        $stepNum = $idx + 1;
+                                        $next = isset($itemsArr[$idx + 1]) ? 'Step '.($idx + 2) : 'End';
+                                        $steps[] = '<div class="border border-gray-200 rounded p-2 mb-2 text-sm"><strong>Step '.$stepNum.':</strong> When cart: '.e($whenStr).' → Offer: '.e($offerStr).'<br><span class="text-gray-500">Next: '.e($next).'</span></div>';
+                                    }
+                                    return new \Illuminate\Support\HtmlString('<div class="space-y-1">'.implode('', $steps).'</div>');
+                                } catch (\Throwable) {
+                                    return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500">—</p>');
                                 }
-                                $steps = [];
-                                $itemsArr = array_values($items);
-                                foreach ($itemsArr as $idx => $m) {
-                                    if (! is_array($m)) {
-                                        continue;
-                                    }
-                                    $when = [];
-                                    if (! empty($m['match_product_id'])) {
-                                        $when[] = 'Product '.preg_replace('/\D/', '', (string) $m['match_product_id']) ?: $m['match_product_id'];
-                                    }
-                                    if (! empty($m['match_variant_id'])) {
-                                        $when[] = 'Variant '.preg_replace('/\D/', '', (string) $m['match_variant_id']) ?: $m['match_variant_id'];
-                                    }
-                                    if (! empty($m['match_sku_segment'])) {
-                                        $when[] = 'SKU contains «'.e((string) $m['match_sku_segment']).'»';
-                                    }
-                                    if (! empty($m['match_quantity_min'])) {
-                                        $when[] = 'Qty ≥ '.$m['match_quantity_min'];
-                                    }
-                                    if (! empty($m['match_quantity_max'])) {
-                                        $when[] = 'Qty ≤ '.$m['match_quantity_max'];
-                                    }
-                                    $sub = (string) ($m['match_subscription'] ?? 'any');
-                                    if ($sub === 'must_be_subscription') {
-                                        $when[] = 'Subscription only';
-                                    } elseif ($sub === 'must_be_one_time') {
-                                        $when[] = 'One-time only';
-                                    }
-                                    $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
-                                    $offer = (string) ($m['target_variant_id'] ?? '');
-                                    $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
-                                    $plans = $m['plans'] ?? [];
-                                    if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
-                                        $offerStr .= ' · '.e((string) $plans[0]['label']);
-                                    }
-                                    $stepNum = $idx + 1;
-                                    $next = isset($itemsArr[$idx + 1]) ? 'Step '.($idx + 2) : 'End';
-                                    $steps[] = '<div class="border border-gray-200 rounded p-2 mb-2 text-sm"><strong>Step '.$stepNum.':</strong> When cart: '.e($whenStr).' → Offer: '.e($offerStr).'<br><span class="text-gray-500">Next: '.e($next).'</span></div>';
-                                }
-                                return new \Illuminate\Support\HtmlString('<div class="space-y-1">'.implode('', $steps).'</div>');
                             }),
                     ])
                     ->collapsible()
@@ -574,51 +582,60 @@ class BlockResource extends Resource
                                 return 'When: '.$whenStr.' → Offer: '.$offerStr;
                             })
                     ->schema([
-                        Forms\Components\Placeholder::make('mapping_summary')
-                            ->label('')
-                            ->content(function (Get $get): \Illuminate\Support\HtmlString {
-                                $when = [];
-                                if ((string) $get('match_product_id') !== '') {
-                                    $when[] = 'Product '.preg_replace('/\D/', '', (string) $get('match_product_id')) ?: $get('match_product_id');
-                                }
-                                if ((string) $get('match_variant_id') !== '') {
-                                    $when[] = 'Variant '.preg_replace('/\D/', '', (string) $get('match_variant_id')) ?: $get('match_variant_id');
-                                }
-                                if ((string) $get('match_sku_segment') !== '') {
-                                    $when[] = 'SKU contains «'.e((string) $get('match_sku_segment')).'»';
-                                }
-                                if ((string) $get('match_sku_regex') !== '') {
-                                    $when[] = 'SKU regex';
-                                }
-                                $qMin = $get('match_quantity_min');
-                                $qMax = $get('match_quantity_max');
-                                if ($qMin !== null && $qMin !== '') {
-                                    $when[] = 'Qty ≥ '.$qMin;
-                                }
-                                if ($qMax !== null && $qMax !== '') {
-                                    $when[] = 'Qty ≤ '.$qMax;
-                                }
-                                $sub = (string) ($get('match_subscription') ?? 'any');
-                                if ($sub === 'must_be_subscription') {
-                                    $when[] = 'Subscription only';
-                                } elseif ($sub === 'must_be_one_time') {
-                                    $when[] = 'One-time only';
-                                }
-                                $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
-                                $offer = (string) $get('target_variant_id');
-                                $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
-                                $plans = $get('plans');
-                                $firstPlanLabel = null;
-                                if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
-                                    $firstPlanLabel = (string) $plans[0]['label'];
-                                }
-                                if ($firstPlanLabel !== null) {
-                                    $offerStr .= ' · '.$firstPlanLabel;
-                                }
-                                return new \Illuminate\Support\HtmlString(
-                                    '<div class="text-sm"><strong>When:</strong> '.e($whenStr).'</div><div class="text-sm mt-1"><strong>Offer:</strong> '.e($offerStr).'</div>'
-                                );
-                            }),
+                        Forms\Components\Section::make('Summary')
+                            ->schema([
+                                Forms\Components\Placeholder::make('mapping_summary')
+                                    ->label('')
+                                    ->content(function (Get $get): \Illuminate\Support\HtmlString {
+                                        try {
+                                            $when = [];
+                                            if ((string) $get('match_product_id') !== '') {
+                                                $when[] = 'Product '.preg_replace('/\D/', '', (string) $get('match_product_id')) ?: $get('match_product_id');
+                                            }
+                                            if ((string) $get('match_variant_id') !== '') {
+                                                $when[] = 'Variant '.preg_replace('/\D/', '', (string) $get('match_variant_id')) ?: $get('match_variant_id');
+                                            }
+                                            if ((string) $get('match_sku_segment') !== '') {
+                                                $when[] = 'SKU contains «'.e((string) $get('match_sku_segment')).'»';
+                                            }
+                                            if ((string) $get('match_sku_regex') !== '') {
+                                                $when[] = 'SKU regex';
+                                            }
+                                            $qMin = $get('match_quantity_min');
+                                            $qMax = $get('match_quantity_max');
+                                            if ($qMin !== null && $qMin !== '') {
+                                                $when[] = 'Qty ≥ '.$qMin;
+                                            }
+                                            if ($qMax !== null && $qMax !== '') {
+                                                $when[] = 'Qty ≤ '.$qMax;
+                                            }
+                                            $sub = (string) ($get('match_subscription') ?? 'any');
+                                            if ($sub === 'must_be_subscription') {
+                                                $when[] = 'Subscription only';
+                                            } elseif ($sub === 'must_be_one_time') {
+                                                $when[] = 'One-time only';
+                                            }
+                                            $whenStr = count($when) > 0 ? implode(' · ', $when) : 'Any cart line';
+                                            $offer = (string) $get('target_variant_id');
+                                            $offerStr = $offer !== '' ? ('Variant '.preg_replace('/\D/', '', $offer) ?: $offer) : '—';
+                                            $plans = $get('plans');
+                                            $firstPlanLabel = null;
+                                            if (is_array($plans) && isset($plans[0]['label']) && (string) $plans[0]['label'] !== '') {
+                                                $firstPlanLabel = (string) $plans[0]['label'];
+                                            }
+                                            if ($firstPlanLabel !== null) {
+                                                $offerStr .= ' · '.$firstPlanLabel;
+                                            }
+                                            return new \Illuminate\Support\HtmlString(
+                                                '<div class="text-sm"><strong>When:</strong> '.e($whenStr).'</div><div class="text-sm mt-1"><strong>Offer:</strong> '.e($offerStr).'</div>'
+                                            );
+                                        } catch (\Throwable) {
+                                            return new \Illuminate\Support\HtmlString('<div class="text-sm text-gray-500">—</div>');
+                                        }
+                                    }),
+                            ])
+                            ->collapsible()
+                            ->collapsed(),
                         Forms\Components\Section::make('Match (when to show this upgrade)')
                             ->schema([
                                 Forms\Components\TextInput::make('match_variant_id')
@@ -1131,6 +1148,7 @@ class BlockResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with('shop'))
             ->columns([
                 Tables\Columns\TextColumn::make('id')
                     ->sortable()
