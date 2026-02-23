@@ -577,9 +577,13 @@ class CreateBlock extends CreateRecord
             }
         }
 
+        $arrayOnlyKeys = ['cart_wide_mappings', 'cart_wide_required_attributes'];
         foreach ($extra as $key => $value) {
             if ($key !== '' && $value !== null && $value !== '') {
                 $k = (string) $key;
+                if (in_array($k, $arrayOnlyKeys, true) && ! is_array($value)) {
+                    continue;
+                }
                 // Allow advanced nested config via JSON in Extra config.
                 if (in_array($k, ['runtime_variables', 'runtimeVariables'], true) && is_string($value) && Str::isJson($value)) {
                     $decoded = json_decode($value, true);
