@@ -107,6 +107,9 @@ class ViewWidgetSessionEvent extends ViewRecord
             $actionsCountExpected = count($payload['actions'] ?? []);
         }
 
+        $hasDiscrepancy = $event->widget_shown !== $upgradeCardEnabledExpected
+            && $upgradeCardEnabledExpected !== null;
+
         $payload = [
             'block' => [
                 'id' => $block->id,
@@ -130,6 +133,10 @@ class ViewWidgetSessionEvent extends ViewRecord
                 'widget_shown' => $event->widget_shown,
                 'rule_passed' => $event->rule_passed,
             ],
+            'diagnosis_note' => 'Computed diagnostics use the **current** block config. If you edited the block (e.g. required checkout attributes, cart-wide mappings) after this event, the result may differ from what actually happened at the time.',
+            'discrepancy_possible_cause' => $hasDiscrepancy
+                ? 'Config may have changed since the event: required checkout attributes (e.g. igTestGroups) or cart-wide mappings affect visibility. Stored widget_shown reflects the API response at event time; computed_diagnostics reflect current config.'
+                : null,
         ];
 
         $this->aiDiagnosisPayload = $payload;

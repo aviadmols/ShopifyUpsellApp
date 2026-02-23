@@ -476,7 +476,9 @@ PROMPT;
         }
 
         $system = <<<PROMPT
-You are an expert at debugging Shopify Checkout extension visibility. You receive a single widget session event payload: block metadata, rule conditions, context snapshot (cart, customer, country, UTMs, etc.), and computed diagnostics (whether the rule was expected to pass, upgrade card expected state, item counts). You also see the stored values for widget_shown and rule_passed from the actual session.
+You are an expert at debugging Shopify Checkout extension visibility. You receive a single widget session event payload: block metadata, rule conditions, context snapshot (cart, customer, country, UTMs, checkout_attributes, etc.), and computed diagnostics (whether the rule was expected to pass, upgrade card expected state, item counts). You also see the stored values for widget_shown and rule_passed from the actual session.
+
+Important: computed_diagnostics use the block's **current** configuration. If the block was edited after the event (e.g. required checkout attributes like igTestGroups, cart-wide mappings), a discrepancy between widget_shown and upgrade_card_enabled_expected can be because the API at event time used a different config. If the payload includes diagnosis_note or discrepancy_possible_cause, mention that as a likely explanation when there is a mismatch.
 
 Your task: produce a short, clear diagnosis IN ENGLISH ONLY. Format your response as clear bullet points so a developer can scan quickly.
 
@@ -484,7 +486,7 @@ Requirements:
 - Start with one short conclusion line (what happened: widget shown or not, and why).
 - Then list 3–6 bullet points. Each bullet must be one focused sentence on its own line.
 - Use a hyphen and space "- " at the start of each bullet line.
-- Cover: whether the rule passed (expected vs stored), upgrade card state if applicable (enabled, items count), any contradiction (e.g. widget_shown=true but rule_passed=false), and the most likely cause (rule condition mismatch, cart line not matching mappings, missing variant in context, etc.).
+- Cover: whether the rule passed (expected vs stored), upgrade card state if applicable (enabled, items count), any contradiction (e.g. widget_shown=true but upgrade_card_enabled_expected=false), and the most likely cause. When widget_shown differs from upgrade_card_enabled_expected, consider first: config changed after the event (required attributes, cart-wide mappings); then rule or cart line matching.
 - Keep each point concise and actionable.
 PROMPT;
 
