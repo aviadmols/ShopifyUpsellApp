@@ -103,6 +103,10 @@ class RuleEngine
             'line_item_property_exists' => $this->lineItemPropertyExists($context, (string) $value),
             'line_item_sku_matches' => $this->lineItemSkuMatches($context, $value),
             'line_item_sku_segment_between' => $this->lineItemSkuSegmentBetween($context, $value),
+            'line_item_product_title_contains' => $this->lineItemProductTitleContains($context, (string) $value),
+            'line_item_variant_title_contains' => $this->lineItemVariantTitleContains($context, (string) $value),
+            'line_item_product_title_equals' => $this->lineItemProductTitleEquals($context, (string) $value),
+            'line_item_variant_title_equals' => $this->lineItemVariantTitleEquals($context, (string) $value),
             'line_items_has_line_without_selling_plan' => $this->lineItemsHasLineWithoutSellingPlan($context),
             'line_items_has_line_with_selling_plan' => $this->lineItemsHasLineWithSellingPlan($context),
             default => false,
@@ -494,5 +498,119 @@ class RuleEngine
             }
         }
         return false;
+    }
+
+    /**
+     * At least one line item has product title containing the given string (case-insensitive).
+     * Value starting with / is treated as regex.
+     */
+    protected function lineItemProductTitleContains(array $context, string $value): bool
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return false;
+        }
+        foreach ($this->getLineItemProductTitles($context) as $title) {
+            if ($title === '') {
+                continue;
+            }
+            if (str_starts_with($value, '/')) {
+                if (@preg_match($value, $title) === 1) {
+                    return true;
+                }
+            } elseif (mb_stripos($title, $value) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * At least one line item has variant title containing the given string (case-insensitive).
+     * Value starting with / is treated as regex.
+     */
+    protected function lineItemVariantTitleContains(array $context, string $value): bool
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return false;
+        }
+        foreach ($this->getLineItemVariantTitles($context) as $title) {
+            if ($title === '') {
+                continue;
+            }
+            if (str_starts_with($value, '/')) {
+                if (@preg_match($value, $title) === 1) {
+                    return true;
+                }
+            } elseif (mb_stripos($title, $value) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * At least one line item has product title exactly equal to the given string (trimmed, case-sensitive).
+     */
+    protected function lineItemProductTitleEquals(array $context, string $value): bool
+    {
+        $value = trim($value);
+        foreach ($this->getLineItemProductTitles($context) as $title) {
+            if (trim($title) === $value) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * At least one line item has variant title exactly equal to the given string (trimmed, case-sensitive).
+     */
+    protected function lineItemVariantTitleEquals(array $context, string $value): bool
+    {
+        $value = trim($value);
+        foreach ($this->getLineItemVariantTitles($context) as $title) {
+            if (trim($title) === $value) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function getLineItemProductTitles(array $context): array
+    {
+        $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
+        $titles = [];
+        foreach ($lines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $merch = $line['merchandise'] ?? $line;
+            $title = $line['product_title'] ?? $line['productTitle'] ?? $merch['product_title'] ?? $merch['product']['title'] ?? null;
+            $titles[] = trim((string) $title);
+        }
+        return $titles;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function getLineItemVariantTitles(array $context): array
+    {
+        $lines = $context['line_items'] ?? $context['lineItems'] ?? [];
+        $titles = [];
+        foreach ($lines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $merch = $line['merchandise'] ?? $line;
+            $title = $line['variant_title'] ?? $line['variantTitle'] ?? $merch['variant_title'] ?? $merch['variantTitle'] ?? $merch['title'] ?? null;
+            $titles[] = trim((string) $title);
+        }
+        return $titles;
     }
 }

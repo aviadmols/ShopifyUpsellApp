@@ -71,10 +71,17 @@ class BlockResource extends Resource
                             })
                             ->searchable()
                             ->live()
-                            ->helperText('Optional: show this block only when rule conditions match.'),
+                            ->helperText('Visibility rules: choose a Rule to show this block only when conditions match. You can filter by: cart subtotal, products/variants in cart (by ID, product name, variant name, SKU), checkout attributes, line item properties, customer tag, country, UTM.'),
                         Forms\Components\TextInput::make('sort_order')
                             ->numeric()
                             ->default(0),
+                        Forms\Components\Placeholder::make('checkout_design_link')
+                            ->label('')
+                            ->content(new \Illuminate\Support\HtmlString(
+                                '<p class="text-sm text-gray-600 dark:text-gray-400">To control checkout appearance (header, colors, typography), use <a href="'.e(\App\Filament\Resources\CheckoutBrandingResource::getUrl('index')).'" class="text-primary-600 dark:text-primary-400 underline font-medium">Checkout design</a>. You can set styling to apply only when the store has a checkout widget.</p>'
+                            ))
+                            ->visible(fn (Get $get): bool => $get('surface') === 'checkout')
+                            ->columnSpanFull(),
                     ])
                     ->columns(2),
 

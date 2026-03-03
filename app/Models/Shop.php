@@ -58,6 +58,11 @@ class Shop extends Model
         return $this->hasOne(CheckoutExperience::class);
     }
 
+    public function checkoutBranding(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(CheckoutBranding::class);
+    }
+
     /**
      * Check if shop is currently installed (not uninstalled).
      */

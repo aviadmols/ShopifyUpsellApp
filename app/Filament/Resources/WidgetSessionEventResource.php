@@ -158,6 +158,28 @@ class WidgetSessionEventResource extends Resource
                         }
                         return ['User ID: ' . $v];
                     }),
+                Tables\Filters\Filter::make('ig_test_groups')
+                    ->form([
+                        TextInput::make('ig_test_groups')
+                            ->label('igTestGroups')
+                            ->placeholder('e.g. f515f4f90f42')
+                            ->maxLength(64)
+                            ->helperText('Filters by checkout_attributes.igTestGroups. Only view events have this in context; click events are not filtered by this.'),
+                    ])
+                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data): \Illuminate\Database\Eloquent\Builder {
+                        $value = trim((string) ($data['ig_test_groups'] ?? ''));
+                        if ($value !== '') {
+                            $query->whereIgTestGroups($value);
+                        }
+                        return $query;
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $v = trim((string) ($data['ig_test_groups'] ?? ''));
+                        if ($v === '') {
+                            return [];
+                        }
+                        return ['igTestGroups: ' . $v];
+                    }),
                 Tables\Filters\SelectFilter::make('shop_id')
                     ->relationship('shop', 'shop_domain')
                     ->searchable()

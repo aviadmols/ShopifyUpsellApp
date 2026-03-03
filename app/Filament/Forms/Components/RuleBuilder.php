@@ -39,6 +39,12 @@ final class RuleBuilder
                             'line_items_has_any_product_id' => 'Cart has any product IDs (comma separated)',
                             'line_items_has_variant_id' => 'Cart has variant ID',
                             'line_items_has_any_variant_id' => 'Cart has any variant IDs (comma separated)',
+                            'line_item_product_title_contains' => 'Cart has product name containing',
+                            'line_item_variant_title_contains' => 'Cart has variant name containing',
+                            'line_item_product_title_equals' => 'Cart has product name exactly',
+                            'line_item_variant_title_equals' => 'Cart has variant name exactly',
+                            'line_item_sku_matches' => 'Cart has line with SKU matching (regex or exact)',
+                            'line_item_sku_segment_between' => 'Cart has SKU segment between (segment_index,min,max)',
                             'customer_has_tag' => 'Customer has tag',
                             'shipping_country_in' => 'Shipping country in (comma separated ISO codes)',
                             'utm_param_equals' => 'UTM param equals (param_name,value)',
@@ -58,7 +64,7 @@ final class RuleBuilder
                     Forms\Components\TextInput::make('value')
                         ->required()
                         ->maxLength(1000)
-                        ->placeholder('e.g. utm_source,google or _my_prop,value'),
+                        ->placeholder('e.g. search text, key,value for checkout_attribute, or /regex/ for SKU'),
                 ])
                 ->columns(2)
                 ->columnSpanFull(),
